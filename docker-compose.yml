@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: max-auth-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maxauth
+      POSTGRES_PASSWORD: maxauth
+      POSTGRES_DB: maxauth
+    ports:
+      - "5432:5432"
+    volumes:
+      - max_auth_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maxauth"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: max-auth-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://maxauth:maxauth@postgres:5432/maxauth?schema=public
+    ports:
+      - "4000:4000"
+    volumes:
+      - max_auth_logs:/app/logs
+
+volumes:
+  max_auth_pgdata:
+  max_auth_logs:

@@ -1,0 +1,459 @@
+// =========================================================
+// MAX Auth - Prisma Schema
+// Identity platform for the entire MAX ecosystem
+// =========================================================
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------
+
+enum SubscriptionTier {
+  FREE
+  PLUS
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  DELETED
+  DEACTIVATED
+}
+
+enum TokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  ACCOUNT_DELETION
+}
+
+enum AuditAction {
+  REGISTER
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  TOKEN_REFRESH
+  PASSWORD_CHANGED
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+  EMAIL_VERIFIED
+  EMAIL_VERIFICATION_SENT
+  ACCOUNT_DELETED
+  ACCOUNT_SUSPENDED
+  ACCOUNT_REACTIVATED
+  DEVICE_TRUSTED
+  DEVICE_REVOKED
+  SESSION_REVOKED
+  TWO_FA_ENABLED
+  TWO_FA_DISABLED
+  RECOVERY_CODES_GENERATED
+  CONNECTED_ACCOUNT_LINKED
+  CONNECTED_ACCOUNT_UNLINKED
+  OAUTH_CLIENT_CREATED
+  OAUTH_CONSENT_GRANTED
+  OAUTH_CONSENT_REVOKED
+  PROFILE_UPDATED
+  ADMIN_ACTION
+}
+
+enum ConnectedProvider {
+  GOOGLE
+  X
+  INSTAGRAM
+  SNAPCHAT
+  SPOTIFY
+  DISCORD
+  GITHUB
+}
+
+enum OAuthGrantType {
+  AUTHORIZATION_CODE
+  REFRESH_TOKEN
+  CLIENT_CREDENTIALS
+}
+
+// ---------------------------------------------------------
+// CORE USER
+// ---------------------------------------------------------
+
+model User {
+  id                 String             @id @default(uuid()) @db.Uuid
+  username           String             @unique @db.VarChar(32)
+  displayName        String?            @db.VarChar(64)
+  email              String             @unique @db.VarChar(255)
+  passwordHash       String
+  avatarUrl          String?
+  country             String?           @db.VarChar(2)
+  language           String?            @db.VarChar(10)
+  timezone           String?            @db.VarChar(64)
+  subscriptionTier   SubscriptionTier   @default(FREE)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  status             AccountStatus      @default(ACTIVE)
+  isAdmin            Boolean            @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  sessions            Session[]
+  devices             Device[]
+  loginHistory        LoginHistory[]
+  auditLogs           AuditLog[]
+  passwordHistory     PasswordHistory[]
+  verificationTokens  VerificationToken[]
+  twoFactor           TwoFactorAuth?
+  recoveryCodes       RecoveryCode[]
+  passkeys            Passkey[]
+  connectedAccounts   ConnectedAccount[]
+  aiProfile           AIProfile?
+  oauthAuthCodes      OAuthAuthorizationCode[]
+  oauthAccessTokens   OAuthAccessToken[]
+  oauthRefreshTokens  OAuthRefreshToken[]
+  oauthConsents       OAuthConsent[]
+  ownedOAuthClients   OAuthClient[]
+
+  @@index([email])
+  @@index([username])
+  @@index([status])
+  @@map("users")
+}
+
+// ---------------------------------------------------------
+// SESSIONS & DEVICES
+// ---------------------------------------------------------
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deviceId         String?   @db.Uuid
+  device           Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  isRevoked        Boolean   @default(false)
+  revokedAt        DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  lastUsedAt        DateTime  @default(now())
+
+  @@index([userId])
+  @@index([deviceId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Device {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deviceName   String?
+  deviceType   String?   // mobile, desktop, tablet, tv, unknown
+  os           String?
+  browser      String?
+  fingerprint  String?   @unique
+  isTrusted    Boolean   @default(false)
+  trustedAt    DateTime?
+  lastIp       String?
+  lastSeenAt   DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  sessions     Session[]
+
+  @@index([userId])
+  @@map("devices")
+}
+
+model LoginHistory {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  success     Boolean
+  ipAddress   String?
+  userAgent   String?
+  location    String?
+  reason      String?  // e.g. "invalid_password", "account_locked"
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("login_history")
+}
+
+// ---------------------------------------------------------
+// AUDIT LOGS
+// ---------------------------------------------------------
+
+model AuditLog {
+  id         String      @id @default(uuid()) @db.Uuid
+  userId     String?     @db.Uuid
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action     AuditAction
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------
+// PASSWORD & TOKENS
+// ---------------------------------------------------------
+
+model PasswordHistory {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_history")
+}
+
+model VerificationToken {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @db.Uuid
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash  String       @unique
+  purpose    TokenPurpose
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime     @default(now())
+
+  @@index([userId, purpose])
+  @@map("verification_tokens")
+}
+
+// ---------------------------------------------------------
+// 2FA / PASSKEYS / RECOVERY (architecture-ready)
+// ---------------------------------------------------------
+
+model TwoFactorAuth {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @unique @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  isEnabled    Boolean   @default(false)
+  method       String?   // "totp", "sms", "email"
+  secretEncrypted String?
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("two_factor_auth")
+}
+
+model RecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("recovery_codes")
+}
+
+model Passkey {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  credentialId    String   @unique
+  publicKey       String
+  counter         BigInt   @default(0)
+  deviceLabel     String?
+  transports      String?
+  createdAt       DateTime @default(now())
+  lastUsedAt      DateTime?
+
+  @@index([userId])
+  @@map("passkeys")
+}
+
+// ---------------------------------------------------------
+// CONNECTED ACCOUNTS (architecture only — no integration logic)
+// ---------------------------------------------------------
+
+model ConnectedAccount {
+  id                String            @id @default(uuid()) @db.Uuid
+  userId            String            @db.Uuid
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider          ConnectedProvider
+  providerAccountId String
+  accessTokenEnc    String?
+  refreshTokenEnc   String?
+  scope             String?
+  tokenExpiresAt    DateTime?
+  linkedAt          DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("connected_accounts")
+}
+
+// ---------------------------------------------------------
+// AI PROFILE (schema only — no memory engine yet)
+// ---------------------------------------------------------
+
+model AIProfile {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @unique @db.Uuid
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  interests          Json?    // e.g. ["gaming", "music production"]
+  preferences        Json?    // e.g. { "tone": "casual", "responseLength": "short" }
+  languages          Json?    // e.g. ["en", "fr"]
+  connectedServices  Json?    // e.g. ["spotify", "discord"]
+  memoryMetadata     Json?    // reserved for future AI memory engine — no logic yet
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("ai_profiles")
+}
+
+// ---------------------------------------------------------
+// OAUTH ("Continue with MAX AI") — architecture only
+// ---------------------------------------------------------
+
+model OAuthClient {
+  id              String   @id @default(uuid()) @db.Uuid
+  clientId        String   @unique
+  clientSecretHash String
+  name            String
+  ownerId         String?  @db.Uuid
+  owner           User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  redirectUris    String[] // list of allowed redirect URIs
+  scopes          String[] // list of allowed scopes e.g. ["profile:read","email:read"]
+  isConfidential  Boolean  @default(true)
+  isActive        Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  authCodes       OAuthAuthorizationCode[]
+  accessTokens    OAuthAccessToken[]
+  refreshTokens   OAuthRefreshToken[]
+  consents        OAuthConsent[]
+
+  @@map("oauth_clients")
+}
+
+model OAuthAuthorizationCode {
+  id           String   @id @default(uuid()) @db.Uuid
+  codeHash     String   @unique
+
+  clientId     String   @db.Uuid
+  client       OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  userId       String   @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  redirectUri  String
+  scopes       String[]
+  codeChallenge      String?  // PKCE
+  codeChallengeMethod String? // "S256" | "plain"
+
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@map("oauth_authorization_codes")
+}
+
+model OAuthAccessToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique
+
+  clientId   String   @db.Uuid
+  client     OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scopes     String[]
+  grantType  OAuthGrantType @default(AUTHORIZATION_CODE)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@map("oauth_access_tokens")
+}
+
+model OAuthRefreshToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique
+
+  clientId   String   @db.Uuid
+  client     OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scopes     String[]
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([clientId])
+  @@index([userId])
+  @@map("oauth_refresh_tokens")
+}
+
+model OAuthConsent {
+  id         String   @id @default(uuid()) @db.Uuid
+
+  clientId   String   @db.Uuid
+  client     OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scopes     String[]
+  grantedAt  DateTime @default(now())
+  revokedAt  DateTime?
+
+  @@unique([clientId, userId])
+  @@map("oauth_consents")
+}
