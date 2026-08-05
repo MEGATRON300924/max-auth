@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { userRepository } from "../repositories/user.repository";
 import { AppError } from "../utils/AppError";
@@ -22,20 +23,28 @@ export const userService = {
     ctx: { ipAddress?: string; userAgent?: string }
   ) {
     const user = await userRepository.update(userId, data);
+
     await auditService.record("PROFILE_UPDATED", {
       userId,
       ipAddress: ctx.ipAddress,
       userAgent: ctx.userAgent,
       metadata: data,
     });
+
     return user;
   },
 
   async getAIProfile(userId: string) {
-    let profile = await prisma.aIProfile.findUnique({ where: { userId } });
+    let profile = await prisma.aIProfile.findUnique({
+      where: { userId },
+    });
+
     if (!profile) {
-      profile = await prisma.aIProfile.create({ data: { userId } });
+      profile = await prisma.aIProfile.create({
+        data: { userId },
+      });
     }
+
     return profile;
   },
 
@@ -50,8 +59,23 @@ export const userService = {
   ) {
     return prisma.aIProfile.upsert({
       where: { userId },
-      create: { userId, ...data },
-      update: data,
+
+      create: {
+        userId,
+        interests: data.interests as Prisma.InputJsonValue | undefined,
+        preferences: data.preferences as Prisma.InputJsonValue | undefined,
+        languages: data.languages as Prisma.InputJsonValue | undefined,
+        connectedServices:
+          data.connectedServices as Prisma.InputJsonValue | undefined,
+      },
+
+      update: {
+        interests: data.interests as Prisma.InputJsonValue | undefined,
+        preferences: data.preferences as Prisma.InputJsonValue | undefined,
+        languages: data.languages as Prisma.InputJsonValue | undefined,
+        connectedServices:
+          data.connectedServices as Prisma.InputJsonValue | undefined,
+      },
     });
   },
 };
