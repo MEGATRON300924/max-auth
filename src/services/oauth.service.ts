@@ -62,7 +62,7 @@ export const oauthService = {
   async revokeClient(ownerId: string, id: string) {
     const client = await prisma.oAuthClient.findUnique({ where: { id } });
     if (!client || client.ownerId !== ownerId) throw AppError.notFound("OAuth client not found");
-    await prisma.$transaction([prisma.oAuthClient.update({ where: { id }, data: { isActive: false } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: id, revokedAt: id, revokedAt: null }, data: { revokedAt: new Date() } })]);
+    await prisma.$transaction([prisma.oAuthClient.update({ where: { id }, data: { isActive: false } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } })]);
     return prisma.oAuthClient.findUnique({ where: { id }, select: { id: true, clientId: true, name: true, isActive: true } });
   },
   listConsentsForUser(userId: string) { return prisma.oAuthConsent.findMany({ where: { userId, revokedAt: null }, include: { client: { select: { name: true, clientId: true } } }, orderBy: { grantedAt: "desc" } }); },
