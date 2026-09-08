@@ -6,31 +6,14 @@ import { ok, sanitizeUser } from "../utils/response";
 import { getRequestContext } from "../utils/requestContext";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
-
-function setRefreshCookie(res: Response, refreshToken: string) {
-  res.cookie(env.REFRESH_COOKIE_NAME, refreshToken, { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: "strict", domain: env.isProduction ? env.COOKIE_DOMAIN : undefined, path: "/api/v1/auth", maxAge: 30 * 24 * 60 * 60 * 1000 });
-}
-
-function clearRefreshCookie(res: Response) {
-  res.clearCookie(env.REFRESH_COOKIE_NAME, { path: "/api/v1/auth", domain: env.isProduction ? env.COOKIE_DOMAIN : undefined, secure: env.COOKIE_SECURE, sameSite: "strict" });
-}
-
+function setRefreshCookie(res: Response, refreshToken: string) { res.cookie(env.REFRESH_COOKIE_NAME, refreshToken, { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: env.COOKIE_SAME_SITE, domain: env.isProduction ? env.COOKIE_DOMAIN : undefined, path: "/api/v1/auth", maxAge: 30 * 24 * 60 * 60 * 1000 }); }
+function clearRefreshCookie(res: Response) { res.clearCookie(env.REFRESH_COOKIE_NAME, { path: "/api/v1/auth", domain: env.isProduction ? env.COOKIE_DOMAIN : undefined, secure: env.COOKIE_SECURE, sameSite: env.COOKIE_SAME_SITE }); }
 export const authController = {
-  async register(req: Request, res: Response, next: NextFunction) {
-    try { const ctx = getRequestContext(req); const { user, accessToken, refreshToken } = await authService.register(req.body, ctx); setRefreshCookie(res, refreshToken); return ok(res, { user: sanitizeUser(user), accessToken }, 201); } catch (err) { next(err); }
-  },
-  async login(req: Request, res: Response, next: NextFunction) {
-    try { const ctx = getRequestContext(req); const { identifier, password } = req.body; const { user, accessToken, refreshToken } = await authService.login(identifier, password, ctx); setRefreshCookie(res, refreshToken); return ok(res, { user: sanitizeUser(user), accessToken }); } catch (err) { next(err); }
-  },
-  async google(req: Request, res: Response, next: NextFunction) {
-    try { const ctx = getRequestContext(req); const { user, accessToken, refreshToken } = await googleAuthService.signIn(req.body.credential, ctx); setRefreshCookie(res, refreshToken); return ok(res, { user: sanitizeUser(user), accessToken }); } catch (err) { next(err); }
-  },
-  async logout(req: Request, res: Response, next: NextFunction) {
-    try { const ctx = getRequestContext(req); const raw = req.cookies?.[env.REFRESH_COOKIE_NAME] || req.body?.refreshToken; await authService.logout(raw, req.user?.sub, ctx); clearRefreshCookie(res); return ok(res, { message: "Logged out successfully" }); } catch (err) { next(err); }
-  },
-  async refresh(req: Request, res: Response, next: NextFunction) {
-    try { const ctx = getRequestContext(req); const raw = req.cookies?.[env.REFRESH_COOKIE_NAME] || req.body?.refreshToken; if (!raw) throw AppError.unauthorized("No refresh token provided"); const tokens = await authService.refresh(raw, ctx); setRefreshCookie(res, tokens.refreshToken); return ok(res, { accessToken: tokens.accessToken }); } catch (err) { next(err); }
-  },
+  async register(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); const { user, accessToken, refreshToken } = await authService.register(req.body, ctx); setRefreshCookie(res, refreshToken); return ok(res, { user: sanitizeUser(user), accessToken }, 201); } catch (err) { next(err); } },
+  async login(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); const { identifier, password } = req.body; const { user, accessToken, refreshToken } = await authService.login(identifier, password, ctx); setRefreshCookie(res, refreshToken); return ok(res, { user: sanitizeUser(user), accessToken }); } catch (err) { next(err); } },
+  async google(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); const { user, accessToken, refreshToken } = await googleAuthService.signIn(req.body.credential, ctx); setRefreshCookie(res, refreshToken); return ok(res, { user: sanitizeUser(user), accessToken }); } catch (err) { next(err); } },
+  async logout(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); const raw = req.cookies?.[env.REFRESH_COOKIE_NAME] || req.body?.refreshToken; await authService.logout(raw, req.user?.sub, ctx); clearRefreshCookie(res); return ok(res, { message: "Logged out successfully" }); } catch (err) { next(err); } },
+  async refresh(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); const raw = req.cookies?.[env.REFRESH_COOKIE_NAME] || req.body?.refreshToken; if (!raw) throw AppError.unauthorized("No refresh token provided"); const tokens = await authService.refresh(raw, ctx); setRefreshCookie(res, tokens.refreshToken); return ok(res, { accessToken: tokens.accessToken }); } catch (err) { next(err); } },
   async sendVerificationEmail(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); await authService.sendEmailVerification(req.user!.sub, ctx); return ok(res, { message: "Verification email sent" }); } catch (err) { next(err); } },
   async verifyEmail(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); await authService.verifyEmail(req.body.token, ctx); return ok(res, { message: "Email verified successfully" }); } catch (err) { next(err); } },
   async forgotPassword(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); await authService.forgotPassword(req.body.email, ctx); return ok(res, { message: "If an account with that email exists, a reset link has been sent" }); } catch (err) { next(err); } },
