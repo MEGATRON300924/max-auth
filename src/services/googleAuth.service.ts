@@ -2,6 +2,8 @@ import { prisma } from "../database/prisma";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 import { userRepository } from "../repositories/user.repository";
+import { hashPassword } from "../security/password";
+import { generateOpaqueToken } from "../security/tokens";
 import { deviceService } from "./device.service";
 import { tokenService } from "./token.service";
 import { auditService } from "./audit.service";
@@ -28,7 +30,7 @@ export const googleAuthService = {
     let user = await userRepository.findByEmail(email);
     if (!user) {
       const username = await uniqueUsername(usernameBase(email, identity.name));
-      user = await prisma.user.create({ data: { username, email, passwordHash: "GOOGLE_AUTH_ONLY", displayName: identity.name || username, avatarUrl: identity.picture, verificationStatus: "VERIFIED", aiProfile: { create: {} } } });
+      user = await prisma.user.create({ data: { username, email, passwordHash: await hashPassword(generateOpaqueToken(32)), displayName: identity.name || username, avatarUrl: identity.picture, verificationStatus: "VERIFIED", aiProfile: { create: {} } } });
       await auditService.record("REGISTER", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, metadata: { provider: "GOOGLE" } });
     } else {
       if (user.status !== "ACTIVE") throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE");
