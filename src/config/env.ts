@@ -16,6 +16,7 @@ export const env = {
   ARGON2_MEMORY_COST: parseInt(optional("ARGON2_MEMORY_COST", "19456"), 10), ARGON2_TIME_COST: parseInt(optional("ARGON2_TIME_COST", "2"), 10), ARGON2_PARALLELISM: parseInt(optional("ARGON2_PARALLELISM", "1"), 10),
   MAIL_FROM: optional("MAIL_FROM", "MAX Auth <no-reply@max-ai.name.ng>"), MAIL_PROVIDER: optional("MAIL_PROVIDER", "console"), RESEND_API_KEY: optional("RESEND_API_KEY", ""),
   OAUTH_AUTH_CODE_TTL_MINUTES: parseInt(optional("OAUTH_AUTH_CODE_TTL_MINUTES", "10"), 10), OAUTH_ACCESS_TOKEN_TTL_MINUTES: parseInt(optional("OAUTH_ACCESS_TOKEN_TTL_MINUTES", "60"), 10), OAUTH_REFRESH_TOKEN_TTL_DAYS: parseInt(optional("OAUTH_REFRESH_TOKEN_TTL_DAYS", "30"), 10),
+  OIDC_ISSUER: optional("OIDC_ISSUER", process.env.APP_URL ?? "http://localhost:4000"), OIDC_KEY_ID: optional("OIDC_KEY_ID", "max-auth-1"), OIDC_PRIVATE_KEY: optional("OIDC_PRIVATE_KEY", ""), OIDC_PUBLIC_KEY: optional("OIDC_PUBLIC_KEY", ""), OIDC_ID_TOKEN_TTL_SECONDS: parseInt(optional("OIDC_ID_TOKEN_TTL_SECONDS", "600"), 10),
   LOG_LEVEL: optional("LOG_LEVEL", "info"), LOG_DIR: optional("LOG_DIR", "logs"),
   get isProduction() { return this.NODE_ENV === "production"; },
 };

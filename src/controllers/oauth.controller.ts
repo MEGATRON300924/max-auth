@@ -1,69 +1,39 @@
 import { Request, Response, NextFunction } from "express";
-import { oauthService } from "../services/oauth.service";
+import { oauthService, MAX_OAUTH_SCOPES } from "../services/oauth.service";
 import { ok } from "../utils/response";
 import { AppError } from "../utils/AppError";
 import { env } from "../config/env";
+import { createPublicKey } from "crypto";
 
-function bearer(req: Request) {
-  const header = req.header("authorization");
-  return header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+function bearer(req: Request) { const header = req.header("authorization"); return header?.startsWith("Bearer ") ? header.slice(7) : undefined; }
+function clientCredentials(req: Request) {
+  const authorization = req.header("authorization");
+  if (authorization?.startsWith("Basic ")) { try { const decoded = Buffer.from(authorization.slice(6), "base64").toString("utf8"); const separator = decoded.indexOf(":"); if (separator > 0) return { clientId: decoded.slice(0, separator), clientSecret: decoded.slice(separator + 1) }; } catch {} }
+  return { clientId: typeof req.body?.client_id === "string" ? req.body.client_id : "", clientSecret: typeof req.body?.client_secret === "string" ? req.body.client_secret : undefined };
 }
 
 export const oauthController = {
   async createClient(req: Request, res: Response, next: NextFunction) { try { const { name, redirectUris, scopes, isConfidential } = req.body; const result = await oauthService.createClient(req.user!.sub, { name, redirectUris, scopes, isConfidential }); return ok(res, { client: result.client, clientSecret: result.clientSecret, warning: "Store this client secret now — it will not be shown again." }, 201); } catch (err) { next(err); } },
   async listClients(req: Request, res: Response, next: NextFunction) { try { return ok(res, { clients: await oauthService.listClientsForOwner(req.user!.sub) }); } catch (err) { next(err); } },
+  async updateClient(req: Request, res: Response, next: NextFunction) { try { const { name, redirectUris, scopes } = req.body; return ok(res, { client: await oauthService.updateClient(req.user!.sub, req.params.clientId, { name, redirectUris, scopes }) }); } catch (err) { next(err); } },
+  async rotateClientSecret(req: Request, res: Response, next: NextFunction) { try { const result = await oauthService.rotateClientSecret(req.user!.sub, req.params.clientId); return ok(res, { ...result, warning: "Store this client secret now — it will not be shown again." }); } catch (err) { next(err); } },
   async revokeClient(req: Request, res: Response, next: NextFunction) { try { return ok(res, { client: await oauthService.revokeClient(req.user!.sub, req.params.clientId) }); } catch (err) { next(err); } },
   async listConsents(req: Request, res: Response, next: NextFunction) { try { return ok(res, { consents: await oauthService.listConsentsForUser(req.user!.sub) }); } catch (err) { next(err); } },
   async revokeConsent(req: Request, res: Response, next: NextFunction) { try { await oauthService.revokeConsent(req.user!.sub, req.params.consentId); return ok(res, { message: "Consent revoked" }); } catch (err) { next(err); } },
-
   async authorize(req: Request, res: Response, next: NextFunction) {
-    try {
-      const input = { clientId: String(req.query.client_id || ""), redirectUri: String(req.query.redirect_uri || ""), responseType: String(req.query.response_type || ""), scope: typeof req.query.scope === "string" ? req.query.scope : undefined, state: typeof req.query.state === "string" ? req.query.state : undefined, codeChallenge: typeof req.query.code_challenge === "string" ? req.query.code_challenge : undefined, codeChallengeMethod: typeof req.query.code_challenge_method === "string" ? req.query.code_challenge_method : undefined };
-      const { client, scopes } = await oauthService.getAuthorizationRequest(input);
-      const params = new URLSearchParams({ client_id: client.clientId, client_name: client.name, redirect_uri: input.redirectUri, response_type: "code", scope: scopes.join(" ") });
-      if (input.state) params.set("state", input.state);
-      if (input.codeChallenge) params.set("code_challenge", input.codeChallenge);
-      if (input.codeChallengeMethod) params.set("code_challenge_method", input.codeChallengeMethod);
-      return res.redirect(`${env.FRONTEND_URL}/authorize?${params.toString()}`);
-    } catch (err) { next(err); }
+    try { const input = { clientId: String(req.query.client_id || ""), redirectUri: String(req.query.redirect_uri || ""), responseType: String(req.query.response_type || ""), scope: typeof req.query.scope === "string" ? req.query.scope : undefined, state: typeof req.query.state === "string" ? req.query.state : undefined, codeChallenge: typeof req.query.code_challenge === "string" ? req.query.code_challenge : undefined, codeChallengeMethod: typeof req.query.code_challenge_method === "string" ? req.query.code_challenge_method : undefined }; const { client, scopes } = await oauthService.getAuthorizationRequest(input); const params = new URLSearchParams({ client_id: client.clientId, client_name: client.name, redirect_uri: input.redirectUri, response_type: "code", scope: scopes.join(" "), state: input.state! }); params.set("code_challenge", input.codeChallenge!); params.set("code_challenge_method", "S256"); return res.redirect(`${env.FRONTEND_URL}/authorize?${params.toString()}`); } catch (err) { next(err); }
   },
-
   async approve(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { clientId, redirectUri, scopes, codeChallenge, codeChallengeMethod, state } = req.body;
-      const code = await oauthService.issueAuthorizationCode({ clientId, userId: req.user!.sub, redirectUri, scopes: String(scopes || "").split(" ").filter(Boolean), codeChallenge, codeChallengeMethod });
-      const callback = new URL(redirectUri);
-      callback.searchParams.set("code", code);
-      if (state) callback.searchParams.set("state", state);
-      return ok(res, { redirectUri: callback.toString() });
-    } catch (err) { next(err); }
+    try { const { clientId, redirectUri, scopes, codeChallenge, codeChallengeMethod, state } = req.body; const code = await oauthService.issueAuthorizationCode({ clientId, userId: req.user!.sub, redirectUri, scopes: String(scopes || "").split(" ").filter(Boolean), codeChallenge, codeChallengeMethod }); const callback = new URL(redirectUri); callback.searchParams.set("code", code); callback.searchParams.set("state", state); return ok(res, { redirectUri: callback.toString() }); } catch (err) { next(err); }
   },
-
   async token(req: Request, res: Response, next: NextFunction) {
-    try {
-      const body = req.body || {};
-      const grantType = body.grant_type;
-      if (grantType === "authorization_code") {
-        const result = await oauthService.exchangeCode({ code: body.code, clientId: body.client_id, redirectUri: body.redirect_uri, codeVerifier: body.code_verifier, clientSecret: body.client_secret });
-        return res.json(result);
-      }
-      if (grantType === "refresh_token") {
-        const result = await oauthService.refreshAccessToken(body.refresh_token, body.client_id, body.client_secret);
-        return res.json(result);
-      }
-      throw AppError.badRequest("Unsupported grant type", "UNSUPPORTED_GRANT_TYPE");
-    } catch (err) { next(err); }
+    try { const body = req.body || {}; const credentials = clientCredentials(req); if (body.grant_type === "authorization_code") return res.json(await oauthService.exchangeCode({ code: body.code, clientId: credentials.clientId, redirectUri: body.redirect_uri, codeVerifier: body.code_verifier, clientSecret: credentials.clientSecret })); if (body.grant_type === "refresh_token") return res.json(await oauthService.refreshAccessToken(body.refresh_token, credentials.clientId, credentials.clientSecret)); throw AppError.badRequest("Unsupported grant type", "UNSUPPORTED_GRANT_TYPE"); } catch (err) { next(err); }
   },
-
-  async introspect(req: Request, res: Response, next: NextFunction) {
-    try { return res.json(await oauthService.introspect(bearer(req) || "")); } catch (err) { next(err); }
-  },
-
+  async revoke(req: Request, res: Response, next: NextFunction) { try { const credentials = clientCredentials(req); await oauthService.revokeToken(req.body?.token, credentials.clientId, credentials.clientSecret); return res.status(200).json({}); } catch (err) { next(err); } },
+  async introspect(req: Request, res: Response, next: NextFunction) { try { return res.json(await oauthService.introspect(bearer(req) || String(req.body?.token || ""))); } catch (err) { next(err); } },
   async userinfo(req: Request, res: Response, next: NextFunction) {
-    try {
-      const result = await oauthService.introspect(bearer(req) || "");
-      if (!result.active) throw AppError.unauthorized("Invalid OAuth access token");
-      return res.json({ sub: result.user.id, username: result.user.username, name: result.user.displayName, email: result.user.email, email_verified: result.user.verificationStatus === "VERIFIED", picture: result.user.avatarUrl, subscription_tier: result.user.subscriptionTier });
-    } catch (err) { next(err); }
+    try { const result = await oauthService.introspect(bearer(req) || ""); if (!result.active) throw AppError.unauthorized("Invalid OAuth access token", "INVALID_TOKEN"); const claims: Record<string, unknown> = { sub: result.user.id }; if (result.scopes.includes("profile") || result.scopes.includes("profile:read")) Object.assign(claims, { name: result.user.displayName, preferred_username: result.user.username, picture: result.user.avatarUrl }); if (result.scopes.includes("email") || result.scopes.includes("email:read")) Object.assign(claims, { email: result.user.email, email_verified: result.user.verificationStatus === "VERIFIED" }); return res.json(claims); } catch (err) { next(err); }
   },
+  discovery(_req: Request, res: Response) { return res.json({ issuer: env.OIDC_ISSUER, authorization_endpoint: `${env.APP_URL}/api/v1/oauth/authorize`, token_endpoint: `${env.APP_URL}/api/v1/oauth/token`, userinfo_endpoint: `${env.APP_URL}/api/v1/oauth/userinfo`, introspection_endpoint: `${env.APP_URL}/api/v1/oauth/introspect`, revocation_endpoint: `${env.APP_URL}/api/v1/oauth/revoke`, jwks_uri: `${env.APP_URL}/.well-known/jwks.json`, response_types_supported: ["code"], response_modes_supported: ["query"], grant_types_supported: ["authorization_code", "refresh_token"], code_challenge_methods_supported: ["S256"], subject_types_supported: ["public"], id_token_signing_alg_values_supported: ["RS256"], scopes_supported: MAX_OAUTH_SCOPES, claims_supported: ["sub", "name", "preferred_username", "email", "email_verified", "picture"] }); },
+  jwks(_req: Request, res: Response) { if (!env.OIDC_PUBLIC_KEY) return res.status(503).json({ error: "oidc_not_configured" }); try { const jwk = createPublicKey(env.OIDC_PUBLIC_KEY.replace(/\\n/g, "\n")).export({ format: "jwk" }) as Record<string, string>; return res.json({ keys: [{ kty: jwk.kty, use: "sig", alg: "RS256", kid: env.OIDC_KEY_ID, n: jwk.n, e: jwk.e }] }); } catch { return res.status(503).json({ error: "oidc_not_configured" }); } },
 };
