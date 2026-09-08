@@ -37,10 +37,10 @@ export const oauthService = {
     const redirectUris = [...new Set(data.redirectUris.map((uri) => new URL(uri).toString()))];
     if (redirectUris.some((uri) => uri.startsWith("http://") && !uri.startsWith("http://localhost") && !uri.startsWith("http://127.0.0.1"))) throw AppError.badRequest("Production redirect URIs must use HTTPS", "INVALID_REDIRECT_URI");
     const clientId = `max_client_${generateOpaqueToken(12)}`;
-    const clientSecret = data.isConfidential ? generateOpaqueToken(32) : undefined;
-    const client = await prisma.oAuthClient.create({ data: { clientId, clientSecretHash: clientSecret ? await hashPassword(clientSecret) : null, name: data.name.trim(), ownerId, redirectUris, scopes, isConfidential: data.isConfidential ?? false } });
+    const clientSecret = generateOpaqueToken(32);
+    const client = await prisma.oAuthClient.create({ data: { clientId, clientSecretHash: await hashPassword(clientSecret), name: data.name.trim(), ownerId, redirectUris, scopes, isConfidential: data.isConfidential ?? false } });
     await auditService.record("OAUTH_CLIENT_CREATED", { userId: ownerId, metadata: { clientId, name: client.name, isConfidential: client.isConfidential } });
-    return { client, clientSecret };
+    return { client, clientSecret: client.isConfidential ? clientSecret : undefined };
   },
   listClientsForOwner(ownerId: string) { return prisma.oAuthClient.findMany({ where: { ownerId }, select: { id: true, clientId: true, name: true, redirectUris: true, scopes: true, isConfidential: true, isActive: true, createdAt: true, updatedAt: true }, orderBy: { createdAt: "desc" } }); },
   async updateClient(ownerId: string, id: string, data: { name?: string; redirectUris?: string[]; scopes?: string[] }) {
@@ -48,7 +48,7 @@ export const oauthService = {
     if (!client || client.ownerId !== ownerId) throw AppError.notFound("OAuth client not found");
     const redirectUris = data.redirectUris ? [...new Set(data.redirectUris.map((uri) => new URL(uri).toString()))] : client.redirectUris;
     if (redirectUris.some((uri) => uri.startsWith("http://") && !uri.startsWith("http://localhost") && !uri.startsWith("http://127.0.0.1"))) throw AppError.badRequest("Production redirect URIs must use HTTPS", "INVALID_REDIRECT_URI");
-    const scopes = data.scopes ? scopesFor(data.scopes, MAX_OAUTH_SCOPES) : client.scopes;
+    const scopes = data.scopes ? scopesFor(data.scopes, client.scopes) : client.scopes;
     return prisma.oAuthClient.update({ where: { id }, data: { name: data.name?.trim() || client.name, redirectUris, scopes } });
   },
   async rotateClientSecret(ownerId: string, id: string) {
@@ -62,7 +62,7 @@ export const oauthService = {
   async revokeClient(ownerId: string, id: string) {
     const client = await prisma.oAuthClient.findUnique({ where: { id } });
     if (!client || client.ownerId !== ownerId) throw AppError.notFound("OAuth client not found");
-    await prisma.$transaction([prisma.oAuthClient.update({ where: { id }, data: { isActive: false } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } })]);
+    await prisma.$transaction([prisma.oAuthClient.update({ where: { id }, data: { isActive: false } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: id, revokedAt: id, revokedAt: null }, data: { revokedAt: new Date() } })]);
     return prisma.oAuthClient.findUnique({ where: { id }, select: { id: true, clientId: true, name: true, isActive: true } });
   },
   listConsentsForUser(userId: string) { return prisma.oAuthConsent.findMany({ where: { userId, revokedAt: null }, include: { client: { select: { name: true, clientId: true } } }, orderBy: { grantedAt: "desc" } }); },
@@ -95,7 +95,7 @@ export const oauthService = {
   async exchangeCode(input: { code: string; clientId: string; redirectUri: string; codeVerifier?: string; clientSecret?: string }) {
     const client = await loadClient(input.clientId);
     if (!client.redirectUris.includes(input.redirectUri)) throw AppError.badRequest("Invalid redirect URI", "INVALID_REDIRECT_URI");
-    if (client.isConfidential && (!input.clientSecret || !(await verifyPassword(client.clientSecretHash ?? "", input.clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
+    if (client.isConfidential && (!input.clientSecret || !(await verifyPassword(client.clientSecretHash, input.clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
     const record = await prisma.oAuthAuthorizationCode.findUnique({ where: { codeHash: hashToken(input.code) } });
     if (!record || record.clientId !== client.id || record.usedAt || record.expiresAt < new Date() || record.redirectUri !== input.redirectUri) throw AppError.badRequest("Invalid or expired authorization code", "INVALID_GRANT");
     if (!input.codeVerifier) throw AppError.badRequest("PKCE verifier required", "PKCE_REQUIRED");
@@ -111,7 +111,7 @@ export const oauthService = {
   },
   async refreshAccessToken(rawRefreshToken: string, clientId: string, clientSecret?: string) {
     const client = await loadClient(clientId);
-    if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash ?? "", clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
+    if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
     const token = await prisma.oAuthRefreshToken.findUnique({ where: { tokenHash: hashToken(rawRefreshToken) } });
     if (!token || token.clientId !== client.id || token.revokedAt || token.expiresAt < new Date()) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
     const newAccess = generateOpaqueToken(48); const newRefresh = generateOpaqueToken(48);
@@ -120,7 +120,7 @@ export const oauthService = {
   },
   async revokeToken(rawToken: string, clientId: string, clientSecret?: string) {
     const client = await loadClient(clientId);
-    if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash ?? "", clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
+    if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
     const hash = hashToken(rawToken);
     await prisma.oAuthAccessToken.updateMany({ where: { tokenHash: hash, clientId: client.id }, data: { revokedAt: new Date() } });
     await prisma.oAuthRefreshToken.updateMany({ where: { tokenHash: hash, clientId: client.id }, data: { revokedAt: new Date() } });
