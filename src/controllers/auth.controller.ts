@@ -7,8 +7,27 @@ import { ok, sanitizeUser } from "../utils/response";
 import { getRequestContext } from "../utils/requestContext";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
-function setRefreshCookie(res: Response, refreshToken: string, rememberMe = true) { res.cookie(env.REFRESH_COOKIE_NAME, refreshToken, { httpOnly: true, secure: env.COOKIE_SECURE, sameSite: env.COOKIE_SAME_SITE, domain: env.isProduction ? env.COOKIE_DOMAIN : undefined, path: "/api/v1/auth", ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 * 1000 } : {}) }); }
-function clearRefreshCookie(res: Response) { res.clearCookie(env.REFRESH_COOKIE_NAME, { path: "/api/v1/auth", domain: env.isProduction ? env.COOKIE_DOMAIN : undefined, secure: env.COOKIE_SECURE, sameSite: env.COOKIE_SAME_SITE }); }
+
+const sharedCookieDomain = env.COOKIE_DOMAIN && env.COOKIE_DOMAIN !== "localhost" ? env.COOKIE_DOMAIN : undefined;
+const refreshCookieOptions = {
+  httpOnly: true,
+  secure: env.COOKIE_SECURE,
+  sameSite: env.COOKIE_SAME_SITE,
+  domain: sharedCookieDomain,
+  path: "/api/v1/auth",
+} as const;
+
+function setRefreshCookie(res: Response, refreshToken: string, rememberMe = true) {
+  res.cookie(env.REFRESH_COOKIE_NAME, refreshToken, {
+    ...refreshCookieOptions,
+    ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 * 1000 } : {}),
+  });
+}
+
+function clearRefreshCookie(res: Response) {
+  res.clearCookie(env.REFRESH_COOKIE_NAME, refreshCookieOptions);
+}
+
 export const authController = {
   async register(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); const { user, accessToken, refreshToken, rememberMe } = await authService.register(req.body, ctx); setRefreshCookie(res, refreshToken, rememberMe); void notificationService.sendWelcomeNotification(user); return ok(res, { user: sanitizeUser(user), accessToken }); } catch (err) { next(err); } },
   async login(req: Request, res: Response, next: NextFunction) { try { const ctx = getRequestContext(req); const { identifier, password, rememberMe = true } = req.body; const { user, accessToken, refreshToken, rememberMe: persistedRememberMe } = await authService.login(identifier, password, ctx, rememberMe); setRefreshCookie(res, refreshToken, persistedRememberMe); void notificationService.sendLoginNotification(user, ctx); return ok(res, { user: sanitizeUser(user), accessToken }); } catch (err) { next(err); } },
