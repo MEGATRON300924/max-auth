@@ -57,6 +57,7 @@ export const oauthService = {
     if (!client.isConfidential) throw AppError.badRequest("Public OAuth clients do not use client secrets", "PUBLIC_CLIENT");
     const clientSecret = generateOpaqueToken(32);
     await prisma.oAuthClient.update({ where: { id }, data: { clientSecretHash: await hashPassword(clientSecret) } });
+    await auditService.record("OAUTH_CLIENT_SECRET_ROTATED", { userId: ownerId, metadata: { clientId: client.clientId } });
     return { clientId: client.clientId, clientSecret };
   },
   async revokeClient(ownerId: string, id: string) {
