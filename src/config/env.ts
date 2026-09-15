@@ -4,18 +4,23 @@ import path from "path";
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 function required(name: string, fallback?: string): string { const value = process.env[name] ?? fallback; if (value === undefined) throw new Error(`Missing required environment variable: ${name}`); return value; }
 function optional(name: string, fallback: string): string { return process.env[name] ?? fallback; }
+const appUrl = process.env.APP_URL ?? "http://localhost:4000";
 const isProduction = (process.env.NODE_ENV ?? "development") === "production";
+const isHttpsApp = appUrl.startsWith("https://");
+const isLocalApp = /https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/i.test(appUrl);
+const defaultCookieDomain = isLocalApp ? "localhost" : "max-ai.name.ng";
 
 export const env = {
-  NODE_ENV: optional("NODE_ENV", "development"), PORT: parseInt(optional("PORT", "4000"), 10), APP_NAME: optional("APP_NAME", "MAX Auth"), APP_URL: optional("APP_URL", "http://localhost:4000"), FRONTEND_URL: optional("FRONTEND_URL", "http://localhost:3000"),
+  NODE_ENV: optional("NODE_ENV", "development"), PORT: parseInt(optional("PORT", "4000"), 10), APP_NAME: optional("APP_NAME", "MAX Auth"), APP_URL: appUrl, FRONTEND_URL: optional("FRONTEND_URL", "http://localhost:3000"),
   DATABASE_URL: required("DATABASE_URL"),
   JWT_ACCESS_SECRET: required("JWT_ACCESS_SECRET"), JWT_REFRESH_SECRET: required("JWT_REFRESH_SECRET"), JWT_ACCESS_EXPIRES_IN: optional("JWT_ACCESS_EXPIRES_IN", "15m"), JWT_REFRESH_EXPIRES_IN: optional("JWT_REFRESH_EXPIRES_IN", "30d"), JWT_ISSUER: optional("JWT_ISSUER", "max-auth"), JWT_AUDIENCE: optional("JWT_AUDIENCE", "max-ecosystem"),
   GOOGLE_CLIENT_ID: optional("GOOGLE_CLIENT_ID", ""),
   EMAIL_VERIFICATION_TOKEN_TTL_HOURS: parseInt(optional("EMAIL_VERIFICATION_TOKEN_TTL_HOURS", "24"), 10), PASSWORD_RESET_TOKEN_TTL_MINUTES: parseInt(optional("PASSWORD_RESET_TOKEN_TTL_MINUTES", "30"), 10),
-  // Production spans the MAX subdomains, so the refresh cookie must be valid for them.
-  // Keep local development scoped to localhost.
-  COOKIE_DOMAIN: optional("COOKIE_DOMAIN", isProduction ? "max-ai.name.ng" : "localhost"),
-  COOKIE_SECURE: optional("COOKIE_SECURE", isProduction ? "true" : "false") === "true",
+  // The MAX web apps are sibling subdomains, so production refresh cookies must
+  // be available to all of them. This default is derived from APP_URL rather
+  // than NODE_ENV because some hosts do not set NODE_ENV automatically.
+  COOKIE_DOMAIN: optional("COOKIE_DOMAIN", defaultCookieDomain),
+  COOKIE_SECURE: optional("COOKIE_SECURE", isHttpsApp || isProduction ? "true" : "false") === "true",
   COOKIE_SAME_SITE: optional("COOKIE_SAME_SITE", "strict") as "strict" | "lax" | "none", REFRESH_COOKIE_NAME: optional("REFRESH_COOKIE_NAME", "max_refresh_token"), CSRF_SECRET: required("CSRF_SECRET"),
   RATE_LIMIT_WINDOW_MINUTES: parseInt(optional("RATE_LIMIT_WINDOW_MINUTES", "15"), 10), RATE_LIMIT_MAX_REQUESTS: parseInt(optional("RATE_LIMIT_MAX_REQUESTS", "100"), 10), LOGIN_RATE_LIMIT_MAX: parseInt(optional("LOGIN_RATE_LIMIT_MAX", "10"), 10), LOGIN_RATE_LIMIT_WINDOW_MINUTES: parseInt(optional("LOGIN_RATE_LIMIT_WINDOW_MINUTES", "15"), 10),
   CORS_ALLOWED_ORIGINS: optional("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",").map((s) => s.trim()),
