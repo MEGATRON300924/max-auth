@@ -15,6 +15,7 @@ export const WEBHOOK_EVENTS = [
 ] as const;
 
 const MAX_DELIVERY_ATTEMPTS = 5;
+const DELIVERY_CLAIM_LEASE_MS = 2 * 60 * 1000;
 
 function hashSecret(secret: string) {
   return crypto.createHash("sha256").update(secret).digest("hex");
@@ -54,7 +55,10 @@ async function sendDelivery(endpoint: { id: string; url: string; secretHash: str
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = crypto.createHmac("sha256", endpoint.secretHash).update(`${timestamp}.${delivery.body}`).digest("hex");
   try {
-    const response = await fetch(endpoint.url, {
+    // Revalidate the destination immediately before every delivery so a DNS change
+    // after endpoint creation/update cannot silently bypass the URL policy.
+    const safeUrl = await validateUrl(endpoint.url);
+    const response = await fetch(safeUrl, {
       method: "POST",
       redirect: "manual",
       headers: {
@@ -161,6 +165,9 @@ export const webhookService = {
   },
 
   async retryPending(limit = 25) {
+    // Recover deliveries whose worker lease expired after a process crash.
+    await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET status = 'retrying' WHERE status = 'processing' AND next_attempt_at IS NOT NULL AND next_attempt_at <= CURRENT_TIMESTAMP`);
+
     const deliveries = await prisma.$queryRawUnsafe<any[]>(`
       SELECT d.id, d.endpoint_id AS "endpointId", d.event_type AS "eventType", d.event_id AS "eventId", d.payload::text AS body,
              d.attempt_count AS "attemptCount", e.url, e.secret_hash AS "secretHash"
@@ -174,13 +181,20 @@ export const webhookService = {
       ORDER BY d.next_attempt_at ASC
       LIMIT $2`, MAX_DELIVERY_ATTEMPTS, limit);
 
+    let claimed = 0;
     for (const delivery of deliveries) {
-      await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET attempt_count = attempt_count + 1 WHERE id = $1`, delivery.id);
+      // Atomically claim the row so multiple MAX Auth instances cannot send the
+      // same retry concurrently. The short lease also makes crashed claims recoverable.
+      const claimRows = await prisma.$queryRawUnsafe<any[]>(`UPDATE webhook_deliveries SET status = 'processing', next_attempt_at = $1 WHERE id = $2 AND status = 'retrying' RETURNING id`, new Date(Date.now() + DELIVERY_CLAIM_LEASE_MS), delivery.id);
+      if (!claimRows.length) continue;
+      claimed += 1;
+
+      await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET attempt_count = attempt_count + 1 WHERE id = $1 AND status = 'processing'`, delivery.id);
       await sendDelivery(
         { id: delivery.endpointId, url: delivery.url, secretHash: delivery.secretHash },
         { id: delivery.id, eventType: delivery.eventType, eventId: delivery.eventId, body: delivery.body, attemptCount: delivery.attemptCount + 1 },
       );
     }
-    return deliveries.length;
+    return claimed;
   },
 };
