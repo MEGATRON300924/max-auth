@@ -8,12 +8,14 @@ import { getRequestContext } from "../utils/requestContext";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 
-const sharedCookieDomain = env.COOKIE_DOMAIN && env.COOKIE_DOMAIN !== "localhost" ? env.COOKIE_DOMAIN : undefined;
+// The refresh token is only consumed by auth.max-ai.name.ng.
+// Keep it host-only instead of using a parent-domain cookie. This avoids
+// browser domain/path policy differences between api.max-ai.name.ng,
+// developers.max-ai.name.ng and auth.max-ai.name.ng.
 const refreshCookieOptions = {
   httpOnly: true,
   secure: env.COOKIE_SECURE,
   sameSite: env.COOKIE_SAME_SITE,
-  domain: sharedCookieDomain,
   path: "/api/v1/auth",
 } as const;
 
