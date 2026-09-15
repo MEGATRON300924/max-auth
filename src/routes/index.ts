@@ -5,6 +5,7 @@ import deviceRoutes from "./device.routes";
 import securityRoutes from "./security.routes";
 import connectedAccountsRoutes from "./connectedAccounts.routes";
 import oauthRoutes from "./oauth.routes";
+import webhookRoutes from "./webhook.routes";
 import adminRoutes from "./admin.routes";
 import healthRoutes from "./health.routes";
 
@@ -16,6 +17,7 @@ router.use("/devices", deviceRoutes);
 router.use("/security", securityRoutes);
 router.use("/connected-accounts", connectedAccountsRoutes);
 router.use("/oauth", oauthRoutes);
+router.use("/webhooks", webhookRoutes);
 router.use("/admin", adminRoutes);
 router.use("/health", healthRoutes);
 
