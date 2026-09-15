@@ -105,9 +105,18 @@ export const oauthService = {
     if (digest !== record.codeChallenge) throw AppError.badRequest("Invalid PKCE verifier", "INVALID_GRANT");
     const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } });
     if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE");
-    await prisma.oAuthAuthorizationCode.update({ where: { id: record.id }, data: { usedAt: new Date() } });
-    const accessToken = generateOpaqueToken(48); const refreshToken = generateOpaqueToken(48);
-    await prisma.$transaction([prisma.oAuthAccessToken.create({ data: { tokenHash: hashToken(accessToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } }), prisma.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } })]);
+
+    const now = new Date();
+    const accessToken = generateOpaqueToken(48);
+    const refreshToken = generateOpaqueToken(48);
+    const result = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.oAuthAuthorizationCode.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
+      if (claimed.count !== 1) throw AppError.badRequest("Invalid or expired authorization code", "INVALID_GRANT");
+      await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(accessToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } });
+      await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } });
+      return true;
+    });
+    if (!result) throw AppError.badRequest("Invalid or expired authorization code", "INVALID_GRANT");
     return { access_token: accessToken, refresh_token: refreshToken, token_type: "Bearer", expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(record.scopes.includes("openid") ? { id_token: signIdToken(user, client.clientId) } : {}) };
   },
   async refreshAccessToken(rawRefreshToken: string, clientId: string, clientSecret?: string) {
@@ -115,8 +124,20 @@ export const oauthService = {
     if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
     const token = await prisma.oAuthRefreshToken.findUnique({ where: { tokenHash: hashToken(rawRefreshToken) } });
     if (!token || token.clientId !== client.id || token.revokedAt || token.expiresAt < new Date()) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
-    const newAccess = generateOpaqueToken(48); const newRefresh = generateOpaqueToken(48);
-    await prisma.$transaction([prisma.oAuthRefreshToken.update({ where: { id: token.id }, data: { revokedAt: new Date() } }), prisma.oAuthAccessToken.create({ data: { tokenHash: hashToken(newAccess), clientId: client.id, userId: token.userId, scopes: token.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } }), prisma.oAuthRefreshToken.create({ data: { tokenHash: hashToken(newRefresh), clientId: client.id, userId: token.userId, scopes: token.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } })]);
+    const user = await prisma.user.findUnique({ where: { id: token.userId }, select: { status: true } });
+    if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE");
+
+    const now = new Date();
+    const newAccess = generateOpaqueToken(48);
+    const newRefresh = generateOpaqueToken(48);
+    const result = await prisma.$transaction(async (tx) => {
+      const rotated = await tx.oAuthRefreshToken.updateMany({ where: { id: token.id, revokedAt: null, expiresAt: { gt: now } }, data: { revokedAt: now } });
+      if (rotated.count !== 1) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
+      await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(newAccess), clientId: client.id, userId: token.userId, scopes: token.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } });
+      await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(newRefresh), clientId: client.id, userId: token.userId, scopes: token.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } });
+      return true;
+    });
+    if (!result) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
     return { access_token: newAccess, refresh_token: newRefresh, token_type: "Bearer", expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: token.scopes.join(" ") };
   },
   async revokeToken(rawToken: string, clientId: string, clientSecret?: string) {
