@@ -4,6 +4,7 @@ import net from "node:net";
 import { prisma } from "../database/prisma";
 
 export const WEBHOOK_EVENTS = [
+  "webhook.test",
   "user.created",
   "user.login",
   "oauth.consent.granted",
@@ -42,14 +43,8 @@ async function validateUrl(rawUrl: string) {
   return url.toString();
 }
 
-function safeJson(value: unknown) {
-  return JSON.stringify(value);
-}
-
 async function getOwnedEndpoint(userId: string, endpointId: string) {
-  const rows = await prisma.$queryRawUnsafe<any[]>(
-    `SELECT id, user_id, name, url, active, created_at, updated_at FROM webhook_endpoints WHERE id = $1 AND user_id = $2 LIMIT 1`, endpointId, userId
-  );
+  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT id, user_id, name, url, active, created_at, updated_at FROM webhook_endpoints WHERE id = $1 AND user_id = $2 LIMIT 1`, endpointId, userId);
   return rows[0] ?? null;
 }
 
@@ -75,22 +70,16 @@ export const webhookService = {
     const selected = [...new Set(events)].filter((event) => WEBHOOK_EVENTS.includes(event as typeof WEBHOOK_EVENTS[number]));
     if (!selected.length) throw new Error("Select at least one supported event");
     const secret = generateSecret();
-    const hash = hashSecret(secret);
-    const endpointRows = await prisma.$queryRawUnsafe<any[]>(
-      `INSERT INTO webhook_endpoints (user_id, name, url, secret_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, url, active, created_at, updated_at`, userId, cleanName, url, hash
-    );
+    const endpointRows = await prisma.$queryRawUnsafe<any[]>(`INSERT INTO webhook_endpoints (user_id, name, url, secret_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, url, active, created_at, updated_at`, userId, cleanName, url, hashSecret(secret));
     const endpoint = endpointRows[0];
-    for (const event of selected) {
-      await prisma.$executeRawUnsafe(`INSERT INTO webhook_subscriptions (endpoint_id, event_type) VALUES ($1, $2)`, endpoint.id, event);
-    }
+    for (const event of selected) await prisma.$executeRawUnsafe(`INSERT INTO webhook_subscriptions (endpoint_id, event_type) VALUES ($1, $2)`, endpoint.id, event);
     return { ...endpoint, subscriptions: selected.map((event) => ({ eventType: event, active: true })), secret };
   },
 
   async update(userId: string, endpointId: string, input: { name?: string; url?: string; active?: boolean; events?: string[] }) {
     const endpoint = await getOwnedEndpoint(userId, endpointId);
     if (!endpoint) throw new Error("Webhook endpoint not found");
-    let url = endpoint.url;
-    if (input.url !== undefined) url = await validateUrl(input.url.trim());
+    const url = input.url === undefined ? endpoint.url : await validateUrl(input.url.trim());
     const name = input.name === undefined ? endpoint.name : input.name.trim().slice(0, 100);
     if (!name) throw new Error("Webhook name is required");
     const active = input.active === undefined ? endpoint.active : Boolean(input.active);
@@ -118,8 +107,7 @@ export const webhookService = {
   },
 
   async deliveries(userId: string, endpointId: string) {
-    const endpoint = await getOwnedEndpoint(userId, endpointId);
-    if (!endpoint) throw new Error("Webhook endpoint not found");
+    if (!(await getOwnedEndpoint(userId, endpointId))) throw new Error("Webhook endpoint not found");
     return prisma.$queryRawUnsafe<any[]>(`SELECT id, event_type AS "eventType", event_id AS "eventId", attempt_count AS "attemptCount", status, response_status AS "responseStatus", response_body AS "responseBody", next_attempt_at AS "nextAttemptAt", delivered_at AS "deliveredAt", created_at AS "createdAt" FROM webhook_deliveries WHERE endpoint_id = $1 ORDER BY created_at DESC LIMIT 100`, endpointId);
   },
 
@@ -129,21 +117,18 @@ export const webhookService = {
     if (!endpoint) return null;
     const subscriptions = await prisma.$queryRawUnsafe<any[]>(`SELECT 1 FROM webhook_subscriptions WHERE endpoint_id = $1 AND event_type = $2 AND active = true LIMIT 1`, endpointId, eventType);
     if (!subscriptions.length) return null;
-
     const eventId = `evt_${crypto.randomBytes(18).toString("base64url")}`;
-    const body = safeJson({ id: eventId, type: eventType, createdAt: new Date().toISOString(), data: payload });
+    const body = JSON.stringify({ id: eventId, type: eventType, createdAt: new Date().toISOString(), data: payload });
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const deliveryRows = await prisma.$queryRawUnsafe<any[]>(`INSERT INTO webhook_deliveries (endpoint_id, event_type, event_id, payload, attempt_count) VALUES ($1, $2, $3, $4::jsonb, 1) RETURNING id`, endpointId, eventType, eventId, body);
     const deliveryId = deliveryRows[0].id;
+    // The database stores SHA-256(secret); that derived key is used for HMAC signing so the raw secret is never persisted.
     const signature = crypto.createHmac("sha256", endpoint.secretHash).update(`${timestamp}.${body}`).digest("hex");
     try {
       const response = await fetch(endpoint.url, { method: "POST", redirect: "manual", headers: { "content-type": "application/json", "user-agent": "MAX-Webhooks/1.0", "x-max-event": eventType, "x-max-event-id": eventId, "x-max-timestamp": timestamp, "x-max-signature": `t=${timestamp},v1=${signature}` }, body, signal: AbortSignal.timeout(10000) });
       const responseBody = (await response.text()).slice(0, 1000);
-      if (response.status >= 200 && response.status < 300) {
-        await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET status = 'delivered', response_status = $1, response_body = $2, delivered_at = CURRENT_TIMESTAMP WHERE id = $3`, response.status, responseBody, deliveryId);
-      } else {
-        await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET status = 'failed', response_status = $1, response_body = $2, next_attempt_at = CURRENT_TIMESTAMP + INTERVAL '60 seconds' WHERE id = $3`, response.status, responseBody, deliveryId);
-      }
+      if (response.status >= 200 && response.status < 300) await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET status = 'delivered', response_status = $1, response_body = $2, delivered_at = CURRENT_TIMESTAMP WHERE id = $3`, response.status, responseBody, deliveryId);
+      else await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET status = 'failed', response_status = $1, response_body = $2, next_attempt_at = CURRENT_TIMESTAMP + INTERVAL '60 seconds' WHERE id = $3`, response.status, responseBody, deliveryId);
       return { deliveryId, status: response.status };
     } catch (error) {
       await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET status = 'failed', response_body = $1, next_attempt_at = CURRENT_TIMESTAMP + INTERVAL '60 seconds' WHERE id = $2`, String(error).slice(0, 1000), deliveryId);
