@@ -13,7 +13,12 @@ router.post("/register", registerRateLimiter, validate(registerSchema), authCont
 router.post("/login", loginRateLimiter, validate(loginSchema), authController.login);
 router.post("/google", loginRateLimiter, validate(googleSchema), authController.google);
 router.post("/logout", doubleCsrfProtection, authController.logout);
-router.post("/refresh", doubleCsrfProtection, authController.refresh);
+// Refresh is protected by the httpOnly, Secure, SameSite cookie itself. Do not
+// require the IP-bound double-submit CSRF token here: browsers/proxies can
+// legitimately present a different req.ip between the bootstrap token request
+// and the refresh request, which would make an otherwise valid session fail on
+// every page reload.
+router.post("/refresh", authController.refresh);
 router.get("/me", authenticate, authController.me);
 router.post("/email/send-verification", authenticate, sensitiveActionRateLimiter, authController.sendVerificationEmail);
 router.post("/email/verify", validate(verifyEmailSchema), authController.verifyEmail);
