@@ -3,6 +3,7 @@ import { env } from "./config/env";
 import { logger } from "./utils/logger";
 import { prisma } from "./database/prisma";
 import { ensureSystemOAuthClients } from "./services/systemOAuth.service";
+import { webhookService } from "./services/webhook.service";
 
 async function start() {
   await ensureSystemOAuthClients();
@@ -13,8 +14,16 @@ async function start() {
     logger.info(`API docs available at ${env.APP_URL}/docs`);
   });
 
+  const webhookRetryInterval = setInterval(() => {
+    webhookService.retryPending().catch((error) => {
+      logger.error("Webhook retry worker failed", { error });
+    });
+  }, 30_000);
+  webhookRetryInterval.unref();
+
   async function shutdown(signal: string) {
     logger.info(`Received ${signal}. Shutting down gracefully...`);
+    clearInterval(webhookRetryInterval);
     server.close(async () => {
       await prisma.$disconnect();
       logger.info("Shutdown complete.");
