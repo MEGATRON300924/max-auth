@@ -17,7 +17,7 @@ export const swaggerSpec = swaggerJsdoc({
         bearerAuth: {
           type: "http",
           scheme: "bearer",
-          bearerFormat: "JWT",
+          bearerFormat: "opaque",
         },
       },
     },
