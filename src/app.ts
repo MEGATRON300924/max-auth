@@ -15,9 +15,16 @@ import apiRouter from "./routes";
 
 export function createApp() {
   const app = express();
+  const firstPartyOrigins = [
+    "https://max-ai.name.ng",
+    "https://developers.max-ai.name.ng",
+    "https://api.max-ai.name.ng",
+  ];
+  const allowedOrigins = [...new Set([...env.CORS_ALLOWED_ORIGINS, ...firstPartyOrigins])];
+
   app.set("trust proxy", 1);
   app.use(helmet({ contentSecurityPolicy: env.isProduction ? undefined : false, crossOriginResourcePolicy: { policy: "same-site" } }));
-  app.use(cors({ origin: env.CORS_ALLOWED_ORIGINS, credentials: true, methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization", "x-csrf-token", "x-client-id", "x-request-id"] }));
+  app.use(cors({ origin: allowedOrigins, credentials: true, methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization", "x-csrf-token", "x-client-id", "x-request-id"] }));
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ extended: true, limit: "1mb" }));
   app.use(cookieParser());
