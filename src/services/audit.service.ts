@@ -1,5 +1,6 @@
 import { prisma } from "../database/prisma";
 import { AuditAction, Prisma } from "@prisma/client";
+import { webhookService } from "./webhook.service";
 
 interface AuditContext {
   userId?: string;
@@ -8,9 +9,17 @@ interface AuditContext {
   metadata?: Prisma.InputJsonValue;
 }
 
+const webhookEventForAudit: Partial<Record<AuditAction, string>> = {
+  REGISTER: "user.created",
+  LOGIN_SUCCESS: "user.login",
+  OAUTH_CLIENT_CREATED: "oauth.client.created",
+  OAUTH_CONSENT_GRANTED: "oauth.consent.granted",
+  OAUTH_CONSENT_REVOKED: "oauth.consent.revoked",
+};
+
 export const auditService = {
   async record(action: AuditAction, ctx: AuditContext) {
-    return prisma.auditLog.create({
+    const audit = await prisma.auditLog.create({
       data: {
         action,
         userId: ctx.userId,
@@ -19,6 +28,21 @@ export const auditService = {
         metadata: ctx.metadata,
       },
     });
+
+    const eventType = webhookEventForAudit[action];
+    if (eventType && ctx.userId) {
+      void Promise.all(
+        (await prisma.$queryRawUnsafe<any[]>(`SELECT id FROM webhook_endpoints WHERE user_id = $1 AND active = true`, ctx.userId)).map((endpoint) =>
+          webhookService.deliver(endpoint.id, eventType, {
+            userId: ctx.userId,
+            action,
+            metadata: ctx.metadata ?? null,
+          })
+        )
+      ).catch(() => undefined);
+    }
+
+    return audit;
   },
 
   async recordLogin(params: {
@@ -40,18 +64,10 @@ export const auditService = {
   },
 
   async listForUser(userId: string, take = 50) {
-    return prisma.auditLog.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take,
-    });
+    return prisma.auditLog.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take });
   },
 
   async listLoginHistoryForUser(userId: string, take = 50) {
-    return prisma.loginHistory.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take,
-    });
+    return prisma.loginHistory.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take });
   },
 };
