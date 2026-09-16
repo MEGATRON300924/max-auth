@@ -14,6 +14,9 @@ const days = (value: number) => new Date(Date.now() + value * 24 * 60 * 60 * 100
 
 type AuthorizationRequest = {
   clientId: string;
+  clientName: string;
+  clientLogo?: string;
+  clientWebsite?: string;
   redirectUri: string;
   scopes: string[];
   codeChallenge: string;
@@ -46,7 +49,7 @@ function verifyAuthorizationRequest(raw: string): AuthorizationRequest {
   if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) throw AppError.badRequest("Invalid authorization request", "INVALID_REQUEST");
   let payload: AuthorizationRequest;
   try { payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")); } catch { throw AppError.badRequest("Invalid authorization request", "INVALID_REQUEST"); }
-  if (!payload?.clientId || !payload?.redirectUri || !Array.isArray(payload.scopes) || !payload?.codeChallenge || payload.codeChallengeMethod !== "S256" || !payload?.state || typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) throw AppError.badRequest("Authorization request expired or invalid", "INVALID_REQUEST");
+  if (!payload?.clientId || !payload?.clientName || !payload?.redirectUri || !Array.isArray(payload.scopes) || !payload?.codeChallenge || payload.codeChallengeMethod !== "S256" || !payload?.state || typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) throw AppError.badRequest("Authorization request expired or invalid", "INVALID_REQUEST");
   return payload;
 }
 
@@ -117,7 +120,7 @@ export const oauthService = {
     await prisma.$transaction([prisma.oAuthConsent.update({ where: { id: consentId }, data: { revokedAt: new Date() } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: consent.clientId, userId, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: consent.clientId, userId, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthAuthorizationCode.deleteMany({ where: { clientId: consent.clientId, userId } })]);
     await auditService.record("OAUTH_CONSENT_REVOKED", { userId, metadata: { clientId: consent.clientId } });
   },
-  async getAuthorizationRequest(input: { clientId: string; redirectUri: string; responseType: string; scope?: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string }) {
+  async getAuthorizationRequest(input: { clientId: string; redirectUri: string; responseType: string; scope?: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string; branding?: { name?: string; logo?: string; website?: string } }) {
     if (input.responseType !== "code") throw AppError.badRequest("Only response_type=code is supported", "UNSUPPORTED_RESPONSE_TYPE");
     if (!input.state) throw AppError.badRequest("state is required", "STATE_REQUIRED");
     const client = await loadClient(input.clientId);
@@ -125,7 +128,8 @@ export const oauthService = {
     if (!input.codeChallenge || input.codeChallengeMethod !== "S256") throw AppError.badRequest("S256 PKCE is required", "PKCE_REQUIRED");
     if (input.codeChallenge.length < 43 || input.codeChallenge.length > 128) throw AppError.badRequest("Invalid PKCE challenge", "INVALID_REQUEST");
     const scopes = scopesFor((input.scope ?? "").split(" ").filter(Boolean), client.scopes);
-    const requestToken = signAuthorizationRequest({ clientId: client.clientId, redirectUri: input.redirectUri, scopes, codeChallenge: input.codeChallenge, codeChallengeMethod: "S256", state: input.state });
+    const clientName = input.branding?.name?.trim() || client.name;
+    const requestToken = signAuthorizationRequest({ clientId: client.clientId, clientName, clientLogo: input.branding?.logo, clientWebsite: input.branding?.website, redirectUri: input.redirectUri, scopes, codeChallenge: input.codeChallenge, codeChallengeMethod: "S256", state: input.state });
     return { client, scopes, requestToken };
   },
   async issueAuthorizationCode(input: { clientId: string; userId: string; redirectUri: string; scopes: string[]; codeChallenge?: string; codeChallengeMethod?: string; state?: string; requestToken?: string }) {
@@ -155,63 +159,52 @@ export const oauthService = {
     if (digest !== record.codeChallenge) throw AppError.badRequest("Invalid PKCE verifier", "INVALID_GRANT");
     const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } });
     if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE");
-
     const now = new Date();
     const accessToken = generateOpaqueToken(48);
     const shouldIssueRefreshToken = record.scopes.includes("offline_access");
     const refreshToken = shouldIssueRefreshToken ? generateOpaqueToken(48) : undefined;
     const result = await prisma.$transaction(async (tx) => {
       const claimed = await tx.oAuthAuthorizationCode.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
-      if (claimed.count !== 1) throw AppError.badRequest("Invalid or expired authorization code", "INVALID_GRANT");
+      if (claimed.count !== 1) throw AppError.badRequest("Authorization code has already been used", "INVALID_GRANT");
       await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(accessToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } });
-      if (refreshToken) {
-        await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } });
-      }
-      return true;
+      if (refreshToken) await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } });
+      return { accessToken, refreshToken };
     });
-    if (!result) throw AppError.badRequest("Invalid or expired authorization code", "INVALID_GRANT");
-    return { access_token: accessToken, ...(refreshToken ? { refresh_token: refreshToken } : {}), token_type: "Bearer", expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(record.scopes.includes("openid") ? { id_token: signIdToken(user, client.clientId) } : {}) };
+    return { token_type: "Bearer", access_token: result.accessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, ...(result.refreshToken ? { refresh_token: result.refreshToken } : {}) };
   },
-  async refreshAccessToken(rawRefreshToken: string, clientId: string, clientSecret?: string) {
+  async refreshAccessToken(refreshToken: string, clientId: string, clientSecret?: string) {
     const client = await loadClient(clientId);
     if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
-    const token = await prisma.oAuthRefreshToken.findUnique({ where: { tokenHash: hashToken(rawRefreshToken) } });
-    if (!token) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
-    if (token.clientId !== client.id) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
-    if (token.revokedAt) {
-      await prisma.$transaction([
-        prisma.oAuthAccessToken.updateMany({ where: { clientId: client.id, userId: token.userId, revokedAt: null }, data: { revokedAt: new Date() } }),
-        prisma.oAuthRefreshToken.updateMany({ where: { clientId: client.id, userId: token.userId, revokedAt: null }, data: { revokedAt: new Date() } }),
-      ]);
-      throw AppError.unauthorized("Refresh token reuse detected", "INVALID_GRANT");
+    const tokenHash = hashToken(refreshToken || "");
+    const record = await prisma.oAuthRefreshToken.findUnique({ where: { tokenHash } });
+    if (!record || record.clientId !== client.id) throw AppError.badRequest("Invalid refresh token", "INVALID_GRANT");
+    if (record.revokedAt) {
+      await prisma.$transaction([prisma.oAuthAccessToken.updateMany({ where: { clientId: client.id, userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: client.id, userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } })]);
+      throw AppError.badRequest("Refresh token reuse detected", "INVALID_GRANT");
     }
-    if (token.expiresAt < new Date()) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
-    const user = await prisma.user.findUnique({ where: { id: token.userId }, select: { status: true } });
+    if (record.expiresAt < new Date()) throw AppError.badRequest("Refresh token expired", "INVALID_GRANT");
+    const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { status: true } });
     if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE");
-
-    const now = new Date();
-    const newAccess = generateOpaqueToken(48);
-    const newRefresh = generateOpaqueToken(48);
-    const result = await prisma.$transaction(async (tx) => {
-      const rotated = await tx.oAuthRefreshToken.updateMany({ where: { id: token.id, revokedAt: null, expiresAt: { gt: now } }, data: { revokedAt: now } });
-      if (rotated.count !== 1) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
-      await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(newAccess), clientId: client.id, userId: token.userId, scopes: token.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } });
-      await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(newRefresh), clientId: client.id, userId: token.userId, scopes: token.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } });
-      return true;
+    const newAccessToken = generateOpaqueToken(48);
+    const newRefreshToken = generateOpaqueToken(48);
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.oAuthRefreshToken.updateMany({ where: { id: record.id, revokedAt: null, expiresAt: { gt: new Date() } }, data: { revokedAt: new Date() } });
+      if (claimed.count !== 1) throw AppError.badRequest("Refresh token has already been used", "INVALID_GRANT");
+      await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(newAccessToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } });
+      await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(newRefreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: record.expiresAt } });
     });
-    if (!result) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
-    return { access_token: newAccess, refresh_token: newRefresh, token_type: "Bearer", expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: token.scopes.join(" ") };
+    return { token_type: "Bearer", access_token: newAccessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, refresh_token: newRefreshToken };
   },
-  async revokeToken(rawToken: string, clientId: string, clientSecret?: string) {
+  async revokeToken(token: string, clientId: string, clientSecret?: string) {
     const client = await loadClient(clientId);
     if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
-    const hash = hashToken(rawToken);
-    await prisma.oAuthAccessToken.updateMany({ where: { tokenHash: hash, clientId: client.id }, data: { revokedAt: new Date() } });
-    await prisma.oAuthRefreshToken.updateMany({ where: { tokenHash: hash, clientId: client.id }, data: { revokedAt: new Date() } });
+    const hash = hashToken(token || "");
+    await prisma.$transaction([prisma.oAuthAccessToken.updateMany({ where: { tokenHash: hash, clientId: client.id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { tokenHash: hash, clientId: client.id, revokedAt: null }, data: { revokedAt: new Date() } })]);
   },
-  async introspect(rawToken: string) {
-    const token = await prisma.oAuthAccessToken.findUnique({ where: { tokenHash: hashToken(rawToken) }, include: { user: { select: { id: true, username: true, displayName: true, email: true, avatarUrl: true, verificationStatus: true, subscriptionTier: true, status: true } }, client: { select: { clientId: true } } } });
-    if (!token || token.revokedAt || token.expiresAt < new Date() || token.user.status !== "ACTIVE") return { active: false as const };
-    return { active: true as const, user: token.user, clientId: token.client.clientId, scopes: token.scopes, expiresAt: token.expiresAt };
+  async introspect(token: string) {
+    const hash = hashToken(token || "");
+    const record = await prisma.oAuthAccessToken.findUnique({ where: { tokenHash: hash }, include: { user: { select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } }, client: { select: { clientId: true } } } });
+    if (!record || record.revokedAt || record.expiresAt < new Date() || record.user.status !== "ACTIVE") return { active: false };
+    return { active: true, client_id: record.client.clientId, user: record.user, scopes: record.scopes, exp: Math.floor(record.expiresAt.getTime() / 1000) };
   },
 };
