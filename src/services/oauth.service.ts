@@ -5,11 +5,22 @@ import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
 import { env } from "../config/env";
 import jwt from "jsonwebtoken";
+import { createHmac, timingSafeEqual } from "crypto";
 
-export const MAX_OAUTH_SCOPES = ["openid", "profile", "email", "offline_access", "profile:read", "email:read", "account:read"];
+export const MAX_OAUTH_SCOPES = ["openid", "profile", "email", "offline_access", "profile:read", "email:read", "account:read", "identity:read", "memory:read"];
 const DEFAULT_SCOPES = ["openid", "profile", "email"];
 const expiry = (minutes: number) => new Date(Date.now() + minutes * 60 * 1000);
 const days = (value: number) => new Date(Date.now() + value * 24 * 60 * 60 * 1000);
+
+type AuthorizationRequest = {
+  clientId: string;
+  redirectUri: string;
+  scopes: string[];
+  codeChallenge: string;
+  codeChallengeMethod: "S256";
+  state: string;
+  exp: number;
+};
 
 function scopesFor(requested: string[], allowed: string[]) {
   const scopes = requested.length ? requested : DEFAULT_SCOPES;
@@ -17,6 +28,26 @@ function scopesFor(requested: string[], allowed: string[]) {
   if (scopes.some((scope) => !MAX_OAUTH_SCOPES.includes(scope))) throw AppError.badRequest("One or more requested scopes are invalid", "INVALID_SCOPE");
   if (scopes.some((scope) => !allowedSet.has(scope))) throw AppError.badRequest("One or more requested scopes are not allowed", "INVALID_SCOPE");
   return [...new Set(scopes)];
+}
+
+function signAuthorizationRequest(request: Omit<AuthorizationRequest, "exp">) {
+  const payload: AuthorizationRequest = { ...request, exp: Math.floor(Date.now() / 1000) + env.OAUTH_AUTH_CODE_TTL_MINUTES * 60 };
+  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = createHmac("sha256", env.JWT_ACCESS_SECRET).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+}
+
+function verifyAuthorizationRequest(raw: string): AuthorizationRequest {
+  const [encoded, signature] = String(raw || "").split(".");
+  if (!encoded || !signature) throw AppError.badRequest("Invalid authorization request", "INVALID_REQUEST");
+  const expected = createHmac("sha256", env.JWT_ACCESS_SECRET).update(encoded).digest("base64url");
+  const provided = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) throw AppError.badRequest("Invalid authorization request", "INVALID_REQUEST");
+  let payload: AuthorizationRequest;
+  try { payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")); } catch { throw AppError.badRequest("Invalid authorization request", "INVALID_REQUEST"); }
+  if (!payload?.clientId || !payload?.redirectUri || !Array.isArray(payload.scopes) || !payload?.codeChallenge || payload.codeChallengeMethod !== "S256" || !payload?.state || typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) throw AppError.badRequest("Authorization request expired or invalid", "INVALID_REQUEST");
+  return payload;
 }
 
 function signIdToken(user: { id: string; email: string; username: string; displayName: string | null; avatarUrl: string | null; verificationStatus: string }, clientId: string) {
@@ -48,7 +79,7 @@ export const oauthService = {
     if (!client || client.ownerId !== ownerId) throw AppError.notFound("OAuth client not found");
     const redirectUris = data.redirectUris ? [...new Set(data.redirectUris.map((uri) => new URL(uri).toString()))] : client.redirectUris;
     if (redirectUris.some((uri) => uri.startsWith("http://") && !uri.startsWith("http://localhost") && !uri.startsWith("http://127.0.0.1"))) throw AppError.badRequest("Production redirect URIs must use HTTPS", "INVALID_REDIRECT_URI");
-    const scopes = data.scopes ? scopesFor(data.scopes, client.scopes) : client.scopes;
+    const scopes = data.scopes ? scopesFor(data.scopes, MAX_OAUTH_SCOPES) : client.scopes;
     return prisma.oAuthClient.update({ where: { id }, data: { name: data.name?.trim() || client.name, redirectUris, scopes } });
   },
   async rotateClientSecret(ownerId: string, id: string) {
@@ -80,13 +111,19 @@ export const oauthService = {
     if (!client.redirectUris.includes(input.redirectUri)) throw AppError.badRequest("Invalid redirect URI", "INVALID_REDIRECT_URI");
     if (!input.codeChallenge || input.codeChallengeMethod !== "S256") throw AppError.badRequest("S256 PKCE is required", "PKCE_REQUIRED");
     if (input.codeChallenge.length < 43 || input.codeChallenge.length > 128) throw AppError.badRequest("Invalid PKCE challenge", "INVALID_REQUEST");
-    return { client, scopes: scopesFor((input.scope ?? "").split(" ").filter(Boolean), client.scopes) };
+    const scopes = scopesFor((input.scope ?? "").split(" ").filter(Boolean), client.scopes);
+    const requestToken = signAuthorizationRequest({ clientId: client.clientId, redirectUri: input.redirectUri, scopes, codeChallenge: input.codeChallenge, codeChallengeMethod: "S256", state: input.state });
+    return { client, scopes, requestToken };
   },
-  async issueAuthorizationCode(input: { clientId: string; userId: string; redirectUri: string; scopes: string[]; codeChallenge?: string; codeChallengeMethod?: string }) {
+  async issueAuthorizationCode(input: { clientId: string; userId: string; redirectUri: string; scopes: string[]; codeChallenge?: string; codeChallengeMethod?: string; state?: string; requestToken?: string }) {
     const client = await loadClient(input.clientId);
     if (!client.redirectUris.includes(input.redirectUri)) throw AppError.badRequest("Invalid redirect URI", "INVALID_REDIRECT_URI");
     if (!input.codeChallenge || input.codeChallengeMethod !== "S256") throw AppError.badRequest("S256 PKCE is required", "PKCE_REQUIRED");
-    const scopes = scopesFor(input.scopes, client.scopes);
+    if (!input.requestToken) throw AppError.badRequest("Authorization request is required", "INVALID_REQUEST");
+    const request = verifyAuthorizationRequest(input.requestToken);
+    if (request.clientId !== client.clientId || request.redirectUri !== input.redirectUri || request.codeChallenge !== input.codeChallenge || request.codeChallengeMethod !== input.codeChallengeMethod || request.state !== input.state) throw AppError.badRequest("Authorization request does not match", "INVALID_REQUEST");
+    const scopes = scopesFor(request.scopes, client.scopes);
+    if (JSON.stringify(scopes) !== JSON.stringify([...new Set(input.scopes)])) throw AppError.badRequest("Approved permissions do not match the authorization request", "INVALID_SCOPE");
     const rawCode = generateOpaqueToken(48);
     await prisma.oAuthAuthorizationCode.create({ data: { codeHash: hashToken(rawCode), clientId: client.id, userId: input.userId, redirectUri: input.redirectUri, scopes, codeChallenge: input.codeChallenge, codeChallengeMethod: input.codeChallengeMethod, expiresAt: expiry(env.OAUTH_AUTH_CODE_TTL_MINUTES) } });
     await prisma.oAuthConsent.upsert({ where: { clientId_userId: { clientId: client.id, userId: input.userId } }, create: { clientId: client.id, userId: input.userId, scopes }, update: { scopes, grantedAt: new Date(), revokedAt: null } });
