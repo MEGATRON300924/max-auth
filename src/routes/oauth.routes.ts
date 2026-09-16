@@ -9,14 +9,13 @@ import { validate } from "../middleware/validate";
 import { MAX_OAUTH_SCOPES } from "../services/oauth.service";
 import { OAUTH_APPLICATION_TYPES } from "../services/oauth-client-config.service";
 
-MAX_OAUTH_SCOPES.push("identity:read", "memory:read");
 const router = Router();
 const scopeSchema = z.array(z.string()).min(1).refine((scopes) => scopes.every((scope) => MAX_OAUTH_SCOPES.includes(scope)), "Unsupported OAuth scope");
 const createClientSchema = z.object({ body: z.object({ name: z.string().trim().min(2).max(100), redirectUris: z.array(z.string().url()).min(1).max(50), scopes: scopeSchema, isConfidential: z.boolean().optional() }) });
 const updateClientSchema = z.object({ body: z.object({ name: z.string().trim().min(2).max(100).optional(), redirectUris: z.array(z.string().url()).min(1).max(50).optional(), scopes: scopeSchema.optional() }).refine((body) => Object.keys(body).length > 0, "At least one field is required") });
 const clientConfigSchema = z.object({ body: z.object({ applicationType: z.enum(OAUTH_APPLICATION_TYPES), authorizedOrigins: z.array(z.string().url()).max(50).optional(), packageName: z.string().trim().max(255).optional(), bundleId: z.string().trim().max(255).optional(), certificateFingerprints: z.array(z.string().trim().max(128)).max(20).optional(), logoUrl: z.string().url().optional().nullable(), displayName: z.string().trim().max(100).optional().nullable(), websiteUrl: z.string().url().optional().nullable(), manifestUrl: z.string().url().optional().nullable() }) });
 const logoSchema = z.object({ body: z.object({ contentType: z.string().min(1), data: z.string().min(1).max(700000) }) });
-const approveSchema = z.object({ body: z.object({ clientId: z.string().min(1), redirectUri: z.string().url(), scopes: z.string().min(1), codeChallenge: z.string().min(43).max(128), codeChallengeMethod: z.literal("S256"), state: z.string().min(1).max(2048) }) });
+const approveSchema = z.object({ body: z.object({ clientId: z.string().min(1), redirectUri: z.string().url(), scopes: z.string().min(1), codeChallenge: z.string().min(43).max(128), codeChallengeMethod: z.literal("S256"), state: z.string().min(1).max(2048), requestToken: z.string().min(1) }) });
 const revokeSchema = z.object({ body: z.object({ token: z.string().min(1), token_type_hint: z.string().optional(), client_id: z.string().optional(), client_secret: z.string().optional() }) });
 
 router.get("/clients/:clientId/logo", oauthClientLogoController.publicLogo);
