@@ -1,0 +1,14 @@
+{
+  "name": "@thetronforge/max-auth-web",
+  "version": "0.1.0",
+  "description": "MAX Auth browser SDK for OAuth 2.0 Authorization Code with S256 PKCE",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
