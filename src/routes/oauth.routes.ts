@@ -1,20 +1,25 @@
 import { Router } from "express";
 import { oauthController } from "../controllers/oauth.controller";
+import { oauthClientConfigController } from "../controllers/oauth-client-config.controller";
 import { authenticate } from "../middleware/authenticate";
 import { z } from "zod";
 import { validate } from "../middleware/validate";
-import { MAX_OAUTH_SCOPES } from "../services/oauth.service";
+import { MAX_OAUTH_SCOPES, } from "../services/oauth.service";
+import { OAUTH_APPLICATION_TYPES } from "../services/oauth-client-config.service";
 
 const router = Router();
 const scopeSchema = z.array(z.string()).min(1).refine((scopes) => scopes.every((scope) => MAX_OAUTH_SCOPES.includes(scope)), "Unsupported OAuth scope");
 const createClientSchema = z.object({ body: z.object({ name: z.string().trim().min(2).max(100), redirectUris: z.array(z.string().url()).min(1).max(50), scopes: scopeSchema, isConfidential: z.boolean().optional() }) });
 const updateClientSchema = z.object({ body: z.object({ name: z.string().trim().min(2).max(100).optional(), redirectUris: z.array(z.string().url()).min(1).max(50).optional(), scopes: scopeSchema.optional() }).refine((body) => Object.keys(body).length > 0, "At least one field is required") });
+const clientConfigSchema = z.object({ body: z.object({ applicationType: z.enum(OAUTH_APPLICATION_TYPES), authorizedOrigins: z.array(z.string().url()).max(50).optional(), packageName: z.string().trim().max(255).optional(), bundleId: z.string().trim().max(255).optional(), certificateFingerprints: z.array(z.string().trim().max(128)).max(20).optional() }) });
 const approveSchema = z.object({ body: z.object({ clientId: z.string().min(1), redirectUri: z.string().url(), scopes: z.string().min(1), codeChallenge: z.string().min(43).max(128), codeChallengeMethod: z.literal("S256"), state: z.string().min(1).max(2048) }) });
 const revokeSchema = z.object({ body: z.object({ token: z.string().min(1), token_type_hint: z.string().optional(), client_id: z.string().optional(), client_secret: z.string().optional() }) });
 
 router.post("/clients", authenticate, validate(createClientSchema), oauthController.createClient);
 router.get("/clients", authenticate, oauthController.listClients);
 router.patch("/clients/:clientId", authenticate, validate(updateClientSchema), oauthController.updateClient);
+router.get("/clients/:clientId/config", authenticate, oauthClientConfigController.get);
+router.put("/clients/:clientId/config", authenticate, validate(clientConfigSchema), oauthClientConfigController.upsert);
 router.post("/clients/:clientId/rotate-secret", authenticate, oauthController.rotateClientSecret);
 router.delete("/clients/:clientId", authenticate, oauthController.revokeClient);
 router.get("/consents", authenticate, oauthController.listConsents);
