@@ -142,9 +142,20 @@ export const oauthService = {
     const scopes = scopesFor(request.scopes, client.scopes);
     if (JSON.stringify(scopes) !== JSON.stringify([...new Set(input.scopes)])) throw AppError.badRequest("Approved permissions do not match the authorization request", "INVALID_SCOPE");
     const rawCode = generateOpaqueToken(48);
-    await prisma.oAuthAuthorizationCode.create({ data: { codeHash: hashToken(rawCode), clientId: client.id, userId: input.userId, redirectUri: input.redirectUri, scopes, codeChallenge: input.codeChallenge, codeChallengeMethod: input.codeChallengeMethod, expiresAt: expiry(env.OAUTH_AUTH_CODE_TTL_MINUTES) } });
-    await prisma.oAuthConsent.upsert({ where: { clientId_userId: { clientId: client.id, userId: input.userId } }, create: { clientId: client.id, userId: input.userId, scopes }, update: { scopes, grantedAt: new Date(), revokedAt: null } });
-    await auditService.record("OAUTH_CONSENT_GRANTED", { userId: input.userId, metadata: { clientId: client.clientId, scopes } });
+    const existingConsent = await prisma.oAuthConsent.findUnique({ where: { clientId_userId: { clientId: client.id, userId: input.userId } } });
+    const previousScopes = existingConsent?.revokedAt ? [] : (existingConsent?.scopes ?? []);
+    const scopeReduction = previousScopes.some((scope) => !new Set(scopes).has(scope));
+    await prisma.$transaction(async (tx) => {
+      if (scopeReduction) {
+        const revokedAt = new Date();
+        await tx.oAuthAccessToken.updateMany({ where: { clientId: client.id, userId: input.userId, revokedAt: null }, data: { revokedAt } });
+        await tx.oAuthRefreshToken.updateMany({ where: { clientId: client.id, userId: input.userId, revokedAt: null }, data: { revokedAt } });
+        await tx.oAuthAuthorizationCode.deleteMany({ where: { clientId: client.id, userId: input.userId } });
+      }
+      await tx.oAuthAuthorizationCode.create({ data: { codeHash: hashToken(rawCode), clientId: client.id, userId: input.userId, redirectUri: input.redirectUri, scopes, codeChallenge: input.codeChallenge, codeChallengeMethod: input.codeChallengeMethod, expiresAt: expiry(env.OAUTH_AUTH_CODE_TTL_MINUTES) } });
+      await tx.oAuthConsent.upsert({ where: { clientId_userId: { clientId: client.id, userId: input.userId } }, create: { clientId: client.id, userId: input.userId, scopes }, update: { scopes, grantedAt: new Date(), revokedAt: null } });
+    });
+    await auditService.record("OAUTH_CONSENT_GRANTED", { userId: input.userId, metadata: { clientId: client.clientId, scopes, previousScopes, scopeReduction } });
     return rawCode;
   },
   async exchangeCode(input: { code: string; clientId: string; redirectUri: string; codeVerifier?: string; clientSecret?: string }) {
@@ -170,7 +181,7 @@ export const oauthService = {
       if (refreshToken) await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } });
       return { accessToken, refreshToken };
     });
-    return { token_type: "Bearer", access_token: result.accessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, ...(result.refreshToken ? { refresh_token: result.refreshToken } : {}) };
+    return { token_type: "Bearer", access_token: result.accessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(result.refreshToken ? { refresh_token: result.refreshToken } : {}), ...(record.scopes.includes("openid") ? { id_token: signIdToken(user, client.clientId) } : {}) };
   },
   async refreshAccessToken(refreshToken: string, clientId: string, clientSecret?: string) {
     const client = await loadClient(clientId);
@@ -193,7 +204,7 @@ export const oauthService = {
       await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(newAccessToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } });
       await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(newRefreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: record.expiresAt } });
     });
-    return { token_type: "Bearer", access_token: newAccessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, refresh_token: newRefreshToken };
+    return { token_type: "Bearer", access_token: newAccessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, refresh_token: newRefreshToken, scope: record.scopes.join(" ") };
   },
   async revokeToken(token: string, clientId: string, clientSecret?: string) {
     const client = await loadClient(clientId);
