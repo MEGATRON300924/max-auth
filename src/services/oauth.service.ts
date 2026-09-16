@@ -80,7 +80,20 @@ export const oauthService = {
     const redirectUris = data.redirectUris ? [...new Set(data.redirectUris.map((uri) => new URL(uri).toString()))] : client.redirectUris;
     if (redirectUris.some((uri) => uri.startsWith("http://") && !uri.startsWith("http://localhost") && !uri.startsWith("http://127.0.0.1"))) throw AppError.badRequest("Production redirect URIs must use HTTPS", "INVALID_REDIRECT_URI");
     const scopes = data.scopes ? scopesFor(data.scopes, MAX_OAUTH_SCOPES) : client.scopes;
-    return prisma.oAuthClient.update({ where: { id }, data: { name: data.name?.trim() || client.name, redirectUris, scopes } });
+    const redirectUrisChanged = JSON.stringify(redirectUris) !== JSON.stringify(client.redirectUris);
+    const scopesChanged = JSON.stringify([...scopes].sort()) !== JSON.stringify([...client.scopes].sort());
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.oAuthClient.update({ where: { id }, data: { name: data.name?.trim() || client.name, redirectUris, scopes } });
+      if (redirectUrisChanged || scopesChanged) {
+        await tx.oAuthAuthorizationCode.deleteMany({ where: { clientId: id } });
+        await tx.oAuthAccessToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+        await tx.oAuthRefreshToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+        await tx.oAuthConsent.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      }
+      return result;
+    });
+    if (redirectUrisChanged || scopesChanged) await auditService.record("OAUTH_CLIENT_UPDATED", { userId: ownerId, metadata: { clientId: client.clientId, invalidatedAuthorizations: true } });
+    return updated;
   },
   async rotateClientSecret(ownerId: string, id: string) {
     const client = await prisma.oAuthClient.findUnique({ where: { id } });
@@ -94,14 +107,14 @@ export const oauthService = {
   async revokeClient(ownerId: string, id: string) {
     const client = await prisma.oAuthClient.findUnique({ where: { id } });
     if (!client || client.ownerId !== ownerId) throw AppError.notFound("OAuth client not found");
-    await prisma.$transaction([prisma.oAuthClient.update({ where: { id }, data: { isActive: false } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } })]);
+    await prisma.$transaction([prisma.oAuthClient.update({ where: { id }, data: { isActive: false } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthAuthorizationCode.deleteMany({ where: { clientId: id } })]);
     return prisma.oAuthClient.findUnique({ where: { id }, select: { id: true, clientId: true, name: true, isActive: true } });
   },
   listConsentsForUser(userId: string) { return prisma.oAuthConsent.findMany({ where: { userId, revokedAt: null }, include: { client: { select: { name: true, clientId: true } } }, orderBy: { grantedAt: "desc" } }); },
   async revokeConsent(userId: string, consentId: string) {
     const consent = await prisma.oAuthConsent.findUnique({ where: { id: consentId } });
     if (!consent || consent.userId !== userId) throw AppError.notFound("Consent record not found");
-    await prisma.$transaction([prisma.oAuthConsent.update({ where: { id: consentId }, data: { revokedAt: new Date() } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: consent.clientId, userId, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: consent.clientId, userId, revokedAt: null }, data: { revokedAt: new Date() } })]);
+    await prisma.$transaction([prisma.oAuthConsent.update({ where: { id: consentId }, data: { revokedAt: new Date() } }), prisma.oAuthAccessToken.updateMany({ where: { clientId: consent.clientId, userId, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: consent.clientId, userId, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthAuthorizationCode.deleteMany({ where: { clientId: consent.clientId, userId } })]);
     await auditService.record("OAUTH_CONSENT_REVOKED", { userId, metadata: { clientId: consent.clientId } });
   },
   async getAuthorizationRequest(input: { clientId: string; redirectUri: string; responseType: string; scope?: string; state?: string; codeChallenge?: string; codeChallengeMethod?: string }) {
@@ -163,7 +176,16 @@ export const oauthService = {
     const client = await loadClient(clientId);
     if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
     const token = await prisma.oAuthRefreshToken.findUnique({ where: { tokenHash: hashToken(rawRefreshToken) } });
-    if (!token || token.clientId !== client.id || token.revokedAt || token.expiresAt < new Date()) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
+    if (!token) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
+    if (token.clientId !== client.id) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
+    if (token.revokedAt) {
+      await prisma.$transaction([
+        prisma.oAuthAccessToken.updateMany({ where: { clientId: client.id, userId: token.userId, revokedAt: null }, data: { revokedAt: new Date() } }),
+        prisma.oAuthRefreshToken.updateMany({ where: { clientId: client.id, userId: token.userId, revokedAt: null }, data: { revokedAt: new Date() } }),
+      ]);
+      throw AppError.unauthorized("Refresh token reuse detected", "INVALID_GRANT");
+    }
+    if (token.expiresAt < new Date()) throw AppError.unauthorized("Invalid or expired refresh token", "INVALID_GRANT");
     const user = await prisma.user.findUnique({ where: { id: token.userId }, select: { status: true } });
     if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE");
 
