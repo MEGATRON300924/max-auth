@@ -31,15 +31,20 @@ export const auditService = {
 
     const eventType = webhookEventForAudit[action];
     if (eventType && ctx.userId) {
-      void Promise.all(
-        (await prisma.$queryRawUnsafe<any[]>(`SELECT id FROM webhook_endpoints WHERE user_id = $1 AND active = true`, ctx.userId)).map((endpoint) =>
-          webhookService.deliver(endpoint.id, eventType, {
-            userId: ctx.userId,
-            action,
-            metadata: ctx.metadata ?? null,
-          })
+      void prisma
+        .$queryRawUnsafe<any[]>(`SELECT id FROM webhook_endpoints WHERE user_id = $1::uuid AND active = true`, ctx.userId)
+        .then((endpoints) =>
+          Promise.all(
+            endpoints.map((endpoint) =>
+              webhookService.deliver(endpoint.id, eventType, {
+                userId: ctx.userId,
+                action,
+                metadata: ctx.metadata ?? null,
+              })
+            )
+          )
         )
-      ).catch(() => undefined);
+        .catch(() => undefined);
     }
 
     return audit;
