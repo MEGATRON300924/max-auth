@@ -18,8 +18,9 @@ export function createApp() {
   const app = express();
   const firstPartyOrigins = [
     "https://max-ai.name.ng",
-    "https://developers.max-ai.name.ng",
     "https://api.max-ai.name.ng",
+    "https://auth.max-ai.name.ng",
+    "https://developers.max-ai.name.ng",
   ];
   const allowedOrigins = [...new Set([...env.CORS_ALLOWED_ORIGINS, ...firstPartyOrigins])];
 
