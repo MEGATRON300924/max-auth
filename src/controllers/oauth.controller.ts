@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { oauthService, MAX_OAUTH_SCOPES } from "../services/oauth.service";
+import { oauthClientConfigService } from "../services/oauth-client-config.service";
 import { ok } from "../utils/response";
 import { AppError } from "../utils/AppError";
 import { env } from "../config/env";
@@ -20,6 +21,7 @@ export const oauthController = {
   async revokeClient(req: Request, res: Response, next: NextFunction) { try { return ok(res, { client: await oauthService.revokeClient(req.user!.sub, req.params.clientId) }); } catch (err) { next(err); } },
   async listConsents(req: Request, res: Response, next: NextFunction) { try { return ok(res, { consents: await oauthService.listConsentsForUser(req.user!.sub) }); } catch (err) { next(err); } },
   async revokeConsent(req: Request, res: Response, next: NextFunction) { try { await oauthService.revokeConsent(req.user!.sub, req.params.consentId); return ok(res, { message: "Consent revoked" }); } catch (err) { next(err); } },
+  async clientTester(req: Request, res: Response, next: NextFunction) { try { const clientId = typeof req.query.client_id === "string" ? req.query.client_id.trim() : ""; const redirectUri = typeof req.query.redirect_uri === "string" ? req.query.redirect_uri : undefined; const scopes = typeof req.query.scope === "string" ? req.query.scope.split(" ").filter(Boolean) : []; if (!clientId) throw AppError.badRequest("client_id is required", "CLIENT_ID_REQUIRED"); return ok(res, await oauthClientConfigService.publicClientTest(clientId, redirectUri, scopes)); } catch (err) { next(err); } },
   async authorize(req: Request, res: Response, next: NextFunction) {
     try { const input = { clientId: String(req.query.client_id || ""), redirectUri: String(req.query.redirect_uri || ""), responseType: String(req.query.response_type || ""), scope: typeof req.query.scope === "string" ? req.query.scope : undefined, state: typeof req.query.state === "string" ? req.query.state : undefined, codeChallenge: typeof req.query.code_challenge === "string" ? req.query.code_challenge : undefined, codeChallengeMethod: typeof req.query.code_challenge_method === "string" ? req.query.code_challenge_method : undefined }; const { client, scopes } = await oauthService.getAuthorizationRequest(input); const params = new URLSearchParams({ client_id: client.clientId, client_name: client.name, redirect_uri: input.redirectUri, response_type: "code", scope: scopes.join(" "), state: input.state! }); params.set("code_challenge", input.codeChallenge!); params.set("code_challenge_method", "S256"); return res.redirect(`${env.FRONTEND_URL}/authorize?${params.toString()}`); } catch (err) { next(err); }
   },
