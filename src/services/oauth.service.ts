@@ -145,16 +145,19 @@ export const oauthService = {
 
     const now = new Date();
     const accessToken = generateOpaqueToken(48);
-    const refreshToken = generateOpaqueToken(48);
+    const shouldIssueRefreshToken = record.scopes.includes("offline_access");
+    const refreshToken = shouldIssueRefreshToken ? generateOpaqueToken(48) : undefined;
     const result = await prisma.$transaction(async (tx) => {
       const claimed = await tx.oAuthAuthorizationCode.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
       if (claimed.count !== 1) throw AppError.badRequest("Invalid or expired authorization code", "INVALID_GRANT");
       await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(accessToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } });
-      await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } });
+      if (refreshToken) {
+        await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, scopes: record.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } });
+      }
       return true;
     });
     if (!result) throw AppError.badRequest("Invalid or expired authorization code", "INVALID_GRANT");
-    return { access_token: accessToken, refresh_token: refreshToken, token_type: "Bearer", expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(record.scopes.includes("openid") ? { id_token: signIdToken(user, client.clientId) } : {}) };
+    return { access_token: accessToken, ...(refreshToken ? { refresh_token: refreshToken } : {}), token_type: "Bearer", expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(record.scopes.includes("openid") ? { id_token: signIdToken(user, client.clientId) } : {}) };
   },
   async refreshAccessToken(rawRefreshToken: string, clientId: string, clientSecret?: string) {
     const client = await loadClient(clientId);
