@@ -19,7 +19,7 @@ export class MaxDesktopAuth {
     const state = encode(randomBytes(32));
     const codeVerifier = verifier();
     const server = createServer();
-    const callback = await new Promise<{ server: Server; url: URL }>((resolve, reject) => {
+    const callback = await new Promise<{ server: Server; url: URL; redirectUri: string }>((resolve, reject) => {
       server.once("error", reject);
       server.listen(0, "127.0.0.1", () => {
         const address = server.address();
@@ -27,16 +27,13 @@ export class MaxDesktopAuth {
         const redirectUri = this.config.redirectUri ?? `http://127.0.0.1:${address.port}/oauth/callback`;
         const url = new URL(this.config.authorizeUrl ?? `${BASE}/oauth/authorize`);
         url.search = new URLSearchParams({ client_id: this.config.clientId, redirect_uri: redirectUri, response_type: "code", scope: (this.config.permissions ?? ["identity:read"]).join(" "), code_challenge: challenge(codeVerifier), code_challenge_method: "S256", state }).toString();
-        resolve({ server, url });
+        resolve({ server, url, redirectUri });
       });
     });
 
-    const openUrl = async (url: string) => {
-      const { exec } = await import("node:child_process");
-      const command = process.platform === "win32" ? `start "" "${url}"` : process.platform === "darwin" ? `open "${url}"` : `xdg-open "${url}"`;
-      exec(command);
-    };
-    await openUrl(callback.url.toString());
+    const { exec } = await import("node:child_process");
+    const openCommand = process.platform === "win32" ? `start "" "${callback.url}"` : process.platform === "darwin" ? `open "${callback.url}"` : `xdg-open "${callback.url}"`;
+    exec(openCommand);
 
     const code = await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => { callback.server.close(); reject(new Error("MAX Auth timed out.")); }, 120000);
@@ -54,10 +51,9 @@ export class MaxDesktopAuth {
       });
     });
 
-    const redirectUri = this.config.redirectUri ?? `http://127.0.0.1:${(callback.server.address() as { port: number }).port}/oauth/callback`;
-    const response = await fetch(this.config.tokenUrl ?? `${BASE}/oauth/token`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ grant_type: "authorization_code", code, client_id: this.config.clientId, redirect_uri: redirectUri, code_verifier: codeVerifier }) });
-    const body = await response.json() as any;
-    if (!response.ok) throw new Error(body?.error?.message ?? body?.error_description ?? "MAX token exchange failed.");
+    const response = await fetch(this.config.tokenUrl ?? `${BASE}/oauth/token`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ grant_type: "authorization_code", code, client_id: this.config.clientId, redirect_uri: callback.redirectUri, code_verifier: codeVerifier }) });
+    const body = await response.json() as { data?: MaxTokens; error?: { message?: string }; error_description?: string };
+    if (!response.ok) throw new Error(body.error?.message ?? body.error_description ?? "MAX token exchange failed.");
     return (body.data ?? body) as MaxTokens;
   }
 }
