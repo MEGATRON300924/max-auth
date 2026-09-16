@@ -31,7 +31,7 @@ export const oauthManifestService = {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    let response: Response;
+    let response: any;
     try {
       response = await fetch(manifest.toString(), {
         headers: { Accept: "application/json" },
