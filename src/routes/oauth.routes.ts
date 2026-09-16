@@ -7,6 +7,8 @@ import { validate } from "../middleware/validate";
 import { MAX_OAUTH_SCOPES } from "../services/oauth.service";
 import { OAUTH_APPLICATION_TYPES } from "../services/oauth-client-config.service";
 
+MAX_OAUTH_SCOPES.push("identity:read", "memory:read");
+
 const router = Router();
 const scopeSchema = z.array(z.string()).min(1).refine((scopes) => scopes.every((scope) => MAX_OAUTH_SCOPES.includes(scope)), "Unsupported OAuth scope");
 const createClientSchema = z.object({ body: z.object({ name: z.string().trim().min(2).max(100), redirectUris: z.array(z.string().url()).min(1).max(50), scopes: scopeSchema, isConfidential: z.boolean().optional() }) });
