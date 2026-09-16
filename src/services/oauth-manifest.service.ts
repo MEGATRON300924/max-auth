@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { prisma } from "../database/prisma";
 import { AppError } from "../utils/AppError";
 
