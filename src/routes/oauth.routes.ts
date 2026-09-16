@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { oauthController } from "../controllers/oauth.controller";
 import { oauthClientConfigController } from "../controllers/oauth-client-config.controller";
+import { oauthManifestController } from "../controllers/oauth-manifest.controller";
 import { authenticate } from "../middleware/authenticate";
 import { z } from "zod";
 import { validate } from "../middleware/validate";
@@ -8,7 +9,6 @@ import { MAX_OAUTH_SCOPES } from "../services/oauth.service";
 import { OAUTH_APPLICATION_TYPES } from "../services/oauth-client-config.service";
 
 MAX_OAUTH_SCOPES.push("identity:read", "memory:read");
-
 const router = Router();
 const scopeSchema = z.array(z.string()).min(1).refine((scopes) => scopes.every((scope) => MAX_OAUTH_SCOPES.includes(scope)), "Unsupported OAuth scope");
 const createClientSchema = z.object({ body: z.object({ name: z.string().trim().min(2).max(100), redirectUris: z.array(z.string().url()).min(1).max(50), scopes: scopeSchema, isConfidential: z.boolean().optional() }) });
@@ -22,6 +22,7 @@ router.get("/clients", authenticate, oauthController.listClients);
 router.patch("/clients/:clientId", authenticate, validate(updateClientSchema), oauthController.updateClient);
 router.get("/clients/:clientId/config", authenticate, oauthClientConfigController.get);
 router.put("/clients/:clientId/config", authenticate, validate(clientConfigSchema), oauthClientConfigController.upsert);
+router.post("/clients/:clientId/verify-manifest", authenticate, oauthManifestController.verify);
 router.post("/clients/:clientId/rotate-secret", authenticate, oauthController.rotateClientSecret);
 router.delete("/clients/:clientId", authenticate, oauthController.revokeClient);
 router.get("/consents", authenticate, oauthController.listConsents);
