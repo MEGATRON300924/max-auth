@@ -10,6 +10,9 @@ export interface OAuthClientConfigInput {
   packageName?: string;
   bundleId?: string;
   certificateFingerprints?: string[];
+  logoUrl?: string;
+  displayName?: string;
+  websiteUrl?: string;
 }
 
 async function clientDatabaseId(ownerId: string, clientId: string) {
@@ -34,34 +37,49 @@ function normalizeFingerprints(values: string[] = []) {
   return [...new Set(values.map((value) => value.trim().replace(/\s+/g, "").toUpperCase()).filter(Boolean))];
 }
 
+function normalizeHttpsUrl(value?: string, field = "URL") {
+  if (!value?.trim()) return null;
+  let url: URL;
+  try { url = new URL(value.trim()); } catch { throw AppError.badRequest(`${field} must be a valid URL`, "INVALID_URL"); }
+  if (url.protocol !== "https:") throw AppError.badRequest(`${field} must use HTTPS`, "INVALID_URL");
+  return url.toString();
+}
+
 export const oauthClientConfigService = {
   async get(ownerId: string, clientId: string) {
     const dbId = await clientDatabaseId(ownerId, clientId);
     const rows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints" FROM oauth_client_configs WHERE client_id = $1::uuid LIMIT 1`,
+      `SELECT application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints", logo_url AS "logoUrl", display_name AS "displayName", website_url AS "websiteUrl" FROM oauth_client_configs WHERE client_id = $1::uuid LIMIT 1`,
       dbId,
     );
-    return rows[0] ?? { applicationType: "WEB", authorizedOrigins: [], packageName: null, bundleId: null, certificateFingerprints: [] };
+    return rows[0] ?? { applicationType: "WEB", authorizedOrigins: [], packageName: null, bundleId: null, certificateFingerprints: [], logoUrl: null, displayName: null, websiteUrl: null };
   },
 
   async upsert(ownerId: string, clientId: string, input: OAuthClientConfigInput) {
     const dbId = await clientDatabaseId(ownerId, clientId);
     const authorizedOrigins = normalizeOrigins(input.authorizedOrigins);
     const certificateFingerprints = normalizeFingerprints(input.certificateFingerprints);
+    const logoUrl = normalizeHttpsUrl(input.logoUrl, "Logo URL");
+    const websiteUrl = normalizeHttpsUrl(input.websiteUrl, "Website URL");
+    const displayName = input.displayName?.trim() || null;
+    if (displayName && displayName.length > 100) throw AppError.badRequest("Display name must be 100 characters or fewer", "INVALID_DISPLAY_NAME");
     if ((input.applicationType === "WEB" || input.applicationType === "SPA") && !authorizedOrigins.length) throw AppError.badRequest("Add at least one authorized site", "AUTHORIZED_SITE_REQUIRED");
     if (input.applicationType === "ANDROID" && !input.packageName?.trim()) throw AppError.badRequest("Android package name is required", "PACKAGE_NAME_REQUIRED");
     if (input.applicationType === "IOS" && !input.bundleId?.trim()) throw AppError.badRequest("iOS bundle ID is required", "BUNDLE_ID_REQUIRED");
     const rows = await prisma.$queryRawUnsafe<any[]>(
-      `INSERT INTO oauth_client_configs (client_id, application_type, authorized_origins, package_name, bundle_id, certificate_fingerprints, updated_at)
-       VALUES ($1::uuid, $2, $3::text[], $4, $5, $6::text[], CURRENT_TIMESTAMP)
-       ON CONFLICT (client_id) DO UPDATE SET application_type = EXCLUDED.application_type, authorized_origins = EXCLUDED.authorized_origins, package_name = EXCLUDED.package_name, bundle_id = EXCLUDED.bundle_id, certificate_fingerprints = EXCLUDED.certificate_fingerprints, updated_at = CURRENT_TIMESTAMP
-       RETURNING application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints"`,
+      `INSERT INTO oauth_client_configs (client_id, application_type, authorized_origins, package_name, bundle_id, certificate_fingerprints, logo_url, display_name, website_url, updated_at)
+       VALUES ($1::uuid, $2, $3::text[], $4, $5, $6::text[], $7, $8, $9, CURRENT_TIMESTAMP)
+       ON CONFLICT (client_id) DO UPDATE SET application_type = EXCLUDED.application_type, authorized_origins = EXCLUDED.authorized_origins, package_name = EXCLUDED.package_name, bundle_id = EXCLUDED.bundle_id, certificate_fingerprints = EXCLUDED.certificate_fingerprints, logo_url = EXCLUDED.logo_url, display_name = EXCLUDED.display_name, website_url = EXCLUDED.website_url, updated_at = CURRENT_TIMESTAMP
+       RETURNING application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints", logo_url AS "logoUrl", display_name AS "displayName", website_url AS "websiteUrl"`,
       dbId,
       input.applicationType,
       authorizedOrigins,
       input.packageName?.trim() || null,
       input.bundleId?.trim() || null,
       certificateFingerprints,
+      logoUrl,
+      displayName,
+      websiteUrl,
     );
     return rows[0];
   },
