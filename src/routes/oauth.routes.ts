@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { oauthController } from "../controllers/oauth.controller";
 import { oauthClientConfigController } from "../controllers/oauth-client-config.controller";
+import { oauthClientLogoController } from "../controllers/oauth-client-logo.controller";
 import { oauthManifestController } from "../controllers/oauth-manifest.controller";
 import { authenticate } from "../middleware/authenticate";
 import { z } from "zod";
@@ -14,14 +15,18 @@ const scopeSchema = z.array(z.string()).min(1).refine((scopes) => scopes.every((
 const createClientSchema = z.object({ body: z.object({ name: z.string().trim().min(2).max(100), redirectUris: z.array(z.string().url()).min(1).max(50), scopes: scopeSchema, isConfidential: z.boolean().optional() }) });
 const updateClientSchema = z.object({ body: z.object({ name: z.string().trim().min(2).max(100).optional(), redirectUris: z.array(z.string().url()).min(1).max(50).optional(), scopes: scopeSchema.optional() }).refine((body) => Object.keys(body).length > 0, "At least one field is required") });
 const clientConfigSchema = z.object({ body: z.object({ applicationType: z.enum(OAUTH_APPLICATION_TYPES), authorizedOrigins: z.array(z.string().url()).max(50).optional(), packageName: z.string().trim().max(255).optional(), bundleId: z.string().trim().max(255).optional(), certificateFingerprints: z.array(z.string().trim().max(128)).max(20).optional(), logoUrl: z.string().url().optional().nullable(), displayName: z.string().trim().max(100).optional().nullable(), websiteUrl: z.string().url().optional().nullable(), manifestUrl: z.string().url().optional().nullable() }) });
+const logoSchema = z.object({ body: z.object({ contentType: z.string().min(1), data: z.string().min(1).max(700000) }) });
 const approveSchema = z.object({ body: z.object({ clientId: z.string().min(1), redirectUri: z.string().url(), scopes: z.string().min(1), codeChallenge: z.string().min(43).max(128), codeChallengeMethod: z.literal("S256"), state: z.string().min(1).max(2048) }) });
 const revokeSchema = z.object({ body: z.object({ token: z.string().min(1), token_type_hint: z.string().optional(), client_id: z.string().optional(), client_secret: z.string().optional() }) });
 
+router.get("/clients/:clientId/logo", oauthClientLogoController.publicLogo);
 router.post("/clients", authenticate, validate(createClientSchema), oauthController.createClient);
 router.get("/clients", authenticate, oauthController.listClients);
 router.patch("/clients/:clientId", authenticate, validate(updateClientSchema), oauthController.updateClient);
 router.get("/clients/:clientId/config", authenticate, oauthClientConfigController.get);
 router.put("/clients/:clientId/config", authenticate, validate(clientConfigSchema), oauthClientConfigController.upsert);
+router.post("/clients/:clientId/logo", authenticate, validate(logoSchema), oauthClientLogoController.upload);
+router.delete("/clients/:clientId/logo", authenticate, oauthClientLogoController.remove);
 router.post("/clients/:clientId/verify-manifest", authenticate, oauthManifestController.verify);
 router.post("/clients/:clientId/rotate-secret", authenticate, oauthController.rotateClientSecret);
 router.delete("/clients/:clientId", authenticate, oauthController.revokeClient);
