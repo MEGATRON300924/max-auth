@@ -23,27 +23,19 @@ async function clientDatabaseId(ownerId: string, clientId: string) {
   return rows[0].id;
 }
 
-function normalizeOrigins(values: string[] = []) {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean).map((value) => {
-    const url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol)) throw AppError.badRequest("Authorized sites must use HTTP or HTTPS", "INVALID_AUTHORIZED_SITE");
-    return `${url.protocol}//${url.host}`;
-  }))];
-}
+function normalizeOrigins(values: string[] = []) { return [...new Set(values.map((value) => value.trim()).filter(Boolean).map((value) => { const url = new URL(value); if (!["http:", "https:"].includes(url.protocol)) throw AppError.badRequest("Authorized sites must use HTTP or HTTPS", "INVALID_AUTHORIZED_SITE"); return `${url.protocol}//${url.host}`; }))]; }
 function normalizeFingerprints(values: string[] = []) { return [...new Set(values.map((value) => value.trim().replace(/\s+/g, "").toUpperCase()).filter(Boolean))]; }
-function normalizeHttpsUrl(value?: string, field = "URL") {
-  if (!value?.trim()) return null;
-  let url: URL;
-  try { url = new URL(value.trim()); } catch { throw AppError.badRequest(`${field} must be a valid URL`, "INVALID_URL"); }
-  if (url.protocol !== "https:") throw AppError.badRequest(`${field} must use HTTPS`, "INVALID_URL");
-  return url.toString();
-}
+function normalizeHttpsUrl(value?: string, field = "URL") { if (!value?.trim()) return null; let url: URL; try { url = new URL(value.trim()); } catch { throw AppError.badRequest(`${field} must be a valid URL`, "INVALID_URL"); } if (url.protocol !== "https:") throw AppError.badRequest(`${field} must use HTTPS`, "INVALID_URL"); return url.toString(); }
 
 export const oauthClientConfigService = {
   async get(ownerId: string, clientId: string) {
     const dbId = await clientDatabaseId(ownerId, clientId);
     const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints", logo_url AS "logoUrl", display_name AS "displayName", website_url AS "websiteUrl", manifest_url AS "manifestUrl", verification_status AS "verificationStatus", verified_at AS "verifiedAt" FROM oauth_client_configs WHERE client_id = $1::uuid LIMIT 1`, dbId);
     return rows[0] ?? { applicationType: "WEB", authorizedOrigins: [], packageName: null, bundleId: null, certificateFingerprints: [], logoUrl: null, displayName: null, websiteUrl: null, manifestUrl: null, verificationStatus: "UNVERIFIED", verifiedAt: null };
+  },
+  async getPublic(clientId: string) {
+    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT display_name AS "displayName", logo_url AS "logoUrl", website_url AS "websiteUrl" FROM oauth_client_configs WHERE client_id = (SELECT id FROM oauth_clients WHERE client_id = $1 AND is_active = true LIMIT 1) LIMIT 1`, clientId);
+    return rows[0] ?? { displayName: null, logoUrl: null, websiteUrl: null };
   },
   async upsert(ownerId: string, clientId: string, input: OAuthClientConfigInput) {
     const dbId = await clientDatabaseId(ownerId, clientId);
@@ -63,15 +55,14 @@ export const oauthClientConfigService = {
   async publicClientTest(clientId: string, redirectUri?: string, requestedScopes: string[] = []) {
     const client = await prisma.oAuthClient.findUnique({ where: { clientId }, select: { clientId: true, name: true, redirectUris: true, scopes: true, isActive: true } });
     if (!client) return { valid: false, clientId, checks: [{ key: "client", label: "Client ID", ok: false, detail: "Client ID was not found." }] };
-    const configRows = await prisma.$queryRawUnsafe<any[]>(`SELECT application_type AS "applicationType", logo_url AS "logoUrl", display_name AS "displayName", website_url AS "websiteUrl", manifest_url AS "manifestUrl", verification_status AS "verificationStatus" FROM oauth_client_configs WHERE client_id = (SELECT id FROM oauth_clients WHERE client_id = $1 LIMIT 1) LIMIT 1`, clientId);
-    const config = configRows[0] ?? null;
+    const config = await this.getPublic(clientId);
+    const configExists = config.displayName !== null || config.logoUrl !== null || config.websiteUrl !== null;
     const checks: Array<{ key: string; label: string; ok: boolean; detail: string }> = [];
     checks.push({ key: "client", label: "Client ID", ok: client.isActive, detail: client.isActive ? "Client is registered and active." : "Client is revoked." });
     if (redirectUri) checks.push({ key: "redirect", label: "Redirect URI", ok: client.redirectUris.includes(redirectUri), detail: client.redirectUris.includes(redirectUri) ? "Redirect URI matches exactly." : "Redirect URI is not registered." });
     const unsupported = requestedScopes.filter((scope) => !client.scopes.includes(scope));
     checks.push({ key: "scopes", label: "Permissions", ok: unsupported.length === 0, detail: unsupported.length ? `Not allowed: ${unsupported.join(", ")}` : "Requested permissions are allowed." });
-    checks.push({ key: "config", label: "Client configuration", ok: !!config, detail: config ? `${config.applicationType} configuration loaded.` : "No platform configuration has been saved yet." });
-    if (config?.manifestUrl) checks.push({ key: "manifest", label: "MAX client manifest", ok: config.verificationStatus === "VERIFIED", detail: config.verificationStatus === "VERIFIED" ? "Manifest is verified." : "Manifest is registered but not verified." });
-    return { valid: client.isActive && checks.every((check) => check.ok), client: { clientId: client.clientId, name: config?.displayName || client.name, websiteUrl: config?.websiteUrl || null, logoUrl: config?.logoUrl || null, applicationType: config?.applicationType || null, verificationStatus: config?.verificationStatus || "UNVERIFIED" }, checks, allowedScopes: client.scopes, redirectUris: client.redirectUris };
+    checks.push({ key: "config", label: "Client configuration", ok: configExists, detail: configExists ? "Client configuration loaded." : "No branding configuration has been saved yet." });
+    return { valid: client.isActive && checks.every((check) => check.ok), client: { clientId: client.clientId, name: config.displayName || client.name, websiteUrl: config.websiteUrl || null, logoUrl: config.logoUrl || null }, checks, allowedScopes: client.scopes, redirectUris: client.redirectUris };
   },
 };
