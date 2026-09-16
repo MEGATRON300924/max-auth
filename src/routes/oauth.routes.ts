@@ -39,4 +39,5 @@ router.post("/revoke", validate(revokeSchema), oauthController.revoke);
 router.get("/introspect", oauthController.introspect);
 router.post("/introspect", oauthController.introspect);
 router.get("/userinfo", oauthController.userinfo);
+router.get("/memory", oauthController.memory);
 export default router;
