@@ -32,3 +32,7 @@ export const env = {
   LOG_LEVEL: optional("LOG_LEVEL", "info"), LOG_DIR: optional("LOG_DIR", "logs"),
   get isProduction() { return this.NODE_ENV === "production"; },
 };
+
+if (env.isProduction && !env.MAX_AUTH_SERVICE_TOKEN) {
+  throw new Error("Missing required environment variable: MAX_AUTH_SERVICE_TOKEN");
+}
