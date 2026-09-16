@@ -1,0 +1,68 @@
+import { prisma } from "../database/prisma";
+import { AppError } from "../utils/AppError";
+
+export const OAUTH_APPLICATION_TYPES = ["WEB", "SPA", "ANDROID", "IOS", "DESKTOP"] as const;
+export type OAuthApplicationType = (typeof OAUTH_APPLICATION_TYPES)[number];
+
+export interface OAuthClientConfigInput {
+  applicationType: OAuthApplicationType;
+  authorizedOrigins?: string[];
+  packageName?: string;
+  bundleId?: string;
+  certificateFingerprints?: string[];
+}
+
+async function clientDatabaseId(ownerId: string, clientId: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT id FROM oauth_clients WHERE client_id = $1 AND owner_id = $2::uuid LIMIT 1`,
+    clientId,
+    ownerId,
+  );
+  if (!rows[0]) throw AppError.notFound("OAuth client not found");
+  return rows[0].id;
+}
+
+function normalizeOrigins(values: string[] = []) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean).map((value) => {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol)) throw AppError.badRequest("Authorized sites must use HTTP or HTTPS", "INVALID_AUTHORIZED_SITE");
+    return `${url.protocol}//${url.host}`;
+  }))];
+}
+
+function normalizeFingerprints(values: string[] = []) {
+  return [...new Set(values.map((value) => value.trim().replace(/\s+/g, "").toUpperCase()).filter(Boolean))];
+}
+
+export const oauthClientConfigService = {
+  async get(ownerId: string, clientId: string) {
+    const dbId = await clientDatabaseId(ownerId, clientId);
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints" FROM oauth_client_configs WHERE client_id = $1::uuid LIMIT 1`,
+      dbId,
+    );
+    return rows[0] ?? { applicationType: "WEB", authorizedOrigins: [], packageName: null, bundleId: null, certificateFingerprints: [] };
+  },
+
+  async upsert(ownerId: string, clientId: string, input: OAuthClientConfigInput) {
+    const dbId = await clientDatabaseId(ownerId, clientId);
+    const authorizedOrigins = normalizeOrigins(input.authorizedOrigins);
+    const certificateFingerprints = normalizeFingerprints(input.certificateFingerprints);
+    if ((input.applicationType === "WEB" || input.applicationType === "SPA") && !authorizedOrigins.length) throw AppError.badRequest("Add at least one authorized site", "AUTHORIZED_SITE_REQUIRED");
+    if (input.applicationType === "ANDROID" && !input.packageName?.trim()) throw AppError.badRequest("Android package name is required", "PACKAGE_NAME_REQUIRED");
+    if (input.applicationType === "IOS" && !input.bundleId?.trim()) throw AppError.badRequest("iOS bundle ID is required", "BUNDLE_ID_REQUIRED");
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `INSERT INTO oauth_client_configs (client_id, application_type, authorized_origins, package_name, bundle_id, certificate_fingerprints, updated_at)
+       VALUES ($1::uuid, $2, $3::text[], $4, $5, $6::text[], CURRENT_TIMESTAMP)
+       ON CONFLICT (client_id) DO UPDATE SET application_type = EXCLUDED.application_type, authorized_origins = EXCLUDED.authorized_origins, package_name = EXCLUDED.package_name, bundle_id = EXCLUDED.bundle_id, certificate_fingerprints = EXCLUDED.certificate_fingerprints, updated_at = CURRENT_TIMESTAMP
+       RETURNING application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints"`,
+      dbId,
+      input.applicationType,
+      authorizedOrigins,
+      input.packageName?.trim() || null,
+      input.bundleId?.trim() || null,
+      certificateFingerprints,
+    );
+    return rows[0];
+  },
+};
