@@ -10,12 +10,11 @@ const isHttpsApp = appUrl.startsWith("https://");
 const isLocalApp = /https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/i.test(appUrl);
 const defaultCookieDomain = isLocalApp ? "localhost" : "max-ai.name.ng";
 const configuredCookieDomain = process.env.COOKIE_DOMAIN?.trim();
-const cookieDomain = configuredCookieDomain && !(configuredCookieDomain === "localhost" && !isLocalApp)
-  ? configuredCookieDomain
-  : defaultCookieDomain;
+const cookieDomain = configuredCookieDomain && !(configuredCookieDomain === "localhost" && !isLocalApp) ? configuredCookieDomain : defaultCookieDomain;
 
 export const env = {
   NODE_ENV: optional("NODE_ENV", "development"), PORT: parseInt(optional("PORT", "4000"), 10), APP_NAME: optional("APP_NAME", "MAX Auth"), APP_URL: appUrl, FRONTEND_URL: optional("FRONTEND_URL", "http://localhost:3000"),
+  MAX_AI_BACKEND_URL: optional("MAX_AI_BACKEND_URL", "https://api.max-ai.name.ng"),
   DATABASE_URL: required("DATABASE_URL"),
   JWT_ACCESS_SECRET: required("JWT_ACCESS_SECRET"), JWT_REFRESH_SECRET: required("JWT_REFRESH_SECRET"), JWT_ACCESS_EXPIRES_IN: optional("JWT_ACCESS_EXPIRES_IN", "15m"), JWT_REFRESH_EXPIRES_IN: optional("JWT_REFRESH_EXPIRES_IN", "30d"), JWT_ISSUER: optional("JWT_ISSUER", "max-auth"), JWT_AUDIENCE: optional("JWT_AUDIENCE", "max-ecosystem"),
   GOOGLE_CLIENT_ID: optional("GOOGLE_CLIENT_ID", ""),
