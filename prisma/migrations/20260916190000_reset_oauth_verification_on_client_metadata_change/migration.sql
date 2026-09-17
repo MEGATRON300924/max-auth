@@ -5,8 +5,8 @@ BEGIN
      OR OLD.redirect_uris IS DISTINCT FROM NEW.redirect_uris THEN
     UPDATE "oauth_client_configs"
     SET "verification_status" = CASE
-          WHEN "manifest_url" IS NULL THEN 'UNVERIFIED'
-          ELSE 'PENDING'
+          WHEN "manifest_url" IS NULL THEN 'UNVERIFIED'::"VerificationStatus"
+          ELSE 'PENDING'::"VerificationStatus"
         END,
         "verified_at" = NULL,
         "updated_at" = CURRENT_TIMESTAMP
