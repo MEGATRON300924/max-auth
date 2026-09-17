@@ -18,7 +18,7 @@ export interface OAuthClientConfigInput {
 }
 
 async function clientDatabaseId(ownerId: string, clientId: string) {
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(`SELECT id FROM oauth_clients WHERE client_id = $1 AND owner_id = $2::uuid LIMIT 1`, clientId, ownerId);
+  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(`SELECT id FROM oauth_clients WHERE "clientId" = $1 AND "ownerId" = $2::uuid LIMIT 1`, clientId, ownerId);
   if (!rows[0]) throw AppError.notFound("OAuth client not found");
   return rows[0].id;
 }
@@ -34,7 +34,7 @@ export const oauthClientConfigService = {
     return rows[0] ?? { applicationType: "WEB", authorizedOrigins: [], packageName: null, bundleId: null, certificateFingerprints: [], logoUrl: null, displayName: null, websiteUrl: null, manifestUrl: null, verificationStatus: "UNVERIFIED", verifiedAt: null };
   },
   async getPublic(clientId: string) {
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT display_name AS "displayName", logo_url AS "logoUrl", website_url AS "websiteUrl" FROM oauth_client_configs WHERE client_id = (SELECT id FROM oauth_clients WHERE client_id = $1 AND is_active = true LIMIT 1) LIMIT 1`, clientId);
+    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT display_name AS "displayName", logo_url AS "logoUrl", website_url AS "websiteUrl" FROM oauth_client_configs WHERE client_id = (SELECT id FROM oauth_clients WHERE "clientId" = $1 AND "isActive" = true LIMIT 1) LIMIT 1`, clientId);
     return rows[0] ?? { displayName: null, logoUrl: null, websiteUrl: null };
   },
   async upsert(ownerId: string, clientId: string, input: OAuthClientConfigInput) {
