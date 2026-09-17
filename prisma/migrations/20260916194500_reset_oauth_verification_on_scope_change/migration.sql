@@ -2,7 +2,7 @@ CREATE OR REPLACE FUNCTION reset_oauth_client_verification_on_metadata_change()
 RETURNS TRIGGER AS $$
 BEGIN
   IF OLD.name IS DISTINCT FROM NEW.name
-     OR OLD.redirect_uris IS DISTINCT FROM NEW.redirect_uris
+     OR OLD."redirectUris" IS DISTINCT FROM NEW."redirectUris"
      OR OLD.scopes IS DISTINCT FROM NEW.scopes THEN
     UPDATE "oauth_client_configs"
     SET "verification_status" = CASE
@@ -21,6 +21,6 @@ DROP TRIGGER IF EXISTS oauth_client_verification_metadata_change
 ON "oauth_clients";
 
 CREATE TRIGGER oauth_client_verification_metadata_change
-AFTER UPDATE OF "name", "redirect_uris", "scopes" ON "oauth_clients"
+AFTER UPDATE OF "name", "redirectUris", "scopes" ON "oauth_clients"
 FOR EACH ROW
 EXECUTE FUNCTION reset_oauth_client_verification_on_metadata_change();
