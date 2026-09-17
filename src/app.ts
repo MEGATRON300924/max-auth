@@ -32,6 +32,11 @@ export function createApp() {
   app.use(cookieParser());
   app.use(compression());
   app.use(requestId);
+
+  app.get("/health", (_req, res) => {
+    res.status(200).json({ success: true, service: env.APP_NAME, status: "healthy" });
+  });
+
   app.use(globalRateLimiter);
   app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   app.get("/docs.json", (_req, res) => res.json(swaggerSpec));
