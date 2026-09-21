@@ -26,7 +26,6 @@ export const authService = {
     await prisma.passwordHistory.create({ data: { userId: user.id, passwordHash } });
     await auditService.record("REGISTER", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent });
     await this.sendEmailVerification(user.id, ctx);
-    await mfaService.verifyLoginFactor(user.id, mfaCode);
     const device = await deviceService.identifyOrCreateDevice(user.id, ctx, ctx.clientHint);
     const tokens = await tokenService.issueTokenPair(user, { deviceId: device.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe: input.rememberMe });
     return { user, ...tokens };
@@ -38,6 +37,7 @@ export const authService = {
     if (user.status !== "ACTIVE") { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: `account_${user.status.toLowerCase()}` }); throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE"); }
     const validPassword = await verifyPassword(user.passwordHash, password);
     if (!validPassword) { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: "invalid_password" }); await auditService.record("LOGIN_FAILED", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent }); throw AppError.unauthorized("Invalid email/username or password", "INVALID_CREDENTIALS"); }
+    await mfaService.verifyLoginFactor(user.id, mfaCode);
     const device = await deviceService.identifyOrCreateDevice(user.id, ctx, ctx.clientHint);
     const tokens = await tokenService.issueTokenPair(user, { deviceId: device.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe });
     await auditService.recordLogin({ userId: user.id, success: true, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent });
