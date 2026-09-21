@@ -39,7 +39,11 @@ export const tokenService = {
       throw AppError.unauthorized("Refresh token reuse detected", "REFRESH_TOKEN_REUSE");
     }
     if (session.userId !== payload.sub || session.id !== payload.sessionId) throw AppError.unauthorized("Token/session mismatch");
-    await sessionRepository.revoke(session.id);
+    const revoked = await sessionRepository.revokeIfActive(session.id);
+    if (revoked.count !== 1) {
+      await sessionRepository.revokeAllForUser(payload.sub);
+      throw AppError.unauthorized("Refresh token reuse detected", "REFRESH_TOKEN_REUSE");
+    }
     const user = await userRepository.findById(session.userId);
     if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active");
     return this.issueTokenPair(user, { deviceId: session.deviceId ?? undefined, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe: payload.rememberMe });
