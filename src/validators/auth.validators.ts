@@ -17,6 +17,7 @@ export const registerSchema = z.object({
     language: z.string().max(10).optional(),
     timezone: z.string().max(64).optional(),
     rememberMe: z.boolean().optional().default(true),
+    mfaCode: z.string().min(6).max(32).optional(),
   }),
 });
 
