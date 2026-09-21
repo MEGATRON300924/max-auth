@@ -14,6 +14,9 @@ export const notificationService = {
   async sendPasswordChangedNotification(user: NotificationUser) {
     try { await mailService.send({ to: user.email, subject: "Your MAX Account password was changed", text: `Hi ${nameOf(user)},\n\nYour MAX Account password was successfully changed.\n\nIf you did not make this change, reset your password immediately and review your active sessions.` }); } catch (error) { logger.error("Password-change notification email failed", { userId: user.username, error }); }
   },
+  async sendMfaChangedNotification(user: NotificationUser, action: "enabled" | "disabled") {
+    try { await mailService.send({ to: user.email, subject: `MAX Account MFA ${action}`, text: `Hi ${nameOf(user)},\n\nMulti-factor authentication was ${action} on your MAX Account.\n\nIf you did not make this change, reset your password immediately and review your active sessions.` }); } catch (error) { logger.error("MFA notification email failed", { userId: user.username, error }); }
+  },
   async sendOAuthAuthorizationNotification(user: NotificationUser, appName: string, scopes: string[]) {
     try { await mailService.send({ to: user.email, subject: `MAX Account connected to ${appName}`, text: `Hi ${nameOf(user)},\n\nYou authorized ${appName} to use your MAX Account.\n\nPermissions: ${scopes.join(", ")}\n\nIf you did not authorize this application, open your MAX Account security settings and revoke its access.` }); } catch (error) { logger.error("OAuth authorization notification email failed", { userId: user.username, error }); }
   },
