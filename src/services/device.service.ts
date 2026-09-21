@@ -65,6 +65,7 @@ export const deviceService = {
     }
     // Revoking a device also revokes all sessions tied to it (cascades via DB relation is SetNull,
     // so explicitly revoke sessions first).
+    await sessionRepository.revokeAllForDevice(deviceId);
     await deviceRepository.remove(deviceId);
   },
 
