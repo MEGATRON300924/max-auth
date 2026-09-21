@@ -9,6 +9,7 @@ import { mailService } from "./mail.service";
 import { AppError } from "../utils/AppError";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
+import { mfaService } from "./mfa.service";
 
 interface RequestContext { ipAddress?: string; userAgent?: string; clientHint?: string; }
 const PASSWORD_HISTORY_LIMIT = 5;
@@ -25,12 +26,13 @@ export const authService = {
     await prisma.passwordHistory.create({ data: { userId: user.id, passwordHash } });
     await auditService.record("REGISTER", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent });
     await this.sendEmailVerification(user.id, ctx);
+    await mfaService.verifyLoginFactor(user.id, mfaCode);
     const device = await deviceService.identifyOrCreateDevice(user.id, ctx, ctx.clientHint);
     const tokens = await tokenService.issueTokenPair(user, { deviceId: device.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe: input.rememberMe });
     return { user, ...tokens };
   },
 
-  async login(identifier: string, password: string, ctx: RequestContext, rememberMe = true) {
+  async login(identifier: string, password: string, ctx: RequestContext, rememberMe = true, mfaCode?: string) {
     const user = await userRepository.findByIdentifier(identifier);
     if (!user) { await verifyPassword("$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHQ$invalidinvalidinvalidinvalid", password).catch(() => undefined); throw AppError.unauthorized("Invalid email/username or password", "INVALID_CREDENTIALS"); }
     if (user.status !== "ACTIVE") { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: `account_${user.status.toLowerCase()}` }); throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE"); }
