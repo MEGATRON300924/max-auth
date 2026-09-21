@@ -31,7 +31,13 @@ export const tokenService = {
     try { payload = verifyRefreshToken(rawRefreshToken); } catch { throw AppError.unauthorized("Invalid or expired refresh token"); }
     const tokenHash = hashToken(rawRefreshToken);
     const session = await sessionRepository.findByRefreshTokenHash(tokenHash);
-    if (!session || session.isRevoked || session.expiresAt < new Date()) throw AppError.unauthorized("Session is no longer valid");
+    if (!session || session.expiresAt < new Date()) throw AppError.unauthorized("Session is no longer valid");
+    if (session.isRevoked) {
+      // A previously rotated refresh token has been replayed. Treat this as
+      // token theft and invalidate every active session for the account.
+      await sessionRepository.revokeAllForUser(payload.sub);
+      throw AppError.unauthorized("Refresh token reuse detected", "REFRESH_TOKEN_REUSE");
+    }
     if (session.userId !== payload.sub || session.id !== payload.sessionId) throw AppError.unauthorized("Token/session mismatch");
     await sessionRepository.revoke(session.id);
     const user = await userRepository.findById(session.userId);
