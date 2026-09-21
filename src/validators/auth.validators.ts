@@ -17,7 +17,6 @@ export const registerSchema = z.object({
     language: z.string().max(10).optional(),
     timezone: z.string().max(64).optional(),
     rememberMe: z.boolean().optional().default(true),
-    mfaCode: z.string().min(6).max(32).optional(),
   }),
 });
 
@@ -26,6 +25,7 @@ export const loginSchema = z.object({
     identifier: z.string().min(3, "Email or username is required"),
     password: z.string().min(1, "Password is required"),
     rememberMe: z.boolean().optional().default(true),
+    mfaCode: z.string().min(6).max(32).optional(),
   }),
 });
 
