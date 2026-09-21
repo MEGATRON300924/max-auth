@@ -10,6 +10,14 @@ export const sessionRepository = {
     return prisma.session.findUnique({ where: { refreshTokenHash } });
   },
 
+  findById(id: string) {
+    return prisma.session.findUnique({ where: { id }, include: { user: { select: { status: true } } } });
+  },
+
+  revokeIfActive(id: string) {
+    return prisma.session.updateMany({ where: { id, isRevoked: false }, data: { isRevoked: true, revokedAt: new Date() } });
+  },
+
   revoke(id: string) {
     return prisma.session.update({
       where: { id },
