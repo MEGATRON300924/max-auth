@@ -55,3 +55,15 @@ export const registerRateLimiter = rateLimit({
     error: { code: "TOO_MANY_REGISTRATIONS", message: "Too many accounts created from this network. Try again later." },
   },
 });
+
+/** OAuth endpoint limiter — protects authorization and token issuance from automated abuse. */
+export const oauthRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { code: "OAUTH_RATE_LIMITED", message: "Too many OAuth requests. Please try again later." },
+  },
+});
