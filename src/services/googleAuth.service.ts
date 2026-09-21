@@ -7,6 +7,7 @@ import { generateOpaqueToken } from "../security/tokens";
 import { deviceService } from "./device.service";
 import { tokenService } from "./token.service";
 import { auditService } from "./audit.service";
+import { mfaService } from "./mfa.service";
 
 interface GoogleIdentity { sub: string; email: string; name?: string; picture?: string; email_verified?: string; }
 function usernameBase(email: string, name?: string) { const value = (name || email.split("@")[0]).toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 24); return value || "maxuser"; }
