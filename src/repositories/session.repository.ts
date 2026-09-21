@@ -17,6 +17,13 @@ export const sessionRepository = {
     });
   },
 
+  revokeAllForDevice(deviceId: string) {
+    return prisma.session.updateMany({
+      where: { deviceId, isRevoked: false },
+      data: { isRevoked: true, revokedAt: new Date() },
+    });
+  },
+
   revokeAllForUser(userId: string) {
     return prisma.session.updateMany({
       where: { userId, isRevoked: false },
