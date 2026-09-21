@@ -30,6 +30,11 @@ function clearRefreshCookie(res: Response) {
   res.clearCookie(env.REFRESH_COOKIE_NAME, refreshCookieOptions);
 }
 
+function noStore(res: Response) {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+}
+
 export const authController = {
   async register(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); const { user, accessToken, refreshToken, rememberMe } = await authService.register(req.body, ctx); setRefreshCookie(res, refreshToken, rememberMe); void notificationService.sendWelcomeNotification(user); return ok(res, { user: sanitizeUser(user), accessToken }); } catch (err) { next(err); } },
   async login(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); const { identifier, password, rememberMe = true, mfaCode } = req.body; const { user, accessToken, refreshToken, rememberMe: persistedRememberMe } = await authService.login(identifier, password, ctx, rememberMe, mfaCode); setRefreshCookie(res, refreshToken, persistedRememberMe); void notificationService.sendLoginNotification(user, ctx); return ok(res, { user: sanitizeUser(user), accessToken }); } catch (err) { next(err); } },
