@@ -25,7 +25,7 @@ async function verifyGoogleCredential(credential: string): Promise<GoogleIdentit
 }
 
 export const googleAuthService = {
-  async signIn(credential: string, ctx: { ipAddress?: string; userAgent?: string; clientHint?: string }) {
+  async signIn(credential: string, ctx: { ipAddress?: string; userAgent?: string; clientHint?: string }, mfaCode?: string) {
     const identity = await verifyGoogleCredential(credential);
     const email = identity.email.toLowerCase();
     let user = await userRepository.findByEmail(email);
@@ -41,6 +41,7 @@ export const googleAuthService = {
     const existingConnection = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: "GOOGLE", providerAccountId: identity.sub } } });
     if (existingConnection && existingConnection.userId !== user.id) throw AppError.conflict("This Google account is already linked to another MAX Account", "GOOGLE_ACCOUNT_ALREADY_LINKED");
     if (!existingConnection) await prisma.connectedAccount.create({ data: { userId: user.id, provider: "GOOGLE", providerAccountId: identity.sub, scope: "openid email profile" } });
+    await mfaService.verifyLoginFactor(user.id, mfaCode);
     const device = await deviceService.identifyOrCreateDevice(user.id, ctx, ctx.clientHint);
     const tokens = await tokenService.issueTokenPair(user, { deviceId: device.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent });
     await auditService.record("LOGIN_SUCCESS", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, metadata: { provider: "GOOGLE" } });
