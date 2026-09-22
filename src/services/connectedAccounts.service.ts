@@ -13,7 +13,7 @@ const SPOTIFY_SCOPES = ["user-read-private", "user-read-email"];
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 function encryptionKey(): Buffer {
-  if (!env.SPOTIFY_TOKEN_ENCRYPTION_KEY) throw AppError.serviceUnavailable("Spotify integration encryption is not configured");
+  if (!env.SPOTIFY_TOKEN_ENCRYPTION_KEY) throw new AppError("Spotify integration encryption is not configured", 503, "SERVICE_UNAVAILABLE");
   return crypto.createHash("sha256").update(env.SPOTIFY_TOKEN_ENCRYPTION_KEY).digest();
 }
 
@@ -27,7 +27,7 @@ function encrypt(value: string): string {
 
 function decrypt(value: string): string {
   const [ivRaw, tagRaw, encryptedRaw] = value.split(".");
-  if (!ivRaw || !tagRaw || !encryptedRaw) throw AppError.internal("Invalid encrypted Spotify credential");
+  if (!ivRaw || !tagRaw || !encryptedRaw) throw new AppError("Invalid encrypted Spotify credential", 500, "INTERNAL_ERROR");
   const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(ivRaw, "base64url"));
   decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encryptedRaw, "base64url")), decipher.final()]).toString("utf8");
@@ -39,7 +39,7 @@ function stateHash(state: string) { return crypto.createHash("sha256").update(st
 
 function ensureConfigured() {
   if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET || !env.SPOTIFY_REDIRECT_URI || !env.SPOTIFY_TOKEN_ENCRYPTION_KEY) {
-    throw AppError.serviceUnavailable("Spotify integration is not configured yet");
+    throw new AppError("Spotify integration is not configured yet", 503, "SERVICE_UNAVAILABLE");
   }
 }
 
