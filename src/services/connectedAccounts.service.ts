@@ -43,9 +43,9 @@ function ensureConfigured() {
   }
 }
 
-async function spotifyRequest(url: string, options: RequestInit) {
+async function spotifyRequest(url: string, options: RequestInit): Promise<any> {
   const response = await fetch(url, options);
-  const body = await response.json().catch(() => ({}));
+  const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = body?.error_description || body?.error?.message || "Spotify request failed";
     throw AppError.badRequest(message, "SPOTIFY_REQUEST_FAILED");
@@ -84,7 +84,7 @@ export const connectedAccountsService = {
     ensureConfigured();
     const verifier = randomBase64Url(64);
     const state = randomBase64Url(32);
-    await prisma.oauthIntegrationState.create({ data: {
+    await prisma.oAuthIntegrationState.create({ data: {
       provider: ConnectedProvider.SPOTIFY, stateHash: stateHash(state), userId, verifierEnc: encrypt(verifier), expiresAt: new Date(Date.now() + STATE_TTL_MS),
     } });
     const params = new URLSearchParams({
@@ -97,15 +97,15 @@ export const connectedAccountsService = {
   async handleSpotifyCallback(query: { code?: string; state?: string; error?: string }, req: Request) {
     ensureConfigured();
     if (query.error) {
-      if (query.state) await prisma.oauthIntegrationState.deleteMany({ where: { provider: ConnectedProvider.SPOTIFY, stateHash: stateHash(query.state) } });
+      if (query.state) await prisma.oAuthIntegrationState.deleteMany({ where: { provider: ConnectedProvider.SPOTIFY, stateHash: stateHash(query.state) } });
       throw AppError.badRequest("Spotify authorization was cancelled", "SPOTIFY_ACCESS_DENIED");
     }
     if (!query.code || !query.state) throw AppError.badRequest("Spotify authorization response was incomplete", "SPOTIFY_CALLBACK_INVALID");
-    const oauthState = await prisma.oauthIntegrationState.findUnique({ where: { stateHash: stateHash(query.state) } });
+    const oauthState = await prisma.oAuthIntegrationState.findUnique({ where: { stateHash: stateHash(query.state) } });
     if (!oauthState || oauthState.provider !== ConnectedProvider.SPOTIFY || oauthState.usedAt || oauthState.expiresAt.getTime() <= Date.now()) {
       throw AppError.badRequest("Invalid or expired Spotify authorization state", "SPOTIFY_STATE_INVALID");
     }
-    const claimed = await prisma.oauthIntegrationState.updateMany({
+    const claimed = await prisma.oAuthIntegrationState.updateMany({
       where: { id: oauthState.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() },
     });
     if (claimed.count !== 1) throw AppError.badRequest("Spotify authorization state has already been used", "SPOTIFY_STATE_REPLAYED");
