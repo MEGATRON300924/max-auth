@@ -14,7 +14,30 @@ export const connectedAccountsController = {
     }
   },
 
-  async googleCalendarConnect(req: Request, res: Response, next: NextFunction) {\n    try {\n      const authorizationUrl = await connectedAccountsService.createGoogleCalendarAuthorizationUrl(req.user!.sub);\n      res.setHeader("Cache-Control", "no-store");\n      return ok(res, { authorizationUrl });\n    } catch (err) { next(err); }\n  },\n\n  async googleCalendarCallback(req: Request, res: Response, next: NextFunction) {\n    try {\n      const result = await connectedAccountsService.handleGoogleCalendarCallback({\n        code: typeof req.query.code === "string" ? req.query.code : undefined,\n        state: typeof req.query.state === "string" ? req.query.state : undefined,\n        error: typeof req.query.error === "string" ? req.query.error : undefined,\n      });\n      res.setHeader("Cache-Control", "no-store");\n      return res.redirect(env.FRONTEND_URL + `/connected-apps?google_calendar=${result.status}`);\n    } catch (err) {\n      res.setHeader("Cache-Control", "no-store");\n      return res.redirect(env.FRONTEND_URL + "/connected-apps?google_calendar=error");\n    }\n  },\n\n  async spotifyConnect(req: Request, res: Response, next: NextFunction) {
+  async googleCalendarConnect(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authorizationUrl = await connectedAccountsService.createGoogleCalendarAuthorizationUrl(req.user!.sub);
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { authorizationUrl });
+    } catch (err) { next(err); }
+  },
+
+  async googleCalendarCallback(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await connectedAccountsService.handleGoogleCalendarCallback({
+        code: typeof req.query.code === "string" ? req.query.code : undefined,
+        state: typeof req.query.state === "string" ? req.query.state : undefined,
+        error: typeof req.query.error === "string" ? req.query.error : undefined,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return res.redirect(env.FRONTEND_URL + `/connected-apps?google_calendar=${result.status}`);
+    } catch (err) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.redirect(env.FRONTEND_URL + "/connected-apps?google_calendar=error");
+    }
+  },
+
+  async spotifyConnect(req: Request, res: Response, next: NextFunction) {
     try {
       const authorizationUrl = await connectedAccountsService.createSpotifyAuthorizationUrl(req.user!.sub);
       res.setHeader("Cache-Control", "no-store");
