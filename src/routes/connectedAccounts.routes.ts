@@ -10,6 +10,12 @@ router.get("/google/calendar/callback", connectedAccountsController.googleCalend
 
 router.use(authenticate);
 
+router.get("/google/calendar", connectedAccountsController.googleCalendarList);
+router.get("/google/calendar/events", connectedAccountsController.googleCalendarEvents);
+router.post("/google/calendar/events", connectedAccountsController.googleCalendarCreateEvent);
+router.patch("/google/calendar/events/:eventId", connectedAccountsController.googleCalendarUpdateEvent);
+router.delete("/google/calendar/events/:eventId", connectedAccountsController.googleCalendarDeleteEvent);
+
 router.get("/spotify/connect", oauthRateLimiter, connectedAccountsController.spotifyConnect);
 router.get("/google/calendar/connect", oauthRateLimiter, connectedAccountsController.googleCalendarConnect);
 router.post("/spotify/refresh", oauthRateLimiter, connectedAccountsController.spotifyRefresh);
