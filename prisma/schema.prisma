@@ -115,6 +115,7 @@ model User {
   recoveryCodes       RecoveryCode[]
   passkeys            Passkey[]
   connectedAccounts   ConnectedAccount[]
+  oauthIntegrationStates OAuthIntegrationState[]
   aiProfile           AIProfile?
   oauthAuthCodes      OAuthAuthorizationCode[]
   oauthAccessTokens   OAuthAccessToken[]
@@ -291,6 +292,21 @@ model ConnectedAccount {
   @@unique([provider, providerAccountId])
   @@index([userId])
   @@map("connected_accounts")
+}
+
+model OAuthIntegrationState {
+  id          String   @id @default(uuid()) @db.Uuid
+  provider    ConnectedProvider
+  stateHash   String   @unique
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verifierEnc String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  @@index([userId, provider])
+  @@index([expiresAt])
+  @@map("oauth_integration_states")
 }
 
 model AIProfile {
