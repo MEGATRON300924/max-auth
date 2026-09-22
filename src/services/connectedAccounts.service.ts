@@ -16,15 +16,12 @@ function encryptionKey(): Buffer {
   if (!env.SPOTIFY_TOKEN_ENCRYPTION_KEY) throw new AppError("Spotify integration encryption is not configured", 503, "SERVICE_UNAVAILABLE");
   return crypto.createHash("sha256").update(env.SPOTIFY_TOKEN_ENCRYPTION_KEY).digest();
 }
-
 function encrypt(value: string): string {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", encryptionKey(), iv);
   const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return [iv.toString("base64url"), tag.toString("base64url"), encrypted.toString("base64url")].join(".");
+  return [iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), encrypted.toString("base64url")].join(".");
 }
-
 function decrypt(value: string): string {
   const [ivRaw, tagRaw, encryptedRaw] = value.split(".");
   if (!ivRaw || !tagRaw || !encryptedRaw) throw new AppError("Invalid encrypted Spotify credential", 500, "INTERNAL_ERROR");
@@ -32,17 +29,14 @@ function decrypt(value: string): string {
   decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(encryptedRaw, "base64url")), decipher.final()]).toString("utf8");
 }
-
 function randomBase64Url(bytes = 32) { return crypto.randomBytes(bytes).toString("base64url"); }
 function pkceChallenge(verifier: string) { return crypto.createHash("sha256").update(verifier).digest("base64url"); }
 function stateHash(state: string) { return crypto.createHash("sha256").update(state).digest("hex"); }
-
 function ensureConfigured() {
   if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET || !env.SPOTIFY_REDIRECT_URI || !env.SPOTIFY_TOKEN_ENCRYPTION_KEY) {
     throw new AppError("Spotify integration is not configured yet", 503, "SERVICE_UNAVAILABLE");
   }
 }
-
 async function spotifyRequest(url: string, options: RequestInit): Promise<any> {
   const response = await fetch(url, options);
   const body: any = await response.json().catch(() => ({}));
@@ -109,18 +103,22 @@ export const connectedAccountsService = {
       where: { id: oauthState.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() },
     });
     if (claimed.count !== 1) throw AppError.badRequest("Spotify authorization state has already been used", "SPOTIFY_STATE_REPLAYED");
+
     const verifier = decrypt(oauthState.verifierEnc);
     const basic = Buffer.from(env.SPOTIFY_CLIENT_ID + ":" + env.SPOTIFY_CLIENT_SECRET).toString("base64");
     let token: any;
+    let profile: any;
     try {
       token = await spotifyRequest(SPOTIFY_TOKEN_URL, {
-      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + basic },
-      body: new URLSearchParams({ grant_type: "authorization_code", code: query.code, redirect_uri: env.SPOTIFY_REDIRECT_URI, code_verifier: verifier }),
-    });
-    const profile = await spotifyRequest(SPOTIFY_ME_URL, { headers: { Authorization: "Bearer " + token.access_token } });
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + basic },
+        body: new URLSearchParams({ grant_type: "authorization_code", code: query.code, redirect_uri: env.SPOTIFY_REDIRECT_URI, code_verifier: verifier }),
+      });
+      profile = await spotifyRequest(SPOTIFY_ME_URL, { headers: { Authorization: "Bearer " + token.access_token } });
     } catch (error) {
       throw error;
     }
+
     const existing = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: ConnectedProvider.SPOTIFY, providerAccountId: profile.id } } });
     if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This Spotify account is already connected to another MAX Account");
     await prisma.connectedAccount.upsert({
@@ -147,10 +145,7 @@ export const connectedAccountsService = {
     } catch (error) {
       if (error instanceof AppError && error.code === "SPOTIFY_REQUEST_FAILED" && /invalid_grant|invalid refresh token|refresh token/i.test(error.message)) {
         await prisma.connectedAccount.delete({ where: { id: account.id } }).catch(() => undefined);
-        await auditService.record("CONNECTED_ACCOUNT_UNLINKED", {
-          userId,
-          metadata: { provider: "SPOTIFY", reason: "refresh_token_invalid" },
-        });
+        await auditService.record("CONNECTED_ACCOUNT_UNLINKED", { userId, metadata: { provider: "SPOTIFY", reason: "refresh_token_invalid" } });
         throw AppError.unauthorized("Your Spotify connection expired. Please connect Spotify again.", "SPOTIFY_REAUTH_REQUIRED");
       }
       throw error;
