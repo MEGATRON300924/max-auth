@@ -133,6 +133,16 @@ export const googleAuthService = {
 
     let user = linked ? await userRepository.findById(linked.userId) : await userRepository.findByEmail(email);
 
+    // Never silently merge a Google identity into an existing MAX Account
+    // merely because the email address matches. The user must first sign in
+    // to that MAX Account and explicitly connect Google.
+    if (!linked && user) {
+      throw AppError.conflict(
+        "A MAX Account already uses this email. Sign in to that account first, then connect Google from Connected Apps.",
+        "GOOGLE_ACCOUNT_LINK_REQUIRED",
+      );
+    }
+
     if (!user) {
       const username = await uniqueUsername(usernameBase(email, identity.name));
       user = await prisma.user.create({
