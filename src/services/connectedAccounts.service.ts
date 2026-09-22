@@ -201,7 +201,7 @@ export const connectedAccountsService = {
     const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Google Calendar is not connected");
     const requiredScope = "https://www.googleapis.com/auth/calendar.events";
-    if (!account.scope?.split(/\\s+/).includes(requiredScope)) throw AppError.badRequest("Google Calendar access has not been granted", "GOOGLE_CALENDAR_SCOPE_REQUIRED");
+    if (!account.scope?.split(/\s+/).includes(requiredScope)) throw AppError.badRequest("Google Calendar access has not been granted", "GOOGLE_CALENDAR_SCOPE_REQUIRED");
 
     let accessToken = googleDecrypt(account.accessTokenEnc);
     if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() <= Date.now() + 60_000) {
