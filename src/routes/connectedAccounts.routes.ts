@@ -5,11 +5,11 @@ import { oauthRateLimiter } from "../middleware/rateLimiter";
 
 const router = Router();
 
-router.get("/spotify/callback", connectedAccountsController.spotifyCallback);
+router.get("/spotify/callback", connectedAccountsController.spotifyCallback);\nrouter.get("/google/calendar/callback", connectedAccountsController.googleCalendarCallback);
 
 router.use(authenticate);
 
-router.get("/spotify/connect", oauthRateLimiter, connectedAccountsController.spotifyConnect);
+router.get("/spotify/connect", oauthRateLimiter, connectedAccountsController.spotifyConnect);\nrouter.get("/google/calendar/connect", oauthRateLimiter, connectedAccountsController.googleCalendarConnect);
 router.post("/spotify/refresh", oauthRateLimiter, connectedAccountsController.spotifyRefresh);
 
 /** @openapi /connected-accounts: get: tags: [Connected Accounts] summary: List linked third-party accounts */
