@@ -24,8 +24,8 @@ router.get("/", connectedAccountsController.list);
  */
 router.delete("/:accountId", connectedAccountsController.unlink);
 
-// NOTE: Provider-specific OAuth link flows (Google, X, Instagram, Snapchat,
-// Spotify, Discord, GitHub) are intentionally not implemented — only the
-// data model + link/unlink management endpoints exist per spec.
+// Spotify has a live OAuth + PKCE connection flow above. Other provider-specific
+// OAuth link flows remain future integrations; generic link/unlink management
+// endpoints are still available for providers that are linked by trusted flows.
 
 export default router;
