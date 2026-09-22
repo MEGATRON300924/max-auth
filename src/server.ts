@@ -4,8 +4,25 @@ import { logger } from "./utils/logger";
 import { prisma } from "./database/prisma";
 import { ensureSystemOAuthClients } from "./services/systemOAuth.service";
 import { webhookService } from "./services/webhook.service";
+import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 async function start() {
+  if (env.isProduction) {
+    logger.info("Applying pending Prisma migrations before MAX Auth startup...");
+    const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+    const { stdout, stderr } = await execFileAsync(
+      npxCommand,
+      ["--no-install", "prisma", "migrate", "deploy"],
+      { cwd: process.cwd(), env: process.env, maxBuffer: 1024 * 1024 },
+    );
+    if (stdout.trim()) logger.info(stdout.trim());
+    if (stderr.trim()) logger.warn(stderr.trim());
+    logger.info("Prisma migrations are up to date.");
+  }
+
   await ensureSystemOAuthClients();
 
   const app = createApp();
