@@ -116,6 +116,9 @@ export const connectedAccountsService = {
       body: new URLSearchParams({ grant_type: "authorization_code", code: query.code, redirect_uri: env.SPOTIFY_REDIRECT_URI, code_verifier: verifier }),
     });
     const profile = await spotifyRequest(SPOTIFY_ME_URL, { headers: { Authorization: "Bearer " + token.access_token } });
+    } catch (error) {
+      throw error;
+    }
     const existing = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: ConnectedProvider.SPOTIFY, providerAccountId: profile.id } } });
     if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This Spotify account is already connected to another MAX Account");
     await prisma.connectedAccount.upsert({
