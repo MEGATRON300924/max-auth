@@ -13,7 +13,7 @@ const SPOTIFY_SCOPES = ["user-read-private", "user-read-email"];
 const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
-const GOOGLE_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
+const GOOGLE_CALENDAR_SCOPES = [\n  "https://www.googleapis.com/auth/calendar.events",\n  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",\n];
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 function encryptionKey(): Buffer {
