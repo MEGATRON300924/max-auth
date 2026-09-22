@@ -37,7 +37,8 @@ export const connectedAccountsController = {
       res.setHeader("Cache-Control", "no-store");
       return res.redirect(`undefined/connected-apps?spotify=${result.status}`);
     } catch (err) {
-      next(err);
+      res.setHeader("Cache-Control", "no-store");
+      return res.redirect(env.FRONTEND_URL + "/connected-apps?spotify=error");
     }
   },
 
