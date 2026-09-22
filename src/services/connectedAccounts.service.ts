@@ -64,7 +64,17 @@ function googleDecrypt(value: string): string {
 async function googleRequest(url: string, options: RequestInit): Promise<any> {
   const response = await fetch(url, options);
   const body: any = await response.json().catch(() => ({}));
-  if (!response.ok) throw AppError.badRequest(body?.error_description || body?.error?.message || "Google request failed", "GOOGLE_REQUEST_FAILED");
+  if (!response.ok) {
+    const message =
+      body?.error_description ||
+      body?.error?.message ||
+      body?.error ||
+      "Google request failed";
+    throw AppError.badRequest(String(message), "GOOGLE_REQUEST_FAILED", {
+      status: response.status,
+      error: body?.error,
+    });
+  }
   return body;
 }
 
