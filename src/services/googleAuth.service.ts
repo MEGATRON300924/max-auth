@@ -10,6 +10,7 @@ import { deviceService } from "./device.service";
 import { tokenService } from "./token.service";
 import { auditService } from "./audit.service";
 import { mfaService } from "./mfa.service";
+import { ConnectedProvider } from "@prisma/client";
 
 interface GoogleIdentity {
   sub: string;
@@ -96,7 +97,7 @@ export const googleAuthService = {
   async connect(userId: string, credential: string, ctx: { ipAddress?: string; userAgent?: string }) {
     const identity = await verifyGoogleCredential(credential);
     const existing = await prisma.connectedAccount.findUnique({
-      where: { provider_providerAccountId: { provider: "GOOGLE", providerAccountId: identity.sub } },
+      where: { provider_providerAccountId: { provider: ConnectedProvider.GOOGLE, providerAccountId: identity.sub } },
     });
 
     if (existing && existing.userId !== userId) {
@@ -107,7 +108,7 @@ export const googleAuthService = {
       await prisma.connectedAccount.create({
         data: {
           userId,
-          provider: "GOOGLE",
+          provider: ConnectedProvider.GOOGLE,
           providerAccountId: identity.sub,
           scope: "openid email profile",
         },
