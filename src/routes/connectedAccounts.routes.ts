@@ -12,6 +12,7 @@ router.use(authenticate);
 
 router.get("/google/calendar", connectedAccountsController.googleCalendarList);
 router.get("/google/calendar/events", connectedAccountsController.googleCalendarEvents);
+router.get("/google/calendar/events/:eventId", connectedAccountsController.googleCalendarEvent);
 router.post("/google/calendar/events", connectedAccountsController.googleCalendarCreateEvent);
 router.patch("/google/calendar/events/:eventId", connectedAccountsController.googleCalendarUpdateEvent);
 router.delete("/google/calendar/events/:eventId", connectedAccountsController.googleCalendarDeleteEvent);
