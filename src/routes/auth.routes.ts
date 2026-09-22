@@ -3,7 +3,7 @@ import { authController } from "../controllers/auth.controller";
 import { authenticate } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
 import { doubleCsrfProtection } from "../middleware/csrf";
-import { loginRateLimiter, registerRateLimiter, sensitiveActionRateLimiter } from "../middleware/rateLimiter";
+import { loginRateLimiter, registerRateLimiter, sensitiveActionRateLimiter, oauthRateLimiter } from "../middleware/rateLimiter";
 import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema, verifyEmailSchema, deleteAccountSchema } from "../validators/auth.validators";
 import { z } from "zod";
 
