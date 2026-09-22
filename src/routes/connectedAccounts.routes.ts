@@ -4,7 +4,12 @@ import { authenticate } from "../middleware/authenticate";
 
 const router = Router();
 
+router.get("/spotify/callback", connectedAccountsController.spotifyCallback);
+
 router.use(authenticate);
+
+router.get("/spotify/connect", connectedAccountsController.spotifyConnect);
+router.post("/spotify/refresh", connectedAccountsController.spotifyRefresh);
 
 /** @openapi /connected-accounts: get: tags: [Connected Accounts] summary: List linked third-party accounts */
 router.get("/", connectedAccountsController.list);
