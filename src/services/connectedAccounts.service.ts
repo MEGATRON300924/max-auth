@@ -255,6 +255,16 @@ export const connectedAccountsService = {
   },
 
   async listGoogleCalendars(userId: string) {
+    ensureGoogleConfigured();
+    const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
+    if (!account?.accessTokenEnc) throw AppError.notFound("Google Calendar is not connected");
+    const calendarListScope = "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
+    if (!account.scope?.split(/\s+/).includes(calendarListScope)) {
+      return {
+        items: [{ id: "primary", summary: "Primary calendar", primary: true }],
+        nextPageToken: null,
+      };
+    }
     return this.googleCalendarRequest(userId, "/users/me/calendarList");
   },
 
