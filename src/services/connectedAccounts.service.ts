@@ -57,7 +57,7 @@ export const connectedAccountsService = {
   list(userId: string) {
     return prisma.connectedAccount.findMany({
       where: { userId },
-      select: { id: true, provider: true, providerAccountId: true, scope: true, linkedAt: true, updatedAt: true },
+      select: { id: true, provider: true, scope: true, tokenExpiresAt: true, linkedAt: true, updatedAt: true },
     });
   },
 
@@ -111,7 +111,7 @@ export const connectedAccountsService = {
     if (claimed.count !== 1) throw AppError.badRequest("Spotify authorization state has already been used", "SPOTIFY_STATE_REPLAYED");
     const verifier = decrypt(oauthState.verifierEnc);
     const basic = Buffer.from(env.SPOTIFY_CLIENT_ID + ":" + env.SPOTIFY_CLIENT_SECRET).toString("base64");
-    const token = await spotifyRequest(SPOTIFY_TOKEN_URL, {
+    let token: any;\n    try {\n      token = await spotifyRequest(SPOTIFY_TOKEN_URL, {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + basic },
       body: new URLSearchParams({ grant_type: "authorization_code", code: query.code, redirect_uri: env.SPOTIFY_REDIRECT_URI, code_verifier: verifier }),
     });
@@ -140,7 +140,7 @@ export const connectedAccountsService = {
     return prisma.connectedAccount.update({
       where: { id: account.id },
       data: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || account.scope, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
-      select: { id: true, provider: true, providerAccountId: true, scope: true, linkedAt: true, updatedAt: true },
+      select: { id: true, provider: true, scope: true, tokenExpiresAt: true, linkedAt: true, updatedAt: true },
     });
   },
 };
