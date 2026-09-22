@@ -117,7 +117,7 @@ export const googleAuthService = {
         userId,
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
-        metadata: { provider: "GOOGLE" },
+        metadata: { provider: ConnectedProvider.GOOGLE },
       });
     }
 
