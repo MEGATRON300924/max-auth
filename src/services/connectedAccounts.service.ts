@@ -256,6 +256,11 @@ export const connectedAccountsService = {
     return this.googleCalendarRequest(userId, "/calendars/" + encodeURIComponent(options.calendarId || "primary") + "/events?" + params.toString());
   },
 
+  async getGoogleCalendarEvent(userId: string, eventId: string, calendarId = "primary") {
+    if (!eventId.trim()) throw AppError.badRequest("Calendar event ID is required", "GOOGLE_CALENDAR_EVENT_ID_REQUIRED");
+    return this.googleCalendarRequest(userId, "/calendars/" + encodeURIComponent(calendarId) + "/events/" + encodeURIComponent(eventId));
+  },
+
   async createGoogleCalendarEvent(userId: string, event: Record<string, unknown>, calendarId = "primary") {
     return this.googleCalendarRequest(userId, "/calendars/" + encodeURIComponent(calendarId) + "/events", {
       method: "POST",
