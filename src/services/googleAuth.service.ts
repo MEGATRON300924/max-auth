@@ -75,7 +75,7 @@ async function verifyGoogleCredential(credential: string): Promise<GoogleIdentit
     }
     if (!jwk) throw new Error("unknown signing key");
 
-    const publicKey = crypto.createPublicKey({ key: jwk as crypto.JsonWebKey, format: "jwk" });
+    const publicKey = crypto.createPublicKey({ key: jwk as any, format: "jwk" });
     const payload = jwt.verify(credential, publicKey, {
       algorithms: ["RS256"],
       audience: env.GOOGLE_CLIENT_ID,
