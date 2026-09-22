@@ -133,10 +133,23 @@ export const connectedAccountsService = {
     if (!account?.refreshTokenEnc) throw AppError.notFound("Spotify is not connected");
     const refreshToken = decrypt(account.refreshTokenEnc);
     const basic = Buffer.from(env.SPOTIFY_CLIENT_ID + ":" + env.SPOTIFY_CLIENT_SECRET).toString("base64");
-    const token = await spotifyRequest(SPOTIFY_TOKEN_URL, {
-      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + basic },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
-    });
+    let token: any;
+    try {
+      token = await spotifyRequest(SPOTIFY_TOKEN_URL, {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + basic },
+        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
+      });
+    } catch (error) {
+      if (error instanceof AppError && error.code === "SPOTIFY_REQUEST_FAILED" && /invalid_grant|invalid refresh token|refresh token/i.test(error.message)) {
+        await prisma.connectedAccount.delete({ where: { id: account.id } }).catch(() => undefined);
+        await auditService.record("CONNECTED_ACCOUNT_UNLINKED", {
+          userId,
+          metadata: { provider: "SPOTIFY", reason: "refresh_token_invalid" },
+        });
+        throw AppError.unauthorized("Your Spotify connection expired. Please connect Spotify again.", "SPOTIFY_REAUTH_REQUIRED");
+      }
+      throw error;
+    }
     return prisma.connectedAccount.update({
       where: { id: account.id },
       data: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || account.scope, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
