@@ -12,6 +12,7 @@ const googleSchema = z.object({ body: z.object({ credential: z.string().min(20).
 router.post("/register", registerRateLimiter, validate(registerSchema), authController.register);
 router.post("/login", loginRateLimiter, validate(loginSchema), authController.login);
 router.post("/google", loginRateLimiter, validate(googleSchema), authController.google);
+router.post("/google/connect", authenticate, oauthRateLimiter, validate(googleSchema), authController.googleConnect);
 router.post("/logout", doubleCsrfProtection, authController.logout);
 // Refresh is protected by the httpOnly, Secure, SameSite cookie itself. Do not
 // require the IP-bound double-submit CSRF token here: browsers/proxies can
