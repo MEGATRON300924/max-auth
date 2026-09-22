@@ -241,7 +241,7 @@ export const connectedAccountsService = {
           },
         });
       } catch (error) {
-        if (error instanceof AppError && /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) {
+        if (error instanceof AppError && (error.code === "GOOGLE_REQUEST_FAILED" || /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) && /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) {
           throw AppError.unauthorized("Google Calendar authorization expired. Please reconnect Google Calendar.", "GOOGLE_REAUTH_REQUIRED");
         }
         throw error;
