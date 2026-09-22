@@ -111,7 +111,9 @@ export const connectedAccountsService = {
     if (claimed.count !== 1) throw AppError.badRequest("Spotify authorization state has already been used", "SPOTIFY_STATE_REPLAYED");
     const verifier = decrypt(oauthState.verifierEnc);
     const basic = Buffer.from(env.SPOTIFY_CLIENT_ID + ":" + env.SPOTIFY_CLIENT_SECRET).toString("base64");
-    let token: any;\n    try {\n      token = await spotifyRequest(SPOTIFY_TOKEN_URL, {
+    let token: any;
+    try {
+      token = await spotifyRequest(SPOTIFY_TOKEN_URL, {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: "Basic " + basic },
       body: new URLSearchParams({ grant_type: "authorization_code", code: query.code, redirect_uri: env.SPOTIFY_REDIRECT_URI, code_verifier: verifier }),
     });
