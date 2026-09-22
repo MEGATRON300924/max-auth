@@ -16,7 +16,9 @@
     "lint": "eslint src --ext .ts",
     "docs:serve": "echo 'Swagger UI available at /docs when server is running'"
   },
-  "engines": { "node": ">=20.0.0" },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@prisma/client": "^5.19.1",
     "argon2": "^0.40.3",
