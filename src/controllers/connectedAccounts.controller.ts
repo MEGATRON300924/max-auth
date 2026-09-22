@@ -59,6 +59,16 @@ export const connectedAccountsController = {
     } catch (err) { next(err); }
   },
 
+  async googleCalendarEvent(req: Request, res: Response, next: NextFunction) {
+    try {
+      const calendarId = typeof req.query.calendarId === "string" ? req.query.calendarId : "primary";
+      const eventId = typeof req.params.eventId === "string" ? req.params.eventId : "";
+      const event = await connectedAccountsService.getGoogleCalendarEvent(req.user!.sub, eventId, calendarId);
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { event });
+    } catch (err) { next(err); }
+  },
+
   async googleCalendarCreateEvent(req: Request, res: Response, next: NextFunction) {
     try {
       const calendarId = typeof req.query.calendarId === "string" ? req.query.calendarId : "primary";
