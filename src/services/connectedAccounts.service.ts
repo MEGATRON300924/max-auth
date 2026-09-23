@@ -29,7 +29,7 @@ const GOOGLE_SCOPES = [
   "profile",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
-  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/drive",
   "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/tasks",
   "https://www.googleapis.com/auth/contacts.readonly",
@@ -345,18 +345,18 @@ export const connectedAccountsService = {
     if (options.q) params.set("q", options.q);
     if (options.pageToken) params.set("pageToken", options.pageToken);
     if (options.orderBy) params.set("orderBy", options.orderBy);
-    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files?" + params.toString(), ["https://www.googleapis.com/auth/drive.file"]);
+    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files?" + params.toString(), ["https://www.googleapis.com/auth/drive"]);
   },
 
   async getGoogleDriveFile(userId: string, fileId: string, download = false) {
     if (!fileId.trim()) throw AppError.badRequest("Drive file ID is required", "GOOGLE_DRIVE_FILE_ID_REQUIRED");
     const params = new URLSearchParams({ fields: "id,name,mimeType,webViewLink,createdTime,modifiedTime,size,parents,trashed" });
     if (download) params.set("alt", "media");
-    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId) + "?" + params.toString(), ["https://www.googleapis.com/auth/drive.file"]);
+    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId) + "?" + params.toString(), ["https://www.googleapis.com/auth/drive"]);
   },
 
   async createGoogleDriveFile(userId: string, metadata: Record<string, unknown>) {
-    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files", ["https://www.googleapis.com/auth/drive.file"], {
+    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files", ["https://www.googleapis.com/auth/drive"], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(metadata),
@@ -365,7 +365,7 @@ export const connectedAccountsService = {
 
   async updateGoogleDriveFile(userId: string, fileId: string, metadata: Record<string, unknown>) {
     if (!fileId.trim()) throw AppError.badRequest("Drive file ID is required", "GOOGLE_DRIVE_FILE_ID_REQUIRED");
-    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId), ["https://www.googleapis.com/auth/drive.file"], {
+    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId), ["https://www.googleapis.com/auth/drive"], {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(metadata),
@@ -374,18 +374,18 @@ export const connectedAccountsService = {
 
   async deleteGoogleDriveFile(userId: string, fileId: string) {
     if (!fileId.trim()) throw AppError.badRequest("Drive file ID is required", "GOOGLE_DRIVE_FILE_ID_REQUIRED");
-    await this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId), ["https://www.googleapis.com/auth/drive.file"], { method: "DELETE" });
+    await this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId), ["https://www.googleapis.com/auth/drive"], { method: "DELETE" });
     return { status: "deleted" as const };
   },
 
   async getGoogleDoc(userId: string, documentId: string) {
     if (!documentId.trim()) throw AppError.badRequest("Google Docs document ID is required", "GOOGLE_DOC_ID_REQUIRED");
-    return this.googleApiRequest(userId, "https://docs.googleapis.com/v1", "/documents/" + encodeURIComponent(documentId), ["https://www.googleapis.com/auth/drive.file"]);
+    return this.googleApiRequest(userId, "https://docs.googleapis.com/v1", "/documents/" + encodeURIComponent(documentId), ["https://www.googleapis.com/auth/drive"]);
   },
 
   async updateGoogleDoc(userId: string, documentId: string, requests: unknown[]) {
     if (!documentId.trim()) throw AppError.badRequest("Google Docs document ID is required", "GOOGLE_DOC_ID_REQUIRED");
-    return this.googleApiRequest(userId, "https://docs.googleapis.com/v1", "/documents/" + encodeURIComponent(documentId) + ":batchUpdate", ["https://www.googleapis.com/auth/drive.file"], {
+    return this.googleApiRequest(userId, "https://docs.googleapis.com/v1", "/documents/" + encodeURIComponent(documentId) + ":batchUpdate", ["https://www.googleapis.com/auth/drive"], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requests }),
@@ -395,13 +395,13 @@ export const connectedAccountsService = {
   async getGoogleSheet(userId: string, spreadsheetId: string, range?: string) {
     if (!spreadsheetId.trim()) throw AppError.badRequest("Google Sheets spreadsheet ID is required", "GOOGLE_SHEET_ID_REQUIRED");
     const path = "/v4/spreadsheets/" + encodeURIComponent(spreadsheetId) + (range ? "?range=" + encodeURIComponent(range) : "");
-    return this.googleApiRequest(userId, "https://sheets.googleapis.com", path, ["https://www.googleapis.com/auth/drive.file"]);
+    return this.googleApiRequest(userId, "https://sheets.googleapis.com", path, ["https://www.googleapis.com/auth/drive"]);
   },
 
   async updateGoogleSheet(userId: string, spreadsheetId: string, range: string, values: unknown[][], valueInputOption = "USER_ENTERED") {
     if (!spreadsheetId.trim() || !range.trim()) throw AppError.badRequest("Spreadsheet ID and range are required", "GOOGLE_SHEET_INPUT_REQUIRED");
     const path = "/v4/spreadsheets/" + encodeURIComponent(spreadsheetId) + "/values/" + encodeURIComponent(range) + "?valueInputOption=" + encodeURIComponent(valueInputOption);
-    return this.googleApiRequest(userId, "https://sheets.googleapis.com", path, ["https://www.googleapis.com/auth/drive.file"], {
+    return this.googleApiRequest(userId, "https://sheets.googleapis.com", path, ["https://www.googleapis.com/auth/drive"], {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ values }),
@@ -410,12 +410,12 @@ export const connectedAccountsService = {
 
   async getGoogleSlides(userId: string, presentationId: string) {
     if (!presentationId.trim()) throw AppError.badRequest("Google Slides presentation ID is required", "GOOGLE_SLIDES_ID_REQUIRED");
-    return this.googleApiRequest(userId, "https://slides.googleapis.com", "/v1/presentations/" + encodeURIComponent(presentationId), ["https://www.googleapis.com/auth/drive.file"]);
+    return this.googleApiRequest(userId, "https://slides.googleapis.com", "/v1/presentations/" + encodeURIComponent(presentationId), ["https://www.googleapis.com/auth/drive"]);
   },
 
   async updateGoogleSlides(userId: string, presentationId: string, requests: unknown[]) {
     if (!presentationId.trim()) throw AppError.badRequest("Google Slides presentation ID is required", "GOOGLE_SLIDES_ID_REQUIRED");
-    return this.googleApiRequest(userId, "https://slides.googleapis.com", "/v1/presentations/" + encodeURIComponent(presentationId) + ":batchUpdate", ["https://www.googleapis.com/auth/drive.file"], {
+    return this.googleApiRequest(userId, "https://slides.googleapis.com", "/v1/presentations/" + encodeURIComponent(presentationId) + ":batchUpdate", ["https://www.googleapis.com/auth/drive"], {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requests }),
