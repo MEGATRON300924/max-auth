@@ -211,7 +211,7 @@ export const connectedAccountsService = {
     if (!profile.sub) throw AppError.badRequest("Google did not return a stable account identifier", "GOOGLE_PROFILE_INVALID");
     const identity = await prisma.connectedAccount.findFirst({ where: { userId: oauthState.userId, provider: ConnectedProvider.GOOGLE } });
     if (!identity || identity.providerAccountId !== profile.sub) throw AppError.badRequest("The selected Google account does not match the Google identity already connected to MAX", "GOOGLE_ACCOUNT_MISMATCH");
-    await prisma.connectedAccount.update({ where: { id: identity.id }, data: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : identity.refreshTokenEnc, scope: token.scope || ["openid", "email", ...GOOGLE_CALENDAR_SCOPES].join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) } });
+    await prisma.connectedAccount.update({ where: { id: identity.id }, data: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : identity.refreshTokenEnc, scope: token.scope || GOOGLE_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) } });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, metadata: { provider: "GOOGLE", service: "calendar" } });
     return { status: "connected" as const };
   },
