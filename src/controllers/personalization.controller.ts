@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { personalizationService } from "../services/personalization.service";
 import { ok } from "../utils/response";
+import { AppError } from "../utils/AppError";
 
 export const personalizationController = {
   async snapshot(req: Request, res: Response, next: NextFunction) {
@@ -26,7 +27,7 @@ export const personalizationController = {
   async updateServiceSignals(req: Request, res: Response, next: NextFunction) {
     try {
       const provider = String(req.params.provider || "").trim().toUpperCase();
-      if (!provider) throw new Error("Provider is required");
+      if (!provider) throw AppError.badRequest("Provider is required", "PROVIDER_REQUIRED");
       const profile = await personalizationService.updateServiceSignals(req.params.userId, provider, req.body || {});
       res.setHeader("Cache-Control", "no-store");
       return ok(res, { profile });
