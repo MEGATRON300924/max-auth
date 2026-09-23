@@ -267,6 +267,45 @@ export const connectedAccountsController = {
     } catch (err) { next(err); }
   },
 
+  async googleYouTubeChannels(req: Request, res: Response, next: NextFunction) {
+    try {
+      const channels = await connectedAccountsService.listGoogleYouTubeChannels(req.user!.sub);
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { channels });
+    } catch (err) { next(err); }
+  },
+
+  async googleYouTubeSubscriptions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const subscriptions = await connectedAccountsService.listGoogleYouTubeSubscriptions(req.user!.sub, {
+        maxResults: typeof req.query.maxResults === "string" ? Number(req.query.maxResults) : undefined,
+        pageToken: typeof req.query.pageToken === "string" ? req.query.pageToken : undefined,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { subscriptions });
+    } catch (err) { next(err); }
+  },
+
+  async googleYouTubeSearch(req: Request, res: Response, next: NextFunction) {
+    try {
+      const results = await connectedAccountsService.searchGoogleYouTube(req.user!.sub, String(req.query.q || ""), {
+        type: req.query.type === "channel" || req.query.type === "playlist" ? req.query.type : "video",
+        maxResults: typeof req.query.maxResults === "string" ? Number(req.query.maxResults) : undefined,
+        pageToken: typeof req.query.pageToken === "string" ? req.query.pageToken : undefined,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { results });
+    } catch (err) { next(err); }
+  },
+
+  async googleYouTubeVideos(req: Request, res: Response, next: NextFunction) {
+    try {
+      const videos = await connectedAccountsService.getGoogleYouTubeVideos(req.user!.sub, String(req.query.ids || ""));
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { videos });
+    } catch (err) { next(err); }
+  },
+
   async googleContacts(req: Request, res: Response, next: NextFunction) {
     try {
       const contacts = await connectedAccountsService.listGoogleContacts(req.user!.sub, typeof req.query.pageSize === "string" ? Number(req.query.pageSize) : 100);
