@@ -13,9 +13,16 @@ const SPOTIFY_SCOPES = ["user-read-private", "user-read-email"];
 const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
-const GOOGLE_CALENDAR_SCOPES = [
+const GOOGLE_SCOPES = [
+  "openid",
+  "email",
+  "profile",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/tasks",
+  "https://www.googleapis.com/auth/contacts.readonly",
 ];
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -41,11 +48,11 @@ function pkceChallenge(verifier: string) { return crypto.createHash("sha256").up
 function stateHash(state: string) { return crypto.createHash("sha256").update(state).digest("hex"); }
 function ensureGoogleConfigured() {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REDIRECT_URI || !env.GOOGLE_TOKEN_ENCRYPTION_KEY) {
-    throw new AppError("Google Calendar integration is not configured yet", 503, "SERVICE_UNAVAILABLE");
+    throw new AppError("Google integration is not configured yet", 503, "SERVICE_UNAVAILABLE");
   }
 }
 function googleEncryptionKey(): Buffer {
-  if (!env.GOOGLE_TOKEN_ENCRYPTION_KEY) throw new AppError("Google Calendar encryption is not configured", 503, "SERVICE_UNAVAILABLE");
+  if (!env.GOOGLE_TOKEN_ENCRYPTION_KEY) throw new AppError("Google integration encryption is not configured", 503, "SERVICE_UNAVAILABLE");
   return crypto.createHash("sha256").update(env.GOOGLE_TOKEN_ENCRYPTION_KEY).digest();
 }
 function googleEncrypt(value: string): string {
@@ -183,7 +190,7 @@ export const connectedAccountsService = {
     const verifier = randomBase64Url(64);
     const state = randomBase64Url(32);
     await prisma.oAuthIntegrationState.create({ data: { provider: ConnectedProvider.GOOGLE, stateHash: stateHash(state), userId, verifierEnc: googleEncrypt(verifier), expiresAt: new Date(Date.now() + STATE_TTL_MS) } });
-    const params = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, redirect_uri: env.GOOGLE_REDIRECT_URI, response_type: "code", access_type: "offline", prompt: "consent", scope: ["openid", "email", ...GOOGLE_CALENDAR_SCOPES].join(" "), state, code_challenge: pkceChallenge(verifier), code_challenge_method: "S256" });
+    const params = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, redirect_uri: env.GOOGLE_REDIRECT_URI, response_type: "code", access_type: "offline", prompt: "consent", scope: GOOGLE_SCOPES.join(" "), state, code_challenge: pkceChallenge(verifier), code_challenge_method: "S256" });
     return GOOGLE_AUTHORIZE_URL + "?" + params.toString();
   },
 
@@ -209,16 +216,17 @@ export const connectedAccountsService = {
     return { status: "connected" as const };
   },
 
-  async googleCalendarRequest(userId: string, path: string, init: RequestInit = {}) {
+  async googleAccessToken(userId: string, requiredScopes: string[]) {
     ensureGoogleConfigured();
     const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
-    if (!account?.accessTokenEnc) throw AppError.notFound("Google Calendar is not connected");
-    const requiredScope = "https://www.googleapis.com/auth/calendar.events";
-    if (!account.scope?.split(/\s+/).includes(requiredScope)) throw AppError.badRequest("Google Calendar access has not been granted", "GOOGLE_CALENDAR_SCOPE_REQUIRED");
+    if (!account?.accessTokenEnc) throw AppError.notFound("Google is not connected");
+    const granted = new Set((account.scope || "").split(/\s+/).filter(Boolean));
+    const missing = requiredScopes.filter((scope) => !granted.has(scope));
+    if (missing.length) throw AppError.badRequest("Google access has not been granted for: " + missing.join(", "), "GOOGLE_SCOPE_REQUIRED", { missingScopes: missing });
 
     let accessToken = googleDecrypt(account.accessTokenEnc);
     if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() <= Date.now() + 60_000) {
-      if (!account.refreshTokenEnc) throw AppError.unauthorized("Google Calendar authorization expired. Please reconnect Google Calendar.", "GOOGLE_REAUTH_REQUIRED");
+      if (!account.refreshTokenEnc) throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
       const refreshToken = googleDecrypt(account.refreshTokenEnc);
       try {
         const refreshed = await googleRequest(GOOGLE_TOKEN_URL, {
@@ -241,17 +249,31 @@ export const connectedAccountsService = {
           },
         });
       } catch (error) {
-        if (error instanceof AppError && (error.code === "GOOGLE_REQUEST_FAILED" || /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) && /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) {
-          throw AppError.unauthorized("Google Calendar authorization expired. Please reconnect Google Calendar.", "GOOGLE_REAUTH_REQUIRED");
+        if (error instanceof AppError && /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) {
+          throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
         }
         throw error;
       }
     }
+    return accessToken;
+  },
 
-    return googleRequest("https://www.googleapis.com/calendar/v3" + path, {
+  async googleApiRequest(userId: string, baseUrl: string, path: string, requiredScopes: string[], init: RequestInit = {}) {
+    const accessToken = await this.googleAccessToken(userId, requiredScopes);
+    return googleRequest(baseUrl + path, {
       ...init,
       headers: { ...(init.headers || {}), Authorization: "Bearer " + accessToken, Accept: "application/json" },
     });
+  },
+
+  async googleCalendarRequest(userId: string, path: string, init: RequestInit = {}) {
+    return this.googleApiRequest(
+      userId,
+      "https://www.googleapis.com/calendar/v3",
+      path,
+      ["https://www.googleapis.com/auth/calendar.events"],
+      init,
+    );
   },
 
   async listGoogleCalendars(userId: string) {
@@ -303,6 +325,160 @@ export const connectedAccountsService = {
   async deleteGoogleCalendarEvent(userId: string, eventId: string, calendarId = "primary") {
     await this.googleCalendarRequest(userId, "/calendars/" + encodeURIComponent(calendarId) + "/events/" + encodeURIComponent(eventId), { method: "DELETE" });
     return { status: "deleted" as const };
+  },
+
+  async listGoogleDriveFiles(userId: string, options: { q?: string; pageSize?: number; pageToken?: string; orderBy?: string } = {}) {
+    const params = new URLSearchParams();
+    params.set("fields", "nextPageToken,files(id,name,mimeType,webViewLink,createdTime,modifiedTime,size,parents,trashed)");
+    params.set("pageSize", String(Math.min(Math.max(options.pageSize || 50, 1), 100)));
+    if (options.q) params.set("q", options.q);
+    if (options.pageToken) params.set("pageToken", options.pageToken);
+    if (options.orderBy) params.set("orderBy", options.orderBy);
+    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files?" + params.toString(), ["https://www.googleapis.com/auth/drive.file"]);
+  },
+
+  async getGoogleDriveFile(userId: string, fileId: string, download = false) {
+    if (!fileId.trim()) throw AppError.badRequest("Drive file ID is required", "GOOGLE_DRIVE_FILE_ID_REQUIRED");
+    const params = new URLSearchParams({ fields: "id,name,mimeType,webViewLink,createdTime,modifiedTime,size,parents,trashed" });
+    if (download) params.set("alt", "media");
+    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId) + "?" + params.toString(), ["https://www.googleapis.com/auth/drive.file"]);
+  },
+
+  async createGoogleDriveFile(userId: string, metadata: Record<string, unknown>) {
+    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files", ["https://www.googleapis.com/auth/drive.file"], {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(metadata),
+    });
+  },
+
+  async updateGoogleDriveFile(userId: string, fileId: string, metadata: Record<string, unknown>) {
+    if (!fileId.trim()) throw AppError.badRequest("Drive file ID is required", "GOOGLE_DRIVE_FILE_ID_REQUIRED");
+    return this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId), ["https://www.googleapis.com/auth/drive.file"], {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(metadata),
+    });
+  },
+
+  async deleteGoogleDriveFile(userId: string, fileId: string) {
+    if (!fileId.trim()) throw AppError.badRequest("Drive file ID is required", "GOOGLE_DRIVE_FILE_ID_REQUIRED");
+    await this.googleApiRequest(userId, "https://www.googleapis.com/drive/v3", "/files/" + encodeURIComponent(fileId), ["https://www.googleapis.com/auth/drive.file"], { method: "DELETE" });
+    return { status: "deleted" as const };
+  },
+
+  async getGoogleDoc(userId: string, documentId: string) {
+    if (!documentId.trim()) throw AppError.badRequest("Google Docs document ID is required", "GOOGLE_DOC_ID_REQUIRED");
+    return this.googleApiRequest(userId, "https://docs.googleapis.com/v1", "/documents/" + encodeURIComponent(documentId), ["https://www.googleapis.com/auth/drive.file"]);
+  },
+
+  async updateGoogleDoc(userId: string, documentId: string, requests: unknown[]) {
+    if (!documentId.trim()) throw AppError.badRequest("Google Docs document ID is required", "GOOGLE_DOC_ID_REQUIRED");
+    return this.googleApiRequest(userId, "https://docs.googleapis.com/v1", "/documents/" + encodeURIComponent(documentId) + ":batchUpdate", ["https://www.googleapis.com/auth/drive.file"], {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requests }),
+    });
+  },
+
+  async getGoogleSheet(userId: string, spreadsheetId: string, range?: string) {
+    if (!spreadsheetId.trim()) throw AppError.badRequest("Google Sheets spreadsheet ID is required", "GOOGLE_SHEET_ID_REQUIRED");
+    const path = "/v4/spreadsheets/" + encodeURIComponent(spreadsheetId) + (range ? "?range=" + encodeURIComponent(range) : "");
+    return this.googleApiRequest(userId, "https://sheets.googleapis.com", path, ["https://www.googleapis.com/auth/drive.file"]);
+  },
+
+  async updateGoogleSheet(userId: string, spreadsheetId: string, range: string, values: unknown[][], valueInputOption = "USER_ENTERED") {
+    if (!spreadsheetId.trim() || !range.trim()) throw AppError.badRequest("Spreadsheet ID and range are required", "GOOGLE_SHEET_INPUT_REQUIRED");
+    const path = "/v4/spreadsheets/" + encodeURIComponent(spreadsheetId) + "/values/" + encodeURIComponent(range) + "?valueInputOption=" + encodeURIComponent(valueInputOption);
+    return this.googleApiRequest(userId, "https://sheets.googleapis.com", path, ["https://www.googleapis.com/auth/drive.file"], {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values }),
+    });
+  },
+
+  async getGoogleSlides(userId: string, presentationId: string) {
+    if (!presentationId.trim()) throw AppError.badRequest("Google Slides presentation ID is required", "GOOGLE_SLIDES_ID_REQUIRED");
+    return this.googleApiRequest(userId, "https://slides.googleapis.com", "/v1/presentations/" + encodeURIComponent(presentationId), ["https://www.googleapis.com/auth/drive.file"]);
+  },
+
+  async updateGoogleSlides(userId: string, presentationId: string, requests: unknown[]) {
+    if (!presentationId.trim()) throw AppError.badRequest("Google Slides presentation ID is required", "GOOGLE_SLIDES_ID_REQUIRED");
+    return this.googleApiRequest(userId, "https://slides.googleapis.com", "/v1/presentations/" + encodeURIComponent(presentationId) + ":batchUpdate", ["https://www.googleapis.com/auth/drive.file"], {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requests }),
+    });
+  },
+
+  async listGmailMessages(userId: string, options: { q?: string; maxResults?: number; pageToken?: string } = {}) {
+    const params = new URLSearchParams();
+    if (options.q) params.set("q", options.q);
+    if (options.maxResults) params.set("maxResults", String(Math.min(Math.max(options.maxResults, 1), 100)));
+    if (options.pageToken) params.set("pageToken", options.pageToken);
+    return this.googleApiRequest(userId, "https://gmail.googleapis.com", "/gmail/v1/users/me/messages?" + params.toString(), ["https://www.googleapis.com/auth/gmail.modify"]);
+  },
+
+  async getGmailMessage(userId: string, messageId: string, format = "full") {
+    if (!messageId.trim()) throw AppError.badRequest("Gmail message ID is required", "GMAIL_MESSAGE_ID_REQUIRED");
+    return this.googleApiRequest(userId, "https://gmail.googleapis.com", "/gmail/v1/users/me/messages/" + encodeURIComponent(messageId) + "?format=" + encodeURIComponent(format), ["https://www.googleapis.com/auth/gmail.modify"]);
+  },
+
+  async sendGmailMessage(userId: string, raw: string) {
+    if (!raw.trim()) throw AppError.badRequest("Gmail raw message is required", "GMAIL_RAW_REQUIRED");
+    return this.googleApiRequest(userId, "https://gmail.googleapis.com", "/gmail/v1/users/me/messages/send", ["https://www.googleapis.com/auth/gmail.modify"], {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw }),
+    });
+  },
+
+  async modifyGmailMessage(userId: string, messageId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []) {
+    if (!messageId.trim()) throw AppError.badRequest("Gmail message ID is required", "GMAIL_MESSAGE_ID_REQUIRED");
+    return this.googleApiRequest(userId, "https://gmail.googleapis.com", "/gmail/v1/users/me/messages/" + encodeURIComponent(messageId) + "/modify", ["https://www.googleapis.com/auth/gmail.modify"], {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addLabelIds, removeLabelIds }),
+    });
+  },
+
+  async listGoogleTaskLists(userId: string) {
+    return this.googleApiRequest(userId, "https://tasks.googleapis.com", "/tasks/v1/users/@me/lists", ["https://www.googleapis.com/auth/tasks"]);
+  },
+
+  async listGoogleTasks(userId: string, taskListId = "@default") {
+    return this.googleApiRequest(userId, "https://tasks.googleapis.com", "/tasks/v1/lists/" + encodeURIComponent(taskListId) + "/tasks", ["https://www.googleapis.com/auth/tasks"]);
+  },
+
+  async createGoogleTask(userId: string, task: Record<string, unknown>, taskListId = "@default") {
+    return this.googleApiRequest(userId, "https://tasks.googleapis.com", "/tasks/v1/lists/" + encodeURIComponent(taskListId) + "/tasks", ["https://www.googleapis.com/auth/tasks"], {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(task),
+    });
+  },
+
+  async updateGoogleTask(userId: string, taskId: string, task: Record<string, unknown>, taskListId = "@default") {
+    if (!taskId.trim()) throw AppError.badRequest("Google Task ID is required", "GOOGLE_TASK_ID_REQUIRED");
+    return this.googleApiRequest(userId, "https://tasks.googleapis.com", "/tasks/v1/lists/" + encodeURIComponent(taskListId) + "/tasks/" + encodeURIComponent(taskId), ["https://www.googleapis.com/auth/tasks"], {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(task),
+    });
+  },
+
+  async deleteGoogleTask(userId: string, taskId: string, taskListId = "@default") {
+    if (!taskId.trim()) throw AppError.badRequest("Google Task ID is required", "GOOGLE_TASK_ID_REQUIRED");
+    await this.googleApiRequest(userId, "https://tasks.googleapis.com", "/tasks/v1/lists/" + encodeURIComponent(taskListId) + "/tasks/" + encodeURIComponent(taskId), ["https://www.googleapis.com/auth/tasks"], { method: "DELETE" });
+    return { status: "deleted" as const };
+  },
+
+  async listGoogleContacts(userId: string, pageSize = 100) {
+    const params = new URLSearchParams({
+      pageSize: String(Math.min(Math.max(pageSize, 1), 1000)),
+      personFields: "names,emailAddresses,phoneNumbers,organizations",
+    });
+    return this.googleApiRequest(userId, "https://people.googleapis.com", "/v1/people/me/connections?" + params.toString(), ["https://www.googleapis.com/auth/contacts.readonly"]);
   },
 
   async refreshSpotify(userId: string) {
