@@ -92,7 +92,7 @@ export const personalizationService = {
     if (!user) throw AppError.notFound("MAX Account not found");
 
     const current = await prisma.aIProfile.findUnique({ where: { userId } });
-    const data: Record<string, unknown> = {};
+    const data: any = {};
 
     if (patch.interests !== undefined) data.interests = patch.interests;
     if (patch.preferences !== undefined) data.preferences = patch.preferences;
