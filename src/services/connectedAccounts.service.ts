@@ -9,7 +9,17 @@ import { env } from "../config/env";
 const SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize";
 const SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token";
 const SPOTIFY_ME_URL = "https://api.spotify.com/v1/me";
-const SPOTIFY_SCOPES = ["user-read-private", "user-read-email"];
+const SPOTIFY_SCOPES = [
+  "user-read-private",
+  "user-read-email",
+  "user-top-read",
+  "user-read-recently-played",
+  "user-read-currently-playing",
+  "user-read-playback-state",
+  "user-modify-playback-state",
+  "user-library-read",
+  "playlist-read-private",
+];
 const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
@@ -23,6 +33,7 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.modify",
   "https://www.googleapis.com/auth/tasks",
   "https://www.googleapis.com/auth/contacts.readonly",
+  "https://www.googleapis.com/auth/youtube.readonly",
 ];
 const STATE_TTL_MS = 10 * 60 * 1000;
 
