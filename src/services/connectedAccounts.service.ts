@@ -492,6 +492,40 @@ export const connectedAccountsService = {
     return this.googleApiRequest(userId, "https://people.googleapis.com", "/v1/people/me/connections?" + params.toString(), ["https://www.googleapis.com/auth/contacts.readonly"]);
   },
 
+  async listGoogleYouTubeChannels(userId: string) {
+    const params = new URLSearchParams({ part: "snippet,contentDetails,statistics", mine: "true" });
+    return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/channels?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
+  },
+
+  async listGoogleYouTubeSubscriptions(userId: string, options: { maxResults?: number; pageToken?: string } = {}) {
+    const params = new URLSearchParams({
+      part: "snippet,contentDetails",
+      mine: "true",
+      maxResults: String(Math.min(Math.max(options.maxResults || 50, 1), 50)),
+    });
+    if (options.pageToken) params.set("pageToken", options.pageToken);
+    return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/subscriptions?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
+  },
+
+  async searchGoogleYouTube(userId: string, query: string, options: { type?: "video" | "channel" | "playlist"; maxResults?: number; pageToken?: string } = {}) {
+    if (!query.trim()) throw AppError.badRequest("YouTube search query is required", "YOUTUBE_SEARCH_QUERY_REQUIRED");
+    const params = new URLSearchParams({
+      part: "snippet",
+      q: query.trim(),
+      type: options.type || "video",
+      maxResults: String(Math.min(Math.max(options.maxResults || 10, 1), 50)),
+    });
+    if (options.pageToken) params.set("pageToken", options.pageToken);
+    return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/search?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
+  },
+
+  async getGoogleYouTubeVideos(userId: string, videoIds: string) {
+    const ids = videoIds.split(",").map((id) => id.trim()).filter(Boolean).slice(0, 50);
+    if (!ids.length) throw AppError.badRequest("At least one YouTube video ID is required", "YOUTUBE_VIDEO_IDS_REQUIRED");
+    const params = new URLSearchParams({ part: "snippet,contentDetails,statistics", id: ids.join(",") });
+    return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/videos?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
+  },
+
   async refreshSpotify(userId: string) {
     ensureConfigured();
     const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
