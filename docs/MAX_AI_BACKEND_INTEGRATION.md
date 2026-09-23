@@ -72,3 +72,67 @@ Google Maps is not an OAuth connected-account scope. Maps Platform access/billin
 ## Security boundary
 
 Raw third-party credentials stay encrypted in MAX Auth. MAX AI Backend receives only the user-scoped data or derived personalization signals it needs. This keeps the AI layer independent of OAuth token storage and provider credential management.
+
+
+## Google service bridge
+
+All Google data access intended for MAX AI Backend is exposed under the same authenticated `/internal` boundary. The backend must send both service headers for every request.
+
+### Calendar
+- `GET /users/:userId/google/calendar`
+- `GET /users/:userId/google/calendar/events`
+- `POST /users/:userId/google/calendar/events`
+- `PATCH /users/:userId/google/calendar/events/:eventId`
+- `DELETE /users/:userId/google/calendar/events/:eventId`
+
+### Drive
+- `GET /users/:userId/google/drive/files`
+- `GET /users/:userId/google/drive/files/:fileId`
+- `POST /users/:userId/google/drive/files`
+- `PATCH /users/:userId/google/drive/files/:fileId`
+- `DELETE /users/:userId/google/drive/files/:fileId`
+
+### Docs, Sheets and Slides
+- `GET /users/:userId/google/docs/:documentId`
+- `POST /users/:userId/google/docs/:documentId/batchUpdate`
+- `GET /users/:userId/google/sheets/:spreadsheetId`
+- `PUT /users/:userId/google/sheets/:spreadsheetId/values`
+- `GET /users/:userId/google/slides/:presentationId`
+- `POST /users/:userId/google/slides/:presentationId/batchUpdate`
+
+### Gmail
+- `GET /users/:userId/google/gmail/messages`
+- `GET /users/:userId/google/gmail/messages/:messageId`
+- `POST /users/:userId/google/gmail/messages/send`
+- `POST /users/:userId/google/gmail/messages/:messageId/modify`
+
+### Tasks and Contacts
+- `GET /users/:userId/google/tasks/lists`
+- `GET /users/:userId/google/tasks`
+- `POST /users/:userId/google/tasks`
+- `PATCH /users/:userId/google/tasks/:taskId`
+- `DELETE /users/:userId/google/tasks/:taskId`
+- `GET /users/:userId/google/contacts`
+
+### YouTube
+- `GET /users/:userId/google/youtube/channels`
+- `GET /users/:userId/google/youtube/subscriptions`
+- `GET /users/:userId/google/youtube/search`
+- `GET /users/:userId/google/youtube/videos`
+
+These endpoints execute calls with the user's encrypted Google credentials inside MAX Auth. They do not expose provider tokens to MAX AI Backend.
+
+## Required production configuration
+
+MAX Auth production must have:
+- `MAX_AUTH_SERVICE_TOKEN`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`
+- `GOOGLE_TOKEN_ENCRYPTION_KEY`
+
+Google Cloud must have the required APIs enabled for the scopes/features being used. The OAuth redirect URI must exactly match:
+
+`https://auth.max-ai.name.ng/api/v1/connected-accounts/google/calendar/callback`
+
+The Google verification/demo-video step can remain pending until the product is ready for submission.
