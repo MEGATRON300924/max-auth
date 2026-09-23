@@ -526,6 +526,71 @@ export const connectedAccountsService = {
     return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/videos?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
   },
 
+  async spotifyAccessToken(userId: string) {
+    ensureConfigured();
+    let account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
+    if (!account?.accessTokenEnc) throw AppError.notFound("Spotify is not connected");
+    if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() - Date.now() < 60_000) {
+      await this.refreshSpotify(userId);
+      account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
+    }
+    if (!account?.accessTokenEnc) throw AppError.notFound("Spotify is not connected");
+    return decrypt(account.accessTokenEnc);
+  },
+
+  async spotifyApiRequest(userId: string, path: string, init: RequestInit = {}) {
+    const accessToken = await this.spotifyAccessToken(userId);
+    const response = await fetch("https://api.spotify.com/v1" + path, {
+      ...init,
+      headers: { Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}), Authorization: "Bearer " + accessToken },
+    });
+    const body: any = await response.json().catch(() => ({}));
+    if (!response.ok) throw AppError.badRequest(body?.error?.message || "Spotify request failed", "SPOTIFY_REQUEST_FAILED", { status: response.status });
+    return body;
+  },
+
+  async spotifyMe(userId: string) {
+    return this.spotifyApiRequest(userId, "/me");
+  },
+
+  async spotifyTopArtists(userId: string, options: { timeRange?: "short_term" | "medium_term" | "long_term"; limit?: number; offset?: number } = {}) {
+    const params = new URLSearchParams({ limit: String(Math.min(Math.max(options.limit || 20, 1), 50)), time_range: options.timeRange || "medium_term", offset: String(Math.max(options.offset || 0, 0)) });
+    return this.spotifyApiRequest(userId, "/me/top/artists?" + params.toString());
+  },
+
+  async spotifyTopTracks(userId: string, options: { timeRange?: "short_term" | "medium_term" | "long_term"; limit?: number; offset?: number } = {}) {
+    const params = new URLSearchParams({ limit: String(Math.min(Math.max(options.limit || 20, 1), 50)), time_range: options.timeRange || "medium_term", offset: String(Math.max(options.offset || 0, 0)) });
+    return this.spotifyApiRequest(userId, "/me/top/tracks?" + params.toString());
+  },
+
+  async spotifyRecentlyPlayed(userId: string, limit = 20) {
+    return this.spotifyApiRequest(userId, "/me/player/recently-played?limit=" + encodeURIComponent(String(Math.min(Math.max(limit, 1), 50))));
+  },
+
+  async spotifyCurrentlyPlaying(userId: string) {
+    return this.spotifyApiRequest(userId, "/me/player");
+  },
+
+  async spotifyPlaybackState(userId: string) {
+    return this.spotifyApiRequest(userId, "/me/player");
+  },
+
+  async spotifyPlay(userId: string, body: unknown) {
+    return this.spotifyApiRequest(userId, "/me/player/play", { method: "PUT", body: JSON.stringify(body || {}) });
+  },
+
+  async spotifyPause(userId: string) {
+    return this.spotifyApiRequest(userId, "/me/player/pause", { method: "PUT" });
+  },
+
+  async spotifyNext(userId: string) {
+    return this.spotifyApiRequest(userId, "/me/player/next", { method: "POST" });
+  },
+
+  async spotifyPrevious(userId: string) {
+    return this.spotifyApiRequest(userId, "/me/player/previous", { method: "POST" });
+  },
+
   async refreshSpotify(userId: string) {
     ensureConfigured();
     const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
