@@ -24,13 +24,13 @@ router.patch("/google/drive/files/:fileId", connectedAccountsController.googleDr
 router.delete("/google/drive/files/:fileId", connectedAccountsController.googleDriveDelete);
 
 router.get("/google/docs/:documentId", connectedAccountsController.googleDoc);
-router.post("/google/docs/:documentId:batchUpdate", connectedAccountsController.googleDocUpdate);
+router.post("/google/docs/:documentId/batchUpdate", connectedAccountsController.googleDocUpdate);
 
 router.get("/google/sheets/:spreadsheetId", connectedAccountsController.googleSheet);
 router.put("/google/sheets/:spreadsheetId/values", connectedAccountsController.googleSheetUpdate);
 
 router.get("/google/slides/:presentationId", connectedAccountsController.googleSlides);
-router.post("/google/slides/:presentationId:batchUpdate", connectedAccountsController.googleSlidesUpdate);
+router.post("/google/slides/:presentationId/batchUpdate", connectedAccountsController.googleSlidesUpdate);
 
 router.get("/google/gmail/messages", connectedAccountsController.gmailMessages);
 router.get("/google/gmail/messages/:messageId", connectedAccountsController.gmailMessage);
