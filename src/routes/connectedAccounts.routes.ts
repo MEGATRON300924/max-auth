@@ -44,6 +44,10 @@ router.patch("/google/tasks/:taskId", connectedAccountsController.googleTaskUpda
 router.delete("/google/tasks/:taskId", connectedAccountsController.googleTaskDelete);
 
 router.get("/google/contacts", connectedAccountsController.googleContacts);
+router.get("/google/youtube/channels", connectedAccountsController.googleYouTubeChannels);
+router.get("/google/youtube/subscriptions", connectedAccountsController.googleYouTubeSubscriptions);
+router.get("/google/youtube/search", connectedAccountsController.googleYouTubeSearch);
+router.get("/google/youtube/videos", connectedAccountsController.googleYouTubeVideos);
 
 router.get("/spotify/connect", oauthRateLimiter, connectedAccountsController.spotifyConnect);
 router.get("/google/calendar/connect", oauthRateLimiter, connectedAccountsController.googleCalendarConnect);
