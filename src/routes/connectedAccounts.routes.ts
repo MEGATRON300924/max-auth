@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { connectedAccountsController } from "../controllers/connectedAccounts.controller";
+import { discordController } from "../controllers/discord.controller";
 import { authenticate } from "../middleware/authenticate";
 import { oauthRateLimiter } from "../middleware/rateLimiter";
 
@@ -7,6 +8,7 @@ const router = Router();
 
 router.get("/spotify/callback", connectedAccountsController.spotifyCallback);
 router.get("/google/calendar/callback", connectedAccountsController.googleCalendarCallback);
+router.get("/discord/callback", discordController.callback);
 
 router.use(authenticate);
 
@@ -52,6 +54,9 @@ router.get("/google/youtube/videos", connectedAccountsController.googleYouTubeVi
 router.get("/spotify/connect", oauthRateLimiter, connectedAccountsController.spotifyConnect);
 router.get("/google/calendar/connect", oauthRateLimiter, connectedAccountsController.googleCalendarConnect);
 router.post("/spotify/refresh", oauthRateLimiter, connectedAccountsController.spotifyRefresh);
+router.get("/discord/connect", oauthRateLimiter, discordController.connect);
+router.get("/discord/me", discordController.me);
+router.get("/discord/guilds", discordController.guilds);
 
 /** @openapi /connected-accounts: get: tags: [Connected Accounts] summary: List linked third-party accounts */
 router.get("/", connectedAccountsController.list);
@@ -65,8 +70,6 @@ router.get("/", connectedAccountsController.list);
  */
 router.delete("/:accountId", connectedAccountsController.unlink);
 
-// Spotify has a live OAuth + PKCE connection flow above. Other provider-specific
-// OAuth link flows remain future integrations; generic link/unlink management
-// endpoints are still available for providers that are linked by trusted flows.
+// Google, Spotify, and Discord have live OAuth connection flows above.
 
 export default router;
