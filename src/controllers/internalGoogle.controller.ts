@@ -91,7 +91,7 @@ export const internalGoogleController = {
   },
 
   async updateSlides(req: Request, res: Response, next: NextFunction) {
-    try { return ok(res, await connectedAccountsService.updateGoogleSlides(req.params.userId, req.params.presentationId, Array.isArray(req.body?.requests) ? req.body.requests : [])); } }
+    try { return ok(res, await connectedAccountsService.updateGoogleSlides(req.params.userId, req.params.presentationId, Array.isArray(req.body?.requests) ? req.body.requests : [])); }
     catch (err) { next(err); }
   },
 
