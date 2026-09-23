@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticateMaxService } from "../middleware/serviceAuthenticate";
 import { personalizationController } from "../controllers/personalization.controller";
 import { internalGoogleController } from "../controllers/internalGoogle.controller";
+import { internalSpotifyController } from "../controllers/internalSpotify.controller";
 
 const router = Router();
 
@@ -51,3 +52,14 @@ router.get("/users/:userId/google/youtube/search", internalGoogleController.yout
 router.get("/users/:userId/google/youtube/videos", internalGoogleController.youtubeVideos);
 
 export default router;
+
+
+router.get("/users/:userId/spotify/me", internalSpotifyController.me);
+router.get("/users/:userId/spotify/top/artists", internalSpotifyController.topArtists);
+router.get("/users/:userId/spotify/top/tracks", internalSpotifyController.topTracks);
+router.get("/users/:userId/spotify/recently-played", internalSpotifyController.recentlyPlayed);
+router.get("/users/:userId/spotify/player", internalSpotifyController.currentlyPlaying);
+router.put("/users/:userId/spotify/player/play", internalSpotifyController.play);
+router.put("/users/:userId/spotify/player/pause", internalSpotifyController.pause);
+router.post("/users/:userId/spotify/player/next", internalSpotifyController.next);
+router.post("/users/:userId/spotify/player/previous", internalSpotifyController.previous);
