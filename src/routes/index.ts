@@ -9,6 +9,7 @@ import oauthRoutes from "./oauth.routes";
 import webhookRoutes from "./webhook.routes";
 import adminRoutes from "./admin.routes";
 import healthRoutes from "./health.routes";
+import internalRoutes from "./internal.routes";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/oauth", oauthRoutes);
 router.use("/webhooks", webhookRoutes);
 router.use("/admin", adminRoutes);
 router.use("/health", healthRoutes);
+router.use("/internal", internalRoutes);
 
 export default router;
