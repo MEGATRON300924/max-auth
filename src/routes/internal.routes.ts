@@ -51,8 +51,6 @@ router.get("/users/:userId/google/youtube/subscriptions", internalGoogleControll
 router.get("/users/:userId/google/youtube/search", internalGoogleController.youtubeSearch);
 router.get("/users/:userId/google/youtube/videos", internalGoogleController.youtubeVideos);
 
-export default router;
-
 
 router.get("/users/:userId/spotify/me", internalSpotifyController.me);
 router.get("/users/:userId/spotify/top/artists", internalSpotifyController.topArtists);
@@ -63,3 +61,5 @@ router.put("/users/:userId/spotify/player/play", internalSpotifyController.play)
 router.put("/users/:userId/spotify/player/pause", internalSpotifyController.pause);
 router.post("/users/:userId/spotify/player/next", internalSpotifyController.next);
 router.post("/users/:userId/spotify/player/previous", internalSpotifyController.previous);
+
+export default router;
