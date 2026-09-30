@@ -53,6 +53,8 @@ router.get("/users/:userId/google/youtube/videos", internalGoogleController.yout
 
 
 router.get("/users/:userId/spotify/me", internalSpotifyController.me);
+router.get("/users/:userId/spotify/saved", internalSpotifyController.saved);
+router.get("/users/:userId/spotify/playlists", internalSpotifyController.playlists);
 router.get("/users/:userId/spotify/top/artists", internalSpotifyController.topArtists);
 router.get("/users/:userId/spotify/top/tracks", internalSpotifyController.topTracks);
 router.get("/users/:userId/spotify/recently-played", internalSpotifyController.recentlyPlayed);
