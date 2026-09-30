@@ -18,10 +18,10 @@ function parseDuration(value: string): number {
 }
 
 export const tokenService = {
-  async issueTokenPair(user: Pick<User, "id" | "username" | "subscriptionTier">, ctx: { deviceId?: string; ipAddress?: string; userAgent?: string; rememberMe?: boolean }) {
+  async issueTokenPair(user: Pick<User, "id" | "username" | "subscriptionTier" | "displayName" | "language" | "timezone">, ctx: { deviceId?: string; ipAddress?: string; userAgent?: string; rememberMe?: boolean }) {
     const sessionId = randomUUID();
     const rememberMe = ctx.rememberMe !== false;
-    const accessToken = signAccessToken({ sub: user.id, username: user.username, tier: user.subscriptionTier, sessionId });
+    const accessToken = signAccessToken({ sub: user.id, username: user.username, tier: user.subscriptionTier, displayName: user.displayName, language: user.language, timezone: user.timezone, sessionId });
     const refreshToken = signRefreshToken({ sub: user.id, sessionId, rememberMe });
     await sessionRepository.create({ id: sessionId, user: { connect: { id: user.id } }, device: ctx.deviceId ? { connect: { id: ctx.deviceId } } : undefined, refreshTokenHash: hashToken(refreshToken), userAgent: ctx.userAgent, ipAddress: ctx.ipAddress, expiresAt: refreshExpiryDate() });
     return { accessToken, refreshToken, sessionId, rememberMe };
