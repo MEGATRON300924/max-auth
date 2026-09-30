@@ -553,6 +553,22 @@ export const connectedAccountsService = {
     return this.spotifyApiRequest(userId, "/me");
   },
 
+  async spotifySavedTracks(userId: string, limit = 20, offset = 0) {
+    const params = new URLSearchParams({
+      limit: String(Math.min(Math.max(limit, 1), 50)),
+      offset: String(Math.max(offset, 0)),
+    });
+    return this.spotifyApiRequest(userId, "/me/tracks?" + params.toString());
+  },
+
+  async spotifyPlaylists(userId: string, limit = 20, offset = 0) {
+    const params = new URLSearchParams({
+      limit: String(Math.min(Math.max(limit, 1), 50)),
+      offset: String(Math.max(offset, 0)),
+    });
+    return this.spotifyApiRequest(userId, "/me/playlists?" + params.toString());
+  },
+
   async spotifyTopArtists(userId: string, options: { timeRange?: "short_term" | "medium_term" | "long_term"; limit?: number; offset?: number } = {}) {
     const params = new URLSearchParams({ limit: String(Math.min(Math.max(options.limit || 20, 1), 50)), time_range: options.timeRange || "medium_term", offset: String(Math.max(options.offset || 0, 0)) });
     return this.spotifyApiRequest(userId, "/me/top/artists?" + params.toString());
