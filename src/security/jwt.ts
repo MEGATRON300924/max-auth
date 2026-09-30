@@ -1,7 +1,7 @@
 import jwt, { SignOptions, VerifyOptions } from "jsonwebtoken";
 import { env } from "../config/env";
 
-export interface AccessTokenPayload { sub: string; username: string; tier: string; sessionId: string; type: "access"; }
+export interface AccessTokenPayload { sub: string; username: string; tier: string; displayName?: string | null; language?: string | null; timezone?: string | null; sessionId: string; type: "access"; }
 export interface RefreshTokenPayload { sub: string; sessionId: string; rememberMe: boolean; type: "refresh"; }
 
 const signOptionsBase = { issuer: env.JWT_ISSUER, audience: env.JWT_AUDIENCE };
