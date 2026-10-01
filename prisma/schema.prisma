@@ -79,6 +79,7 @@ enum ConnectedProvider {
   SPOTIFY
   DISCORD
   GITHUB
+  MICROSOFT
 }
 
 enum OAuthGrantType {
