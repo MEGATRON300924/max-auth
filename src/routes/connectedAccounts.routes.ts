@@ -65,6 +65,7 @@ router.get("/microsoft/drive/files", microsoftController.driveFiles);
 router.get("/microsoft/todo/lists", microsoftController.todoLists);
 router.get("/microsoft/todo/tasks", microsoftController.todoTasks);
 router.get("/microsoft/contacts", microsoftController.contacts);
+router.post("/microsoft/mail/send", microsoftController.sendMail);
 router.get("/discord/me", discordController.me);
 router.get("/discord/guilds", discordController.guilds);
 
