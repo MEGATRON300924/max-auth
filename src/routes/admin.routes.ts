@@ -7,19 +7,49 @@ const router = Router();
 
 router.use(authenticate, requireAdmin);
 
-/** @openapi /admin/users: get: tags: [Admin] summary: List/search users (paginated) */
+/**
+ * @openapi
+ * /admin/users:
+ *   get:
+ *     tags: [Admin]
+ *     summary: List/search users (paginated)
+ */
 router.get("/users", adminController.listUsers);
 
-/** @openapi /admin/users/{userId}: get: tags: [Admin] summary: Get a single user by ID */
+/**
+ * @openapi
+ * /admin/users/{userId}:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Get a single user by ID
+ */
 router.get("/users/:userId", adminController.getUser);
 
-/** @openapi /admin/users/{userId}/suspend: post: tags: [Admin] summary: Suspend a user account */
+/**
+ * @openapi
+ * /admin/users/{userId}/suspend:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Suspend a user account
+ */
 router.post("/users/:userId/suspend", adminController.suspendUser);
 
-/** @openapi /admin/users/{userId}/reactivate: post: tags: [Admin] summary: Reactivate a suspended user account */
+/**
+ * @openapi
+ * /admin/users/{userId}/reactivate:
+ *   post:
+ *     tags: [Admin]
+ *     summary: Reactivate a suspended user account
+ */
 router.post("/users/:userId/reactivate", adminController.reactivateUser);
 
-/** @openapi /admin/stats: get: tags: [Admin] summary: Get platform-wide statistics */
+/**
+ * @openapi
+ * /admin/stats:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Get platform-wide statistics
+ */
 router.get("/stats", adminController.stats);
 
 export default router;
