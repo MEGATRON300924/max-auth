@@ -1,6 +1,6 @@
 # Microsoft Integration
 
-MAX Auth uses Microsoft identity platform authorization code flow with Microsoft Graph delegated permissions. Microsoft documents delegated access as the model where the app acts on behalf of the signed-in user, and recommends least-privilege permissions. citeturn0search0turn0search1
+MAX Auth uses Microsoft identity platform authorization code flow with Microsoft Graph delegated permissions. Microsoft documents delegated access as the model where the app acts on behalf of the signed-in user, and recommends least-privilege permissions.
 
 ## Render environment variables
 
@@ -37,7 +37,7 @@ Under Microsoft Graph -> Delegated permissions, the current MAX integration requ
 - `email`
 - `offline_access`
 
-`offline_access` is requested because MAX Auth stores encrypted refresh tokens so a connected account can continue working after the short-lived access token expires. Microsoft documents this scope for long-lived delegated access. citeturn0search1turn0search2
+`offline_access` is requested because MAX Auth stores encrypted refresh tokens so a connected account can continue working after the short-lived access token expires. Microsoft documents this scope for long-lived delegated access.
 
 ## Connected endpoints
 
