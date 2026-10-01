@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { connectedAccountsController } from "../controllers/connectedAccounts.controller";
 import { discordController } from "../controllers/discord.controller";
+import { microsoftController } from "../controllers/microsoft.controller";
 import { authenticate } from "../middleware/authenticate";
 import { oauthRateLimiter } from "../middleware/rateLimiter";
 
@@ -9,6 +10,7 @@ const router = Router();
 router.get("/spotify/callback", connectedAccountsController.spotifyCallback);
 router.get("/google/calendar/callback", connectedAccountsController.googleCalendarCallback);
 router.get("/discord/callback", discordController.callback);
+router.get("/microsoft/callback", microsoftController.callback);
 
 router.use(authenticate);
 
@@ -55,6 +57,14 @@ router.get("/spotify/connect", oauthRateLimiter, connectedAccountsController.spo
 router.get("/google/calendar/connect", oauthRateLimiter, connectedAccountsController.googleCalendarConnect);
 router.post("/spotify/refresh", oauthRateLimiter, connectedAccountsController.spotifyRefresh);
 router.get("/discord/connect", oauthRateLimiter, discordController.connect);
+router.get("/microsoft/connect", oauthRateLimiter, microsoftController.connect);
+router.get("/microsoft/me", microsoftController.me);
+router.get("/microsoft/mail", microsoftController.mail);
+router.get("/microsoft/calendar/events", microsoftController.calendarEvents);
+router.get("/microsoft/drive/files", microsoftController.driveFiles);
+router.get("/microsoft/todo/lists", microsoftController.todoLists);
+router.get("/microsoft/todo/tasks", microsoftController.todoTasks);
+router.get("/microsoft/contacts", microsoftController.contacts);
 router.get("/discord/me", discordController.me);
 router.get("/discord/guilds", discordController.guilds);
 
