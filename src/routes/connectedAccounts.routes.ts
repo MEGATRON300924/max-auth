@@ -58,7 +58,13 @@ router.get("/discord/connect", oauthRateLimiter, discordController.connect);
 router.get("/discord/me", discordController.me);
 router.get("/discord/guilds", discordController.guilds);
 
-/** @openapi /connected-accounts: get: tags: [Connected Accounts] summary: List linked third-party accounts */
+/**
+ * @openapi
+ * /connected-accounts:
+ *   get:
+ *     tags: [Connected Accounts]
+ *     summary: List linked third-party accounts
+ */
 router.get("/", connectedAccountsController.list);
 
 /**
