@@ -4,6 +4,8 @@ import { discordController } from "../controllers/discord.controller";
 import { microsoftController } from "../controllers/microsoft.controller";
 import { githubController } from "../controllers/github.controller";
 import { xController } from "../controllers/x.controller";
+import { instagramController } from "../controllers/instagram.controller";
+import { snapchatController } from "../controllers/snapchat.controller";
 import { authenticate } from "../middleware/authenticate";
 import { oauthRateLimiter } from "../middleware/rateLimiter";
 
@@ -15,6 +17,8 @@ router.get("/discord/callback", discordController.callback);
 router.get("/microsoft/callback", microsoftController.callback);
 router.get("/github/callback", githubController.callback);
 router.get("/x/callback", xController.callback);
+router.get("/instagram/callback", instagramController.callback);
+router.get("/snapchat/callback", snapchatController.callback);
 
 router.use(authenticate);
 
@@ -64,6 +68,8 @@ router.get("/discord/connect", oauthRateLimiter, discordController.connect);
 router.get("/microsoft/connect", oauthRateLimiter, microsoftController.connect);
 router.get("/github/connect", oauthRateLimiter, githubController.connect);
 router.get("/x/connect", oauthRateLimiter, xController.connect);
+router.get("/instagram/connect", oauthRateLimiter, instagramController.connect);
+router.get("/snapchat/connect", oauthRateLimiter, snapchatController.connect);
 router.get("/microsoft/me", microsoftController.me);
 router.get("/microsoft/mail", microsoftController.mail);
 router.get("/microsoft/calendar/events", microsoftController.calendarEvents);
@@ -78,6 +84,7 @@ router.get("/github/me", githubController.me);
 router.get("/github/repos", githubController.repos);
 router.get("/x/me", xController.me);
 router.get("/x/posts", xController.posts);
+router.get("/instagram/me", instagramController.me);
 
 router.get("/", connectedAccountsController.list);
 router.delete("/:accountId", connectedAccountsController.unlink);
