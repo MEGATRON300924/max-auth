@@ -3,6 +3,7 @@ import { connectedAccountsController } from "../controllers/connectedAccounts.co
 import { discordController } from "../controllers/discord.controller";
 import { microsoftController } from "../controllers/microsoft.controller";
 import { githubController } from "../controllers/github.controller";
+import { xController } from "../controllers/x.controller";
 import { authenticate } from "../middleware/authenticate";
 import { oauthRateLimiter } from "../middleware/rateLimiter";
 
@@ -13,6 +14,7 @@ router.get("/google/calendar/callback", connectedAccountsController.googleCalend
 router.get("/discord/callback", discordController.callback);
 router.get("/microsoft/callback", microsoftController.callback);
 router.get("/github/callback", githubController.callback);
+router.get("/x/callback", xController.callback);
 
 router.use(authenticate);
 
@@ -61,6 +63,7 @@ router.post("/spotify/refresh", oauthRateLimiter, connectedAccountsController.sp
 router.get("/discord/connect", oauthRateLimiter, discordController.connect);
 router.get("/microsoft/connect", oauthRateLimiter, microsoftController.connect);
 router.get("/github/connect", oauthRateLimiter, githubController.connect);
+router.get("/x/connect", oauthRateLimiter, xController.connect);
 router.get("/microsoft/me", microsoftController.me);
 router.get("/microsoft/mail", microsoftController.mail);
 router.get("/microsoft/calendar/events", microsoftController.calendarEvents);
@@ -73,6 +76,8 @@ router.get("/discord/me", discordController.me);
 router.get("/discord/guilds", discordController.guilds);
 router.get("/github/me", githubController.me);
 router.get("/github/repos", githubController.repos);
+router.get("/x/me", xController.me);
+router.get("/x/posts", xController.posts);
 
 router.get("/", connectedAccountsController.list);
 router.delete("/:accountId", connectedAccountsController.unlink);
