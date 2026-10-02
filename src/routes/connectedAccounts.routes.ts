@@ -2,6 +2,7 @@ import { Router } from "express";
 import { connectedAccountsController } from "../controllers/connectedAccounts.controller";
 import { discordController } from "../controllers/discord.controller";
 import { microsoftController } from "../controllers/microsoft.controller";
+import { githubController } from "../controllers/github.controller";
 import { authenticate } from "../middleware/authenticate";
 import { oauthRateLimiter } from "../middleware/rateLimiter";
 
@@ -11,6 +12,7 @@ router.get("/spotify/callback", connectedAccountsController.spotifyCallback);
 router.get("/google/calendar/callback", connectedAccountsController.googleCalendarCallback);
 router.get("/discord/callback", discordController.callback);
 router.get("/microsoft/callback", microsoftController.callback);
+router.get("/github/callback", githubController.callback);
 
 router.use(authenticate);
 
@@ -58,6 +60,7 @@ router.get("/google/calendar/connect", oauthRateLimiter, connectedAccountsContro
 router.post("/spotify/refresh", oauthRateLimiter, connectedAccountsController.spotifyRefresh);
 router.get("/discord/connect", oauthRateLimiter, discordController.connect);
 router.get("/microsoft/connect", oauthRateLimiter, microsoftController.connect);
+router.get("/github/connect", oauthRateLimiter, githubController.connect);
 router.get("/microsoft/me", microsoftController.me);
 router.get("/microsoft/mail", microsoftController.mail);
 router.get("/microsoft/calendar/events", microsoftController.calendarEvents);
@@ -68,25 +71,10 @@ router.get("/microsoft/contacts", microsoftController.contacts);
 router.post("/microsoft/mail/send", microsoftController.sendMail);
 router.get("/discord/me", discordController.me);
 router.get("/discord/guilds", discordController.guilds);
+router.get("/github/me", githubController.me);
+router.get("/github/repos", githubController.repos);
 
-/**
- * @openapi
- * /connected-accounts:
- *   get:
- *     tags: [Connected Accounts]
- *     summary: List linked third-party accounts
- */
 router.get("/", connectedAccountsController.list);
-
-/**
- * @openapi
- * /connected-accounts/{accountId}:
- *   delete:
- *     tags: [Connected Accounts]
- *     summary: Unlink a connected third-party account
- */
 router.delete("/:accountId", connectedAccountsController.unlink);
-
-// Google, Spotify, and Discord have live OAuth connection flows above.
 
 export default router;
