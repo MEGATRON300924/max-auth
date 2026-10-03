@@ -75,7 +75,6 @@ enum ConnectedProvider {
   GOOGLE
   X
   INSTAGRAM
-  SNAPCHAT
   SPOTIFY
   DISCORD
   GITHUB
