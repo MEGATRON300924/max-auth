@@ -80,6 +80,7 @@ enum ConnectedProvider {
   DISCORD
   GITHUB
   MICROSOFT
+  TIKTOK
 }
 
 enum OAuthGrantType {
