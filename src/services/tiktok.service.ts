@@ -137,7 +137,13 @@ export const tiktokService = {
 
   async accessToken(userId: string) {
     ensureConfigured();
-    const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.TIKTOK } });
+    let account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.TIKTOK } });
+    if (!account?.accessTokenEnc) throw AppError.notFound("TikTok is not connected");
+    if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() - Date.now() < 15 * 60 * 1000) {
+      if (!account.refreshTokenEnc) throw AppError.unauthorized("Your TikTok connection expired. Please reconnect TikTok.", "TIKTOK_REAUTH_REQUIRED");
+      await this.refresh(userId);
+      account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.TIKTOK } });
+    }
     if (!account?.accessTokenEnc) throw AppError.notFound("TikTok is not connected");
     return decrypt(account.accessTokenEnc);
   },
@@ -168,16 +174,18 @@ export const tiktokService = {
   },
 
   async me(userId: string) {
-    return request(API_URL + "/v2/user/info/?fields=open_id,avatar_url,display_name,profile_deep_link,bio_description", {
+    const response = await request(API_URL + "/v2/user/info/?fields=open_id,avatar_url,display_name", {
       headers: { Authorization: "Bearer " + await this.accessToken(userId) },
     });
+    return response?.data?.user || response?.user || response;
   },
 
   async videos(userId: string) {
-    return request(API_URL + "/v2/video/list/?fields=id,create_time,title,video_description,duration,cover_image_url,share_url,embed_link", {
+    const response = await request(API_URL + "/v2/video/list/?fields=id,create_time,title,video_description,duration,cover_image_url,share_url,embed_link", {
       method: "POST",
       headers: { Authorization: "Bearer " + await this.accessToken(userId), "Content-Type": "application/json" },
       body: JSON.stringify({ max_count: 20 }),
     });
+    return response?.data || response;
   },
 };
