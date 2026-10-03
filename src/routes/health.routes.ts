@@ -14,6 +14,15 @@ router.get("/live", healthController.liveness);
 
 /**
  * @openapi
+ * /health/uptime:
+ *   get:
+ *     tags: [Health]
+ *     summary: Uptime monitor probe (does not access the database)
+ */
+router.get("/uptime", healthController.liveness);
+
+/**
+ * @openapi
  * /health/ready:
  *   get:
  *     tags: [Health]
