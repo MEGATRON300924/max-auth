@@ -1,0 +1,1 @@
+ALTER TYPE "ConnectedProvider" ADD VALUE IF NOT EXISTS 'TIKTOK';
