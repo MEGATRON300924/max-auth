@@ -5,7 +5,7 @@ import { microsoftController } from "../controllers/microsoft.controller";
 import { githubController } from "../controllers/github.controller";
 import { xController } from "../controllers/x.controller";
 import { instagramController } from "../controllers/instagram.controller";
-import { snapchatController } from "../controllers/snapchat.controller";
+import { tiktokController } from "../controllers/tiktok.controller";
 import { authenticate } from "../middleware/authenticate";
 import { oauthRateLimiter } from "../middleware/rateLimiter";
 
@@ -18,7 +18,7 @@ router.get("/microsoft/callback", microsoftController.callback);
 router.get("/github/callback", githubController.callback);
 router.get("/x/callback", xController.callback);
 router.get("/instagram/callback", instagramController.callback);
-router.get("/snapchat/callback", snapchatController.callback);
+router.get("/tiktok/callback", tiktokController.callback);
 
 router.use(authenticate);
 
@@ -69,7 +69,7 @@ router.get("/microsoft/connect", oauthRateLimiter, microsoftController.connect);
 router.get("/github/connect", oauthRateLimiter, githubController.connect);
 router.get("/x/connect", oauthRateLimiter, xController.connect);
 router.get("/instagram/connect", oauthRateLimiter, instagramController.connect);
-router.get("/snapchat/connect", oauthRateLimiter, snapchatController.connect);
+router.get("/tiktok/connect", oauthRateLimiter, tiktokController.connect);
 router.get("/microsoft/me", microsoftController.me);
 router.get("/microsoft/mail", microsoftController.mail);
 router.get("/microsoft/calendar/events", microsoftController.calendarEvents);
@@ -85,6 +85,9 @@ router.get("/github/repos", githubController.repos);
 router.get("/x/me", xController.me);
 router.get("/x/posts", xController.posts);
 router.get("/instagram/me", instagramController.me);
+router.get("/tiktok/me", tiktokController.me);
+router.get("/tiktok/videos", tiktokController.videos);
+router.post("/tiktok/refresh", oauthRateLimiter, tiktokController.refresh);
 
 router.get("/", connectedAccountsController.list);
 router.delete("/:accountId", connectedAccountsController.unlink);
