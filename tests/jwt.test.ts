@@ -14,7 +14,7 @@ describe("jwt security", () => {
   });
 
   it("signs and verifies a refresh token", () => {
-    const token = signRefreshToken({ sub: "user-123", sessionId: "session-abc" });
+    const token = signRefreshToken({ sub: "user-123", sessionId: "session-abc", rememberMe: true });
     const payload = verifyRefreshToken(token);
     expect(payload.sessionId).toBe("session-abc");
     expect(payload.type).toBe("refresh");
