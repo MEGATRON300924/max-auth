@@ -37,10 +37,15 @@ function renderOAuthRequestError(req: Request, res: Response, err: AppError) {
   const requested = typeof req.query.scope === "string"
     ? [...new Set(req.query.scope.split(/\s+/).filter(Boolean))]
     : [];
+  const scopeDetails = (err.details && typeof err.details === "object" ? err.details : {}) as { invalidScopes?: unknown; notAllowedScopes?: unknown };
+  const invalidScopes = new Set(Array.isArray(scopeDetails.invalidScopes) ? scopeDetails.invalidScopes.filter((scope): scope is string => typeof scope === "string") : []);
+  const notAllowedScopes = new Set(Array.isArray(scopeDetails.notAllowedScopes) ? scopeDetails.notAllowedScopes.filter((scope): scope is string => typeof scope === "string") : []);
   const scopeItems = requested.length
     ? requested.map((scope) => {
         const label = OAUTH_SCOPE_LABELS[scope] || "Unrecognized permission";
-        return `<li><span class="permission-name">${escapeHtml(label)}</span><span class="permission-code">${escapeHtml(scope)}</span></li>`;
+        const issue = invalidScopes.has(scope) ? "Not recognized by MAX Auth" : notAllowedScopes.has(scope) ? "Not enabled for this application" : "";
+        const issueMarkup = issue ? `<span class="permission-issue">${escapeHtml(issue)}</span>` : "";
+        return `<li class="${issue ? "permission-invalid" : ""}"><div><span class="permission-name">${escapeHtml(label)}</span>${issueMarkup}</div><span class="permission-code">${escapeHtml(scope)}</span></li>`;
       }).join("")
     : '<li><span class="permission-name">The requested permissions could not be validated.</span></li>';
   const logoUrl = `${env.FRONTEND_URL.replace(/\/$/, "")}/logo.png`;
@@ -50,10 +55,10 @@ function renderOAuthRequestError(req: Request, res: Response, err: AppError) {
   const isScopeError = err.code === "INVALID_SCOPE";
   const title = isScopeError ? "Permission check failed" : "We couldn't continue";
   const message = isScopeError
-    ? "This request includes permissions that aren't enabled for this application in MAX Auth. The request has been stopped, and no access was granted."
+    ? "Some permissions in this request are invalid or aren't enabled for this application. MAX Auth has stopped the request, and no access was granted."
     : "MAX Auth couldn't validate this authorization request. No access was granted.";
   const detail = isScopeError
-    ? "If you're the developer, review the application's registered permissions in MAX for Developers or MAX Auth, then try again."
+    ? "If you're the developer, compare the flagged permissions with this application's configured scopes in MAX for Developers or MAX Auth. Request only the permissions the app actually needs, then try again."
     : "Return to the app that sent you here, or contact its developer if the problem continues.";
   return res.status(err.statusCode).type("html").send(`<!doctype html>
 <html lang="en">
@@ -68,7 +73,7 @@ function renderOAuthRequestError(req: Request, res: Response, err: AppError) {
     *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--page);color:var(--ink);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:grid;place-items:center;padding:28px 16px}
     main{width:100%;max-width:520px}.brand{display:flex;align-items:center;gap:10px;margin:0 0 28px 4px;color:var(--muted);font-size:14px;font-weight:600}.brand img{width:32px;height:32px;object-fit:contain;border-radius:9px}
     .card{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:32px;box-shadow:0 8px 32px #1018280a}.mark{width:44px;height:44px;border-radius:14px;background:var(--soft);display:grid;place-items:center;color:var(--accent);font-size:22px;font-weight:700}
-    h1{font-size:25px;line-height:1.25;letter-spacing:-.5px;font-weight:600;margin:18px 0 10px}p{margin:0;color:var(--muted)}.intro{margin-bottom:24px}.permission-box{border:1px solid var(--border);border-radius:16px;padding:16px;margin:20px 0}.permission-heading{font-size:13px;color:var(--muted);font-weight:600;margin-bottom:10px}ul{list-style:none;padding:0;margin:0;display:grid;gap:12px}li{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.permission-name{font-size:14px}.permission-code{flex-shrink:0;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);background:var(--soft);border-radius:6px;padding:3px 6px;overflow-wrap:anywhere}.notice{font-size:13px;margin-top:16px}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:999px;text-decoration:none;font-size:14px;font-weight:600;border:1px solid var(--border);color:var(--ink)}.primary{background:var(--accent);border-color:var(--accent);color:white}.footer{font-size:12px;text-align:center;margin-top:22px;color:var(--muted)}a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}@media(max-width:480px){.card{padding:24px;border-radius:20px}h1{font-size:23px}li{display:grid;gap:4px}}
+    h1{font-size:25px;line-height:1.25;letter-spacing:-.5px;font-weight:600;margin:18px 0 10px}p{margin:0;color:var(--muted)}.intro{margin-bottom:24px}.permission-box{border:1px solid var(--border);border-radius:16px;padding:16px;margin:20px 0}.permission-heading{font-size:13px;color:var(--muted);font-weight:600;margin-bottom:10px}ul{list-style:none;padding:0;margin:0;display:grid;gap:12px}li{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.permission-name{font-size:14px}.permission-issue{display:block;margin-top:4px;font-size:12px;color:#b54708}.permission-invalid{background:color-mix(in srgb,#f79009 7%,transparent);border-radius:10px;padding:8px}.permission-code{flex-shrink:0;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);background:var(--soft);border-radius:6px;padding:3px 6px;overflow-wrap:anywhere}.notice{font-size:13px;margin-top:16px}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:999px;text-decoration:none;font-size:14px;font-weight:600;border:1px solid var(--border);color:var(--ink)}.primary{background:var(--accent);border-color:var(--accent);color:white}.footer{font-size:12px;text-align:center;margin-top:22px;color:var(--muted)}a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}@media(max-width:480px){.card{padding:24px;border-radius:20px}h1{font-size:23px}li{display:grid;gap:4px}}
   </style>
 </head>
 <body>
