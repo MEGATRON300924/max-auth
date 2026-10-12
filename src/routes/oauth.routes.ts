@@ -33,6 +33,7 @@ router.delete("/clients/:clientId", authenticate, oauthController.revokeClient);
 router.get("/consents", authenticate, oauthController.listConsents);
 router.delete("/consents/:consentId", authenticate, oauthController.revokeConsent);
 router.get("/client-tester", oauthController.clientTester);
+router.get("/authorize/details", oauthRateLimiter, oauthController.authorizeDetails);
 router.get("/authorize", oauthRateLimiter, oauthController.authorize);
 router.post("/authorize/approve", authenticate, oauthRateLimiter, validate(approveSchema), oauthController.approve);
 router.post("/token", oauthRateLimiter, oauthController.token);
