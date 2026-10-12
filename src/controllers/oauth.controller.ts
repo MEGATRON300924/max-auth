@@ -35,7 +35,7 @@ const OAUTH_SCOPE_LABELS: Record<string, string> = {
 function renderOAuthRequestError(req: Request, res: Response, err: AppError) {
   noStore(res);
   const requested = typeof req.query.scope === "string"
-    ? [...new Set(req.query.scope.split(/\\s+/).filter(Boolean))]
+    ? [...new Set(req.query.scope.split(/\s+/).filter(Boolean))]
     : [];
   const scopeItems = requested.length
     ? requested.map((scope) => {
@@ -43,7 +43,7 @@ function renderOAuthRequestError(req: Request, res: Response, err: AppError) {
         return `<li><span class="permission-name">${escapeHtml(label)}</span><span class="permission-code">${escapeHtml(scope)}</span></li>`;
       }).join("")
     : '<li><span class="permission-name">The requested permissions could not be validated.</span></li>';
-  const logoUrl = `${env.FRONTEND_URL.replace(/\\/$/, "")}/logo.png`;
+  const logoUrl = `${env.FRONTEND_URL.replace(/\/$/, "")}/logo.png`;
   const isScopeError = err.code === "INVALID_SCOPE";
   const title = isScopeError ? "Permission check failed" : "We couldn't continue";
   const message = isScopeError
