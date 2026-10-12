@@ -1,0 +1,49 @@
+name: Compatible backend dependency security updates
+
+on:
+  push:
+    branches:
+      - security/max-auth-backend-audit-2026-10-12
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/max-auth-backend-audit-2026-10-12
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply compatible security updates
+        run: npm audit fix || true
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Build application
+        run: npm run build
+      - name: Run tests
+        run: npm test
+      - name: Report remaining advisories
+        run: |
+          npm audit --json > /tmp/npm-audit.json || true
+          node -e "const a=require('/tmp/npm-audit.json'); console.log(JSON.stringify({vulnerabilities:a.metadata?.vulnerabilities, packages:Object.entries(a.vulnerabilities||{}).map(([name,v])=>({name,severity:v.severity,fixAvailable:v.fixAvailable}))},null,2))"
+      - name: Commit lockfile updates
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No compatible dependency updates were needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(deps): apply compatible npm security updates"
+          git push origin HEAD:security/max-auth-backend-audit-2026-10-12
