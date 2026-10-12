@@ -29,6 +29,7 @@ const OAUTH_SCOPE_LABELS: Record<string, string> = {
   "identity:read": "Read your MAX account identity",
   memory: "Access MAX Memory",
   "memory:read": "Read information you have allowed MAX Memory to share",
+  "developer:manage": "Manage OAuth applications owned by your MAX Account in MAX for Developers",
   offline_access: "Keep access available when you are not actively using the app",
 };
 
