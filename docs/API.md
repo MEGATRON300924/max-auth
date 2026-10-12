@@ -35,7 +35,7 @@ Cookie-based routes (`/auth/refresh`, `/auth/logout`) additionally require an
 | POST | `/auth/password/change` | Bearer | Change password (requires current password) |
 | DELETE | `/auth/account` | Bearer | Soft-delete the account (requires password) |
 
-**Register** body: `{ username, email, password, displayName?, country?, language?, timezone? }`
+**Register** body: `{ username, email, password, fullName, displayName, ageConfirmed: true, rememberMe?, country?, language?, timezone? }`. `ageConfirmed` is a required self-attestation; MAX does not collect a date of birth in this flow.
 **Login** body: `{ identifier, password }` — `identifier` is email or username.
 
 ## Profile — `/profile`
