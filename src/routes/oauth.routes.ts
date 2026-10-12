@@ -3,6 +3,7 @@ import { oauthController } from "../controllers/oauth.controller";
 import { oauthClientConfigController } from "../controllers/oauth-client-config.controller";
 import { oauthClientLogoController } from "../controllers/oauth-client-logo.controller";
 import { oauthManifestController } from "../controllers/oauth-manifest.controller";
+import { authenticate } from "../middleware/authenticate";
 import { authenticateDeveloper } from "../middleware/authenticateDeveloper";
 import { oauthRateLimiter } from "../middleware/rateLimiter";
 import { z } from "zod";
@@ -35,7 +36,7 @@ router.delete("/consents/:consentId", authenticateDeveloper, oauthController.rev
 router.get("/client-tester", oauthController.clientTester);
 router.get("/authorize/details", oauthRateLimiter, oauthController.authorizeDetails);
 router.get("/authorize", oauthRateLimiter, oauthController.authorize);
-router.post("/authorize/approve", authenticateDeveloper, oauthRateLimiter, validate(approveSchema), oauthController.approve);
+router.post("/authorize/approve", authenticate, oauthRateLimiter, validate(approveSchema), oauthController.approve);
 router.post("/token", oauthRateLimiter, oauthController.token);
 router.post("/revoke", oauthRateLimiter, validate(revokeSchema), oauthController.revoke);
 router.get("/introspect", oauthController.introspect);
