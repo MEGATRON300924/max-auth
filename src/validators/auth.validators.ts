@@ -10,9 +10,11 @@ const passwordSchema = z
 export const registerSchema = z.object({
   body: z.object({
     username: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_.]+$/),
+    fullName: z.string().trim().min(1).max(128),
+    displayName: z.string().trim().min(1).max(64),
+    ageConfirmed: z.literal(true),
     email: z.string().email().max(255),
     password: passwordSchema,
-    displayName: z.string().max(64).optional(),
     country: z.string().length(2).optional(),
     language: z.string().max(10).optional(),
     timezone: z.string().max(64).optional(),
