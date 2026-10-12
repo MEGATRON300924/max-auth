@@ -16,6 +16,7 @@ export const env = {
   NODE_ENV: optional("NODE_ENV", "development"), PORT: parseInt(optional("PORT", "4000"), 10), APP_NAME: optional("APP_NAME", "MAX Auth"), APP_URL: appUrl, FRONTEND_URL: optional("FRONTEND_URL", "http://localhost:3000"),
   MAX_AI_BACKEND_URL: optional("MAX_AI_BACKEND_URL", "https://api.max-ai.name.ng"),
   MAX_AUTH_SERVICE_TOKEN: optional("MAX_AUTH_SERVICE_TOKEN", ""),
+  MAX_DEVELOPERS_CLIENT_IDS: optional("MAX_DEVELOPERS_CLIENT_IDS", "max_client_llITDlGy6a2tSJBX,max_client_developers_platform_v1"),
   DATABASE_URL: required("DATABASE_URL"),
   JWT_ACCESS_SECRET: required("JWT_ACCESS_SECRET"), JWT_REFRESH_SECRET: required("JWT_REFRESH_SECRET"), JWT_ACCESS_EXPIRES_IN: optional("JWT_ACCESS_EXPIRES_IN", "15m"), JWT_REFRESH_EXPIRES_IN: optional("JWT_REFRESH_EXPIRES_IN", "30d"), JWT_ISSUER: optional("JWT_ISSUER", "max-auth"), JWT_AUDIENCE: optional("JWT_AUDIENCE", "max-ecosystem"),
   GOOGLE_CLIENT_ID: optional("GOOGLE_CLIENT_ID", ""), GOOGLE_CLIENT_SECRET: optional("GOOGLE_CLIENT_SECRET", ""),
