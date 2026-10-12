@@ -74,17 +74,24 @@ Cookie-based routes (`/auth/refresh`, `/auth/logout`) additionally require an
 | GET | `/connected-accounts` | List linked accounts |
 | DELETE | `/connected-accounts/:accountId` | Unlink an account |
 
-## OAuth ("Continue with MAX AI") — `/oauth`
+## OAuth / OIDC — `/oauth`
 
-| Method | Path | Status | Description |
-|---|---|---|---|
-| POST | `/oauth/clients` | ✅ live | Register a new OAuth client |
-| GET | `/oauth/clients` | ✅ live | List your OAuth clients |
-| DELETE | `/oauth/clients/:clientId` | ✅ live | Deactivate a client |
-| GET | `/oauth/consents` | ✅ live | List apps you've granted access to |
-| DELETE | `/oauth/consents/:consentId` | ✅ live | Revoke access for an app |
-| GET | `/oauth/authorize` | 🚧 501 | Authorization endpoint — not implemented yet |
-| POST | `/oauth/token` | 🚧 501 | Token exchange — not implemented yet |
+| Method | Path | Description |
+|---|---|---|
+| POST | `/oauth/clients` | Register an OAuth client |
+| GET | `/oauth/clients` | List owned OAuth clients |
+| PATCH | `/oauth/clients/:clientId` | Update client name, redirect URIs or scopes |
+| GET / PUT | `/oauth/clients/:clientId/config` | Read or update platform configuration |
+| GET | `/oauth/authorize` | Validate an authorization request and start consent |
+| GET | `/oauth/authorize/details` | Return details from a signed, validated authorization request |
+| POST | `/oauth/authorize/approve` | Approve a validated request and issue a short-lived code |
+| POST | `/oauth/token` | Exchange an authorization code or refresh token |
+| POST | `/oauth/revoke` | Revoke a token |
+| GET | `/oauth/userinfo` | Return claims permitted by the access token's scopes |
+| GET | `/oauth/memory` | Read authorized MAX Memory data when `memory:read` is granted |
+| GET / POST | `/oauth/introspect` | Internal token introspection; requires service authentication |
+
+Authorization uses the authorization-code flow with PKCE S256, exact redirect URI matching, signed request details, short-lived single-use codes, and scope checks. Browser requests that fail validation receive a branded HTML error page; API requests can receive JSON errors. Only the official MAX for Developers client may request `developer:manage`, and the developer console must request only `openid profile email offline_access developer:manage`.
 
 ## Administration — `/admin` (requires `isAdmin = true`)
 
@@ -110,7 +117,7 @@ Cookie-based routes (`/auth/refresh`, `/auth/logout`) additionally require an
 ```bash
 curl -X POST http://localhost:4000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"megatron","email":"zion@example.com","password":"SuperSecret123"}'
+  -d '{"username":"megatron","fullName":"Example Name","displayName":"Megatron","email":"zion@example.com","password":"SuperSecret123","ageConfirmed":true,"rememberMe":false}'
 
 # -> { "success": true, "data": { "user": {...}, "accessToken": "eyJ..." } }
 
