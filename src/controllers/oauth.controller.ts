@@ -44,6 +44,9 @@ function renderOAuthRequestError(req: Request, res: Response, err: AppError) {
       }).join("")
     : '<li><span class="permission-name">The requested permissions could not be validated.</span></li>';
   const logoUrl = `${env.FRONTEND_URL.replace(/\/$/, "")}/logo.png`;
+  const logoOrigin = new URL(logoUrl).origin;
+  const q = String.fromCharCode(39);
+  res.setHeader("Content-Security-Policy", "default-src " + q + "none" + q + "; img-src " + logoOrigin + "; style-src " + q + "unsafe-inline" + q + "; base-uri " + q + "none" + q + "; form-action " + q + "none" + q + "; frame-ancestors " + q + "none" + q);
   const isScopeError = err.code === "INVALID_SCOPE";
   const title = isScopeError ? "Permission check failed" : "We couldn't continue";
   const message = isScopeError
