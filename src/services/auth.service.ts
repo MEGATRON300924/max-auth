@@ -15,16 +15,16 @@ interface RequestContext { ipAddress?: string; userAgent?: string; clientHint?: 
 const PASSWORD_HISTORY_LIMIT = 5;
 
 export const authService = {
-  async register(input: { username: string; email: string; password: string; displayName?: string; country?: string; language?: string; timezone?: string; rememberMe?: boolean }, ctx: RequestContext) {
+  async register(input: { username: string; email: string; password: string; fullName: string; displayName: string; ageConfirmed: true; country?: string; language?: string; timezone?: string; rememberMe?: boolean }, ctx: RequestContext) {
     const email = input.email.toLowerCase();
     const [existingEmail, existingUsername] = await Promise.all([userRepository.findByEmail(email), userRepository.findByUsername(input.username)]);
     if (existingEmail) throw AppError.conflict("An account with this email already exists", "EMAIL_TAKEN");
     if (existingUsername) throw AppError.conflict("This username is already taken", "USERNAME_TAKEN");
     if (!isPasswordStrongEnough(input.password)) throw AppError.badRequest("Password does not meet strength requirements", "WEAK_PASSWORD");
     const passwordHash = await hashPassword(input.password);
-    const user = await prisma.user.create({ data: { username: input.username, email, passwordHash, displayName: input.displayName ?? input.username, country: input.country, language: input.language, timezone: input.timezone, aiProfile: { create: {} } } });
+    const user = await prisma.user.create({ data: { username: input.username, email, passwordHash, fullName: input.fullName.trim(), displayName: input.displayName.trim(), country: input.country, language: input.language, timezone: input.timezone, aiProfile: { create: {} } } });
     await prisma.passwordHistory.create({ data: { userId: user.id, passwordHash } });
-    await auditService.record("REGISTER", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent });
+    await auditService.record("REGISTER", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, metadata: { ageConfirmed: input.ageConfirmed, ageAttestationVersion: "MAX_ACCOUNT_AGE_V1" } });
     await this.sendEmailVerification(user.id, ctx);
     const device = await deviceService.identifyOrCreateDevice(user.id, ctx, ctx.clientHint);
     const tokens = await tokenService.issueTokenPair(user, { deviceId: device.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe: input.rememberMe });
