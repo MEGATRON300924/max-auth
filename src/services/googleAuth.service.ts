@@ -4,8 +4,6 @@ import { prisma } from "../database/prisma";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 import { userRepository } from "../repositories/user.repository";
-import { hashPassword } from "../security/password";
-import { generateOpaqueToken } from "../security/tokens";
 import { deviceService } from "./device.service";
 import { tokenService } from "./token.service";
 import { auditService } from "./audit.service";
@@ -18,20 +16,6 @@ interface GoogleIdentity {
   name?: string;
   picture?: string;
   email_verified?: string | boolean;
-}
-
-function usernameBase(email: string, name?: string) {
-  const value = (name || email.split("@")[0]).toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 24);
-  return value || "maxuser";
-}
-
-async function uniqueUsername(base: string) {
-  let candidate = base;
-  for (let i = 0; i < 100; i += 1) {
-    if (!(await userRepository.findByUsername(candidate))) return candidate;
-    candidate = `${base.slice(0, 20)}${i + 1}`;
-  }
-  return `max${Date.now().toString(36)}`.slice(0, 32);
 }
 
 type GoogleJwk = {
@@ -145,35 +129,20 @@ export const googleAuthService = {
     }
 
     if (!user) {
-      const username = await uniqueUsername(usernameBase(email, identity.name));
-      user = await prisma.user.create({
-        data: {
-          username,
-          email,
-          passwordHash: await hashPassword(generateOpaqueToken(32)),
-          displayName: identity.name || username,
-          avatarUrl: identity.picture,
-          verificationStatus: "VERIFIED",
-          aiProfile: { create: {} },
-        },
-      });
-      await auditService.record("REGISTER", {
-        userId: user.id,
-        ipAddress: ctx.ipAddress,
-        userAgent: ctx.userAgent,
-        metadata: { provider: "GOOGLE" },
-      });
-    } else {
-      if (user.status !== "ACTIVE") {
-        throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE");
-      }
-      await userRepository.update(user.id, {
-        avatarUrl: identity.picture || user.avatarUrl,
-        displayName: identity.name || user.displayName,
-        verificationStatus: "VERIFIED",
-      });
-      user = (await userRepository.findById(user.id))!;
+      throw AppError.notFound(
+        "No MAX Account is linked to this Google account. Create your MAX Account first, then connect Google from Connected Apps.",
+        "GOOGLE_ACCOUNT_NOT_LINKED",
+      );
     }
+    if (user.status !== "ACTIVE") {
+      throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE");
+    }
+    await userRepository.update(user.id, {
+      avatarUrl: identity.picture || user.avatarUrl,
+      displayName: identity.name || user.displayName,
+      verificationStatus: "VERIFIED",
+    });
+    user = (await userRepository.findById(user.id))!;
 
     const existingConnection = await prisma.connectedAccount.findUnique({
       where: { provider_providerAccountId: { provider: "GOOGLE", providerAccountId: identity.sub } },
