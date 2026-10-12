@@ -8,7 +8,7 @@ import { env } from "../config/env";
 const DEVELOPER_MANAGEMENT_SCOPE = "developer:manage";
 
 function isOfficialDeveloperClient(clientId: string) {
-  return new Set(env.MAX_DEVELOPERS_CLIENT_IDS.split(",").map((value) => value.trim()).filter(Boolean)).has(clientId);
+  return new Set(["max_client_llITDlGy6a2tSJBX", "max_client_developers_platform_v1", ...env.MAX_DEVELOPERS_CLIENT_IDS.split(",").map((value) => value.trim()).filter(Boolean)]).has(clientId);
 }
 
 /**
