@@ -49,10 +49,12 @@ export const oauthClientConfigService = {
     const websiteUrl = normalizeHttpsUrl(input.websiteUrl, "Website URL");
     const manifestUrl = normalizeHttpsUrl(input.manifestUrl, "Manifest URL");
     const displayName = input.displayName?.trim() || null;
-    const autoPrompt = input.autoPrompt ?? false;
-    const popupPlacement = input.popupPlacement ?? "bottom-right";
-    const popupFrequency = input.popupFrequency ?? "session";
-    const promptDelay = input.promptDelay ?? 1500;
+    const previousSettings = await prisma.$queryRawUnsafe<Array<{ autoPrompt: boolean; popupPlacement: "top-right" | "bottom-right"; popupFrequency: "always" | "session" | "once"; promptDelay: number }>>(`SELECT auto_prompt AS "autoPrompt", popup_placement AS "popupPlacement", popup_frequency AS "popupFrequency", prompt_delay AS "promptDelay" FROM oauth_client_configs WHERE client_id = $1::uuid LIMIT 1`, dbId);
+    const previous = previousSettings[0];
+    const autoPrompt = input.autoPrompt ?? previous?.autoPrompt ?? false;
+    const popupPlacement = input.popupPlacement ?? previous?.popupPlacement ?? "bottom-right";
+    const popupFrequency = input.popupFrequency ?? previous?.popupFrequency ?? "session";
+    const promptDelay = input.promptDelay ?? previous?.promptDelay ?? 1500;
     if (!Number.isInteger(promptDelay) || promptDelay < 0 || promptDelay > 10000) throw AppError.badRequest("Prompt delay must be between 0 and 10000 milliseconds", "INVALID_PROMPT_DELAY");
     if (displayName && displayName.length > 100) throw AppError.badRequest("Display name must be 100 characters or fewer", "INVALID_DISPLAY_NAME");
     if ((input.applicationType === "WEB" || input.applicationType === "SPA") && !authorizedOrigins.length) throw AppError.badRequest("Add at least one authorized site", "AUTHORIZED_SITE_REQUIRED");
