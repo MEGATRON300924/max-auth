@@ -22,9 +22,9 @@ All endpoints are under /api/v1/ecosystems and require a valid MAX Auth develope
 | POST | /organisations | Create an organisation; creator becomes owner |
 | GET | /organisations/:organisationId/ecosystems | List an organisation's ecosystems |
 | POST | /organisations/:organisationId/ecosystems | Create an ecosystem (owner/admin) |
-| POST | /ecosystems/:ecosystemId/clients | Link an existing OAuth client (owner/admin/developer) |
-| PUT | /ecosystems/:ecosystemId/clients/:oauthClientId/primary | Select the primary linked client |
-| DELETE | /ecosystems/:ecosystemId/clients/:oauthClientId | Unlink a client without deleting it |
+| POST | /:ecosystemId/clients | Link an existing OAuth client (owner/admin/developer) |
+| PUT | /:ecosystemId/clients/:oauthClientId/primary | Select the primary linked client |
+| DELETE | /:ecosystemId/clients/:oauthClientId | Unlink a client without deleting it |
 
 Create organisation body: { "name": "Acme Hosting", "slug": "acme-hosting" }.
 
