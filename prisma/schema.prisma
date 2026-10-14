@@ -124,6 +124,11 @@ model User {
   oauthRefreshTokens  OAuthRefreshToken[]
   oauthConsents       OAuthConsent[]
   ownedOAuthClients   OAuthClient[]
+  createdOrganisations Organisation[] @relation("OrganisationCreator")
+  organisationMemberships OrganisationMember[]
+  createdEcosystems Ecosystem[] @relation("EcosystemCreator")
+  linkedEcosystemClients EcosystemClient[] @relation("EcosystemClientLinker")
+  ecosystemIdentities EcosystemIdentity[]
   @@index([email])
   @@index([username])
   @@index([status])
@@ -342,6 +347,7 @@ model OAuthClient {
   accessTokens    OAuthAccessToken[]
   refreshTokens   OAuthRefreshToken[]
   consents        OAuthConsent[]
+  ecosystemClient EcosystemClient?
   @@map("oauth_clients")
 }
 
@@ -408,4 +414,74 @@ model OAuthConsent {
   revokedAt  DateTime?
   @@unique([clientId, userId])
   @@map("oauth_consents")
+}
+
+model Organisation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @db.VarChar(120)
+  slug      String   @unique @db.VarChar(64)
+  createdBy String   @map("created_by") @db.Uuid
+  creator   User     @relation("OrganisationCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  members   OrganisationMember[]
+  ecosystems Ecosystem[]
+  @@map("organisations")
+}
+
+model OrganisationMember {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String       @map("organisation_id") @db.Uuid
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  userId         String       @map("user_id") @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("MEMBER") @db.VarChar(16)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@unique([organisationId, userId])
+  @@index([userId], map: "organisation_members_user_idx")
+  @@map("organisation_members")
+}
+
+model Ecosystem {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String       @map("organisation_id") @db.Uuid
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String       @db.VarChar(120)
+  slug           String       @db.VarChar(64)
+  description    String?      @db.VarChar(500)
+  createdBy      String       @map("created_by") @db.Uuid
+  creator        User         @relation("EcosystemCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  clients        EcosystemClient[]
+  identities     EcosystemIdentity[]
+  @@unique([organisationId, slug], map: "ecosystems_org_slug_unique")
+  @@index([organisationId], map: "ecosystems_org_idx")
+  @@map("ecosystems")
+}
+
+model EcosystemClient {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ecosystemId   String      @map("ecosystem_id") @db.Uuid
+  ecosystem     Ecosystem   @relation(fields: [ecosystemId], references: [id], onDelete: Cascade)
+  oauthClientId String      @unique @map("oauth_client_id") @db.Uuid
+  oauthClient   OAuthClient @relation(fields: [oauthClientId], references: [id], onDelete: Cascade)
+  linkedBy      String      @map("linked_by") @db.Uuid
+  linker        User        @relation("EcosystemClientLinker", fields: [linkedBy], references: [id], onDelete: Restrict)
+  isPrimary     Boolean     @default(false) @map("is_primary")
+  linkedAt      DateTime    @default(now()) @map("linked_at") @db.Timestamptz(6)
+  @@index([ecosystemId], map: "ecosystem_clients_ecosystem_idx")
+  @@map("ecosystem_clients")
+}
+
+model EcosystemIdentity {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ecosystemId String    @map("ecosystem_id") @db.Uuid
+  ecosystem   Ecosystem @relation(fields: [ecosystemId], references: [id], onDelete: Cascade)
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@unique([ecosystemId, userId], map: "ecosystem_identity_user_unique")
+  @@index([userId], map: "ecosystem_identities_user_idx")
+  @@map("ecosystem_identities")
 }
