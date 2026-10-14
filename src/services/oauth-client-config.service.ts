@@ -15,6 +15,10 @@ export interface OAuthClientConfigInput {
   displayName?: string;
   websiteUrl?: string;
   manifestUrl?: string;
+  autoPrompt?: boolean;
+  popupPlacement?: "top-right" | "bottom-right";
+  popupFrequency?: "always" | "session" | "once";
+  promptDelay?: number;
 }
 
 async function clientDatabaseId(ownerId: string, clientId: string) {
@@ -30,8 +34,8 @@ function normalizeHttpsUrl(value?: string, field = "URL") { if (!value?.trim()) 
 export const oauthClientConfigService = {
   async get(ownerId: string, clientId: string) {
     const dbId = await clientDatabaseId(ownerId, clientId);
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints", logo_url AS "logoUrl", display_name AS "displayName", website_url AS "websiteUrl", manifest_url AS "manifestUrl", verification_status AS "verificationStatus", verified_at AS "verifiedAt" FROM oauth_client_configs WHERE client_id = $1::uuid LIMIT 1`, dbId);
-    return rows[0] ?? { applicationType: "WEB", authorizedOrigins: [], packageName: null, bundleId: null, certificateFingerprints: [], logoUrl: null, displayName: null, websiteUrl: null, manifestUrl: null, verificationStatus: "UNVERIFIED", verifiedAt: null };
+    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints", logo_url AS "logoUrl", display_name AS "displayName", website_url AS "websiteUrl", manifest_url AS "manifestUrl", auto_prompt AS "autoPrompt", popup_placement AS "popupPlacement", popup_frequency AS "popupFrequency", prompt_delay AS "promptDelay", verification_status AS "verificationStatus", verified_at AS "verifiedAt" FROM oauth_client_configs WHERE client_id = $1::uuid LIMIT 1`, dbId);
+    return rows[0] ?? { applicationType: "WEB", authorizedOrigins: [], packageName: null, bundleId: null, certificateFingerprints: [], logoUrl: null, displayName: null, websiteUrl: null, manifestUrl: null, autoPrompt: false, popupPlacement: "bottom-right", popupFrequency: "session", promptDelay: 1500, verificationStatus: "UNVERIFIED", verifiedAt: null };
   },
   async getPublic(clientId: string) {
     const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT display_name AS "displayName", logo_url AS "logoUrl", website_url AS "websiteUrl" FROM oauth_client_configs WHERE client_id = (SELECT id FROM oauth_clients WHERE "clientId" = $1 AND "isActive" = true LIMIT 1) LIMIT 1`, clientId);
@@ -45,11 +49,18 @@ export const oauthClientConfigService = {
     const websiteUrl = normalizeHttpsUrl(input.websiteUrl, "Website URL");
     const manifestUrl = normalizeHttpsUrl(input.manifestUrl, "Manifest URL");
     const displayName = input.displayName?.trim() || null;
+    const previousSettings = await prisma.$queryRawUnsafe<Array<{ autoPrompt: boolean; popupPlacement: "top-right" | "bottom-right"; popupFrequency: "always" | "session" | "once"; promptDelay: number }>>(`SELECT auto_prompt AS "autoPrompt", popup_placement AS "popupPlacement", popup_frequency AS "popupFrequency", prompt_delay AS "promptDelay" FROM oauth_client_configs WHERE client_id = $1::uuid LIMIT 1`, dbId);
+    const previous = previousSettings[0];
+    const autoPrompt = input.autoPrompt ?? previous?.autoPrompt ?? false;
+    const popupPlacement = input.popupPlacement ?? previous?.popupPlacement ?? "bottom-right";
+    const popupFrequency = input.popupFrequency ?? previous?.popupFrequency ?? "session";
+    const promptDelay = input.promptDelay ?? previous?.promptDelay ?? 1500;
+    if (!Number.isInteger(promptDelay) || promptDelay < 0 || promptDelay > 10000) throw AppError.badRequest("Prompt delay must be between 0 and 10000 milliseconds", "INVALID_PROMPT_DELAY");
     if (displayName && displayName.length > 100) throw AppError.badRequest("Display name must be 100 characters or fewer", "INVALID_DISPLAY_NAME");
     if ((input.applicationType === "WEB" || input.applicationType === "SPA") && !authorizedOrigins.length) throw AppError.badRequest("Add at least one authorized site", "AUTHORIZED_SITE_REQUIRED");
     if (input.applicationType === "ANDROID" && !input.packageName?.trim()) throw AppError.badRequest("Android package name is required", "PACKAGE_NAME_REQUIRED");
     if (input.applicationType === "IOS" && !input.bundleId?.trim()) throw AppError.badRequest("iOS bundle ID is required", "BUNDLE_ID_REQUIRED");
-    const rows = await prisma.$queryRawUnsafe<any[]>(`INSERT INTO oauth_client_configs (client_id, application_type, authorized_origins, package_name, bundle_id, certificate_fingerprints, logo_url, display_name, website_url, manifest_url, verification_status, verified_at, updated_at) VALUES ($1::uuid, $2, $3::text[], $4, $5, $6::text[], $7, $8, $9, $10, CASE WHEN $10 IS NULL THEN 'UNVERIFIED' ELSE 'PENDING' END, NULL, CURRENT_TIMESTAMP) ON CONFLICT (client_id) DO UPDATE SET application_type = EXCLUDED.application_type, authorized_origins = EXCLUDED.authorized_origins, package_name = EXCLUDED.package_name, bundle_id = EXCLUDED.bundle_id, certificate_fingerprints = EXCLUDED.certificate_fingerprints, logo_url = EXCLUDED.logo_url, display_name = EXCLUDED.display_name, website_url = EXCLUDED.website_url, manifest_url = EXCLUDED.manifest_url, verification_status = CASE WHEN EXCLUDED.manifest_url IS NULL THEN 'UNVERIFIED' ELSE 'PENDING' END, verified_at = NULL, updated_at = CURRENT_TIMESTAMP RETURNING application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints", logo_url AS "logoUrl", display_name AS "displayName", website_url AS "websiteUrl", manifest_url AS "manifestUrl", verification_status AS "verificationStatus", verified_at AS "verifiedAt"`, dbId, input.applicationType, authorizedOrigins, input.packageName?.trim() || null, input.bundleId?.trim() || null, certificateFingerprints, logoUrl, displayName, websiteUrl, manifestUrl);
+    const rows = await prisma.$queryRawUnsafe<any[]>(`INSERT INTO oauth_client_configs (client_id, application_type, authorized_origins, package_name, bundle_id, certificate_fingerprints, logo_url, display_name, website_url, manifest_url, auto_prompt, popup_placement, popup_frequency, prompt_delay, verification_status, verified_at, updated_at) VALUES ($1::uuid, $2, $3::text[], $4, $5, $6::text[], $7, $8, $9, $10, $11, $12, $13, $14, CASE WHEN $10 IS NULL THEN 'UNVERIFIED' ELSE 'PENDING' END, NULL, CURRENT_TIMESTAMP) ON CONFLICT (client_id) DO UPDATE SET application_type = EXCLUDED.application_type, authorized_origins = EXCLUDED.authorized_origins, package_name = EXCLUDED.package_name, bundle_id = EXCLUDED.bundle_id, certificate_fingerprints = EXCLUDED.certificate_fingerprints, logo_url = EXCLUDED.logo_url, display_name = EXCLUDED.display_name, website_url = EXCLUDED.website_url, manifest_url = EXCLUDED.manifest_url, auto_prompt = EXCLUDED.auto_prompt, popup_placement = EXCLUDED.popup_placement, popup_frequency = EXCLUDED.popup_frequency, prompt_delay = EXCLUDED.prompt_delay, verification_status = CASE WHEN EXCLUDED.manifest_url IS NULL THEN 'UNVERIFIED' ELSE 'PENDING' END, verified_at = NULL, updated_at = CURRENT_TIMESTAMP RETURNING application_type AS "applicationType", authorized_origins AS "authorizedOrigins", package_name AS "packageName", bundle_id AS "bundleId", certificate_fingerprints AS "certificateFingerprints", logo_url AS "logoUrl", display_name AS "displayName", website_url AS "websiteUrl", manifest_url AS "manifestUrl", auto_prompt AS "autoPrompt", popup_placement AS "popupPlacement", popup_frequency AS "popupFrequency", prompt_delay AS "promptDelay", verification_status AS "verificationStatus", verified_at AS "verifiedAt"`, dbId, input.applicationType, authorizedOrigins, input.packageName?.trim() || null, input.bundleId?.trim() || null, certificateFingerprints, logoUrl, displayName, websiteUrl, manifestUrl, autoPrompt, popupPlacement, popupFrequency, promptDelay);
     return rows[0];
   },
   async publicClientTest(clientId: string, redirectUri?: string, requestedScopes: string[] = []) {
