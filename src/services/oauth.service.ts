@@ -12,7 +12,7 @@ const DEFAULT_SCOPES = ["openid", "profile", "email"];
 const expiry = (minutes: number) => new Date(Date.now() + minutes * 60 * 1000);
 const days = (value: number) => new Date(Date.now() + value * 24 * 60 * 60 * 1000);
 const DEVELOPER_MANAGEMENT_SCOPE = "developer:manage";
-function isDeveloperPortalClient(clientId: string) { return new Set(["max_client_llITDlGy6a2tSJBX", "max_client_developers_platform_v1", ...env.MAX_DEVELOPERS_CLIENT_IDS.split(",").map((value) => value.trim()).filter(Boolean)]).has(clientId); }
+function isDeveloperPortalClient(clientId: string) { return new Set(["max_client_llITDlGy6a2tSJBX", "max_client_developers_platform_v1", "max_client_Rjxv2tyTV7Luek00", ...env.MAX_DEVELOPERS_CLIENT_IDS.split(",").map((value) => value.trim()).filter(Boolean)]).has(clientId); }
 const DEVELOPER_PORTAL_ALLOWED_SCOPES = new Set(["openid", "profile", "email", "offline_access", DEVELOPER_MANAGEMENT_SCOPE]);
 function assertDeveloperScopeAllowed(clientId: string, scopes: string[]) { const officialClient = isDeveloperPortalClient(clientId); if (scopes.includes(DEVELOPER_MANAGEMENT_SCOPE) && !officialClient) throw AppError.badRequest("Developer management permission is reserved for the official MAX for Developers application", "INVALID_SCOPE", { notAllowedScopes: [DEVELOPER_MANAGEMENT_SCOPE] }); if (officialClient) { const unnecessaryScopes = scopes.filter((scope) => !DEVELOPER_PORTAL_ALLOWED_SCOPES.has(scope)); if (unnecessaryScopes.length) throw AppError.badRequest("MAX for Developers can request only the permissions it needs", "INVALID_SCOPE", { notAllowedScopes: unnecessaryScopes }); } }
 
