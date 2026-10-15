@@ -334,7 +334,7 @@ model OAuthClient {
   owner           User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   redirectUris    String[]
   scopes          String[]
-  isConfidential  Boolean  @default(true)
+  isConfidential  Boolean  @default(false)
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
