@@ -53,16 +53,17 @@ export const oauthClientConfigService = {
     return rows[0];
   },
   async publicClientTest(clientId: string, redirectUri?: string, requestedScopes: string[] = []) {
-    const client = await prisma.oAuthClient.findUnique({ where: { clientId }, select: { clientId: true, name: true, redirectUris: true, scopes: true, isActive: true } });
+    const client = await prisma.oAuthClient.findUnique({ where: { clientId }, select: { clientId: true, name: true, redirectUris: true, scopes: true, isActive: true, isConfidential: true } });
     if (!client) return { valid: false, clientId, checks: [{ key: "client", label: "Client ID", ok: false, detail: "Client ID was not found." }] };
     const config = await this.getPublic(clientId);
     const hasBranding = config.displayName !== null || config.logoUrl !== null || config.websiteUrl !== null;
     const checks: Array<{ key: string; label: string; ok: boolean; detail: string }> = [];
     checks.push({ key: "client", label: "Client ID", ok: client.isActive, detail: client.isActive ? "Client is registered and active." : "Client is revoked." });
+    checks.push({ key: "client_type", label: "Client authentication", ok: true, detail: client.isConfidential ? "Confidential client: token requests must authenticate with its secret. Never use this mode in browser or mobile code." : "Public client: use Authorization Code with PKCE; do not send a client secret." });
     if (redirectUri) checks.push({ key: "redirect", label: "Redirect URI", ok: client.redirectUris.includes(redirectUri), detail: client.redirectUris.includes(redirectUri) ? "Redirect URI matches exactly." : "Redirect URI is not registered." });
     const unsupported = requestedScopes.filter((scope) => !client.scopes.includes(scope));
     checks.push({ key: "scopes", label: "Permissions", ok: unsupported.length === 0, detail: unsupported.length ? `Not allowed: ${unsupported.join(", ")}` : "Requested permissions are allowed." });
     checks.push({ key: "branding", label: "Branding", ok: true, detail: hasBranding ? "Optional client branding is configured." : "Optional branding has not been configured." });
-    return { valid: client.isActive && checks.filter((check) => check.key !== "branding").every((check) => check.ok), client: { clientId: client.clientId, name: config.displayName || client.name, websiteUrl: config.websiteUrl || null, logoUrl: config.logoUrl || null }, checks, allowedScopes: client.scopes, redirectUris: client.redirectUris };
+    return { valid: client.isActive && checks.filter((check) => check.key !== "branding").every((check) => check.ok), client: { clientId: client.clientId, name: config.displayName || client.name, websiteUrl: config.websiteUrl || null, logoUrl: config.logoUrl || null, tokenEndpointAuthMethod: client.isConfidential ? "client_secret" : "none" }, checks, allowedScopes: client.scopes, redirectUris: client.redirectUris };
   },
 };
