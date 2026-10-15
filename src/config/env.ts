@@ -2,7 +2,8 @@ import dotenv from "dotenv";
 import path from "path";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
-function required(name: string, fallback?: string): string { const value = process.env[name] ?? fallback; if (value === undefined) throw new Error(`Missing required environment variable: ${name}`); return value; }
+function required(name: string, fallback?: string): string { const value = process.env[name] ?? fallback; if (value === undefined || value.trim() === "") throw new Error(`Missing required environment variable: ${name}`); return value; }
+function requiredSecret(name: string, minBytes = 32): string { const value = required(name); if (Buffer.byteLength(value, "utf8") < minBytes) throw new Error(`${name} must contain at least ${minBytes} bytes. Generate a unique cryptographically secure secret for this environment.`); return value; }
 function optional(name: string, fallback: string): string { return process.env[name] ?? fallback; }
 const appUrl = process.env.APP_URL ?? "http://localhost:4000";
 const isProduction = (process.env.NODE_ENV ?? "development") === "production";
@@ -47,7 +48,7 @@ export const env = {
   EMAIL_VERIFICATION_TOKEN_TTL_HOURS: parseInt(optional("EMAIL_VERIFICATION_TOKEN_TTL_HOURS", "24"), 10), PASSWORD_RESET_TOKEN_TTL_MINUTES: parseInt(optional("PASSWORD_RESET_TOKEN_TTL_MINUTES", "30"), 10),
   COOKIE_DOMAIN: cookieDomain,
   COOKIE_SECURE: optional("COOKIE_SECURE", isHttpsApp || isProduction ? "true" : "false") === "true",
-  COOKIE_SAME_SITE: optional("COOKIE_SAME_SITE", "strict") as "strict" | "lax" | "none", REFRESH_COOKIE_NAME: optional("REFRESH_COOKIE_NAME", "max_refresh_token"), CSRF_SECRET: required("CSRF_SECRET"),
+  COOKIE_SAME_SITE: optional("COOKIE_SAME_SITE", "strict") as "strict" | "lax" | "none", REFRESH_COOKIE_NAME: optional("REFRESH_COOKIE_NAME", "max_refresh_token"), CSRF_SECRET: requiredSecret("CSRF_SECRET", 32),
   RATE_LIMIT_WINDOW_MINUTES: parseInt(optional("RATE_LIMIT_WINDOW_MINUTES", "15"), 10), RATE_LIMIT_MAX_REQUESTS: parseInt(optional("RATE_LIMIT_MAX_REQUESTS", "100"), 10), LOGIN_RATE_LIMIT_MAX: parseInt(optional("LOGIN_RATE_LIMIT_MAX", "10"), 10), LOGIN_RATE_LIMIT_WINDOW_MINUTES: parseInt(optional("LOGIN_RATE_LIMIT_WINDOW_MINUTES", "15"), 10),
   CORS_ALLOWED_ORIGINS: optional("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",").map((s) => s.trim()),
   ARGON2_MEMORY_COST: parseInt(optional("ARGON2_MEMORY_COST", "19456"), 10), ARGON2_TIME_COST: parseInt(optional("ARGON2_TIME_COST", "2"), 10), ARGON2_PARALLELISM: parseInt(optional("ARGON2_PARALLELISM", "1"), 10),
