@@ -4,6 +4,7 @@ import { ok } from "../utils/response";
 
 export const internalSpotifyController = {
   async me(req: Request, res: Response, next: NextFunction) { try { return ok(res, { profile: await connectedAccountsService.spotifyMe(req.params.userId) }); } catch (err) { next(err); } },
+  async search(req: Request, res: Response, next: NextFunction) { try { return ok(res, { results: await connectedAccountsService.spotifySearch(req.params.userId, String(req.query.q || ""), { type: typeof req.query.type === "string" ? req.query.type : "track", limit: Number(req.query.limit) || 20, offset: Number(req.query.offset) || 0 }) }); } catch (err) { next(err); } },
   async saved(req: Request, res: Response, next: NextFunction) { try { return ok(res, { tracks: await connectedAccountsService.spotifySavedTracks(req.params.userId, Number(req.query.limit) || 20, Number(req.query.offset) || 0) }); } catch (err) { next(err); } },
   async playlists(req: Request, res: Response, next: NextFunction) { try { return ok(res, { playlists: await connectedAccountsService.spotifyPlaylists(req.params.userId, Number(req.query.limit) || 20, Number(req.query.offset) || 0) }); } catch (err) { next(err); } },
   async topArtists(req: Request, res: Response, next: NextFunction) { try { return ok(res, { artists: await connectedAccountsService.spotifyTopArtists(req.params.userId, { timeRange: req.query.timeRange as any, limit: Number(req.query.limit) || 20, offset: Number(req.query.offset) || 0 }) }); } catch (err) { next(err); } },
