@@ -552,6 +552,20 @@ export const connectedAccountsService = {
   async spotifyMe(userId: string) {
     return this.spotifyApiRequest(userId, "/me");
   },
+  async spotifySearch(userId: string, query: string, options: { type?: string; limit?: number; offset?: number } = {}) {
+    const q = query.trim();
+    if (!q) throw AppError.badRequest("A Spotify search query is required", "SPOTIFY_QUERY_REQUIRED");
+    const type = (options.type || "track").split(",").map((item) => item.trim()).filter((item) => ["track", "album", "artist", "playlist", "show", "episode"].includes(item)).join(",");
+    if (!type) throw AppError.badRequest("A supported Spotify search type is required", "SPOTIFY_SEARCH_TYPE_INVALID");
+    const params = new URLSearchParams({
+      q: q.slice(0, 200),
+      type,
+      limit: String(Math.min(Math.max(options.limit || 20, 1), 50)),
+      offset: String(Math.max(options.offset || 0, 0))
+    });
+    return this.spotifyApiRequest(userId, "/search?" + params.toString());
+  },
+
 
   async spotifySavedTracks(userId: string, limit = 20, offset = 0) {
     const params = new URLSearchParams({
