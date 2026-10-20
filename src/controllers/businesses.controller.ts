@@ -235,10 +235,11 @@ export const businessesController = {
       if (user.verificationStatus !== "VERIFIED") throw AppError.forbidden("Verify your MAX account email before accepting a business invitation", "BUSINESS_EMAIL_VERIFICATION_REQUIRED");
 
       await prisma.$transaction(async (tx) => {
-        const current = await tx.businessInvitation.findUnique({ where: { id: invitation.id } });
-        if (!current || current.revokedAt || current.acceptedAt || current.expiresAt <= new Date()) {
-          throw AppError.conflict("This invitation has already been used or is no longer valid", "BUSINESS_INVITATION_ALREADY_USED");
-        }
+        const claimed = await tx.businessInvitation.updateMany({
+          where: { id: invitation.id, tokenHash, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+          data: { acceptedAt: new Date() },
+        });
+        if (claimed.count !== 1) throw AppError.conflict("This invitation has already been used or is no longer valid", "BUSINESS_INVITATION_ALREADY_USED");
         const membership = await tx.businessMembership.findUnique({ where: { businessId_userId: { businessId: invitation.businessId, userId: actorId } } });
         if (membership?.isActive) throw AppError.conflict("You are already an active member of this business", "BUSINESS_MEMBER_EXISTS");
         if (membership) {
@@ -246,7 +247,6 @@ export const businessesController = {
         } else {
           await tx.businessMembership.create({ data: { businessId: invitation.businessId, userId: actorId, role: invitation.role, isActive: true } });
         }
-        await tx.businessInvitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } });
         await tx.businessAuditLog.create({ data: { businessId: invitation.businessId, actorId, action: "INVITATION_ACCEPTED", metadata: { invitationId: invitation.id, role: invitation.role }, ipAddress: req.ip, userAgent: req.get("user-agent")?.slice(0, 1000) } });
       });
       return ok(res, { accepted: true, business: { businessId: invitation.business.businessId, displayName: invitation.business.displayName, handle: invitation.business.handle }, role: invitation.role });
