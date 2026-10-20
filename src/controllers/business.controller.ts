@@ -99,6 +99,14 @@ export const businessController = {
     try { return ok(res, await businessService.transferOwnership(req.params.businessId, req.body.membershipId, req.user!.sub, context(req))); } catch (err) { next(err); }
   },
 
+  async apps(req: Request, res: Response, next: NextFunction) {
+    try { return ok(res, { apps: await businessService.listApps(req.params.businessId, req.user!.sub) }); } catch (err) { next(err); }
+  },
+
+  async revokeApp(req: Request, res: Response, next: NextFunction) {
+    try { return ok(res, await businessService.revokeApp(req.params.businessId, req.params.connectionId, req.user!.sub, context(req))); } catch (err) { next(err); }
+  },
+
   async auditLogs(req: Request, res: Response, next: NextFunction) {
     try { return ok(res, { logs: await businessService.listAuditLogs(req.params.businessId, req.user!.sub) }); } catch (err) { next(err); }
   },
