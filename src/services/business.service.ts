@@ -214,6 +214,16 @@ export const businessService = {
     return { membership: result, business: this.safeBusiness(invitation.business) };
   },
 
+  async listInvitations(businessId: string, userId: string) {
+    const membership = await membershipFor(businessId, userId);
+    requireRole(membership.role, ownerAdmin);
+    return prisma.businessInvitation.findMany({
+      where: { businessId, status: BusinessInvitationStatus.PENDING, expiresAt: { gt: new Date() } },
+      select: { id: true, email: true, role: true, status: true, expiresAt: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
+  },
+
   async revokeInvitation(businessId: string, invitationId: string, userId: string, context: Context) {
     const membership = await membershipFor(businessId, userId);
     requireRole(membership.role, ownerAdmin);
