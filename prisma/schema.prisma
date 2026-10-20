@@ -168,7 +168,6 @@ model User {
   businessMemberships BusinessMembership[]
   businessInvitationsSent BusinessInvitation[] @relation("BusinessInvitationInviter")
   businessAppConnections BusinessAppConnection[] @relation("BusinessAppConnectionAuthorizer")
-  businessAppConnections BusinessAppConnection[] @relation("BusinessAppConnectionAuthorizer")
   @@index([email])
   @@index([username])
   @@index([status])
@@ -387,6 +386,7 @@ model OAuthClient {
   accessTokens    OAuthAccessToken[]
   refreshTokens   OAuthRefreshToken[]
   consents        OAuthConsent[]
+  businessConnections BusinessAppConnection[]
   @@map("oauth_clients")
 }
 
