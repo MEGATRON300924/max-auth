@@ -11,6 +11,7 @@ import adminRoutes from "./admin.routes";
 import healthRoutes from "./health.routes";
 import internalRoutes from "./internal.routes";
 import businessRoutes from "./business.routes";
+import statusRoutes from "./status.routes";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use("/admin", adminRoutes);
 router.use("/health", healthRoutes);
 router.use("/internal", internalRoutes);
 router.use("/businesses", businessRoutes);
+router.use("/status", statusRoutes);
 
 export default router;

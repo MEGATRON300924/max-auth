@@ -572,3 +572,18 @@ model BusinessAppConnection {
   @@index([authorizedById])
   @@map("business_app_connections")
 }
+
+
+model StatusPageService {
+  id          String   @id @default(uuid()) @db.Uuid
+  serviceKey  String   @unique @map("service_key") @db.VarChar(100)
+  name        String   @unique @db.VarChar(120)
+  category    String   @db.VarChar(40)
+  status      String   @default("green") @db.VarChar(16)
+  reason      String   @default("") @db.VarChar(1000)
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@index([category, updatedAt])
+  @@map("status_page_services")
+}
