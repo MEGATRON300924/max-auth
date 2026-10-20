@@ -2,7 +2,7 @@ import { Router } from "express";
 import { businessesController } from "../controllers/businesses.controller";
 import { authenticate } from "../middleware/authenticate";
 import { validate } from "../middleware/validate";
-import { createBusinessSchema, updateBusinessSchema, businessIdParamSchema, businessMemberParamsSchema, updateBusinessMemberSchema } from "../validators/businesses.validators";
+import { createBusinessSchema, updateBusinessSchema, businessIdParamSchema, businessMemberParamsSchema, updateBusinessMemberSchema, createBusinessInvitationSchema, businessInvitationParamsSchema, acceptBusinessInvitationSchema } from "../validators/businesses.validators";
 const router = Router();
 router.use(authenticate);
 router.post("/", validate(createBusinessSchema), businessesController.create);
@@ -12,4 +12,8 @@ router.patch("/:businessId", validate(updateBusinessSchema), businessesControlle
 router.get("/:businessId/members", validate(businessIdParamSchema), businessesController.listMembers);
 router.patch("/:businessId/members/:userId", validate(updateBusinessMemberSchema), businessesController.updateMemberRole);
 router.delete("/:businessId/members/:userId", validate(businessMemberParamsSchema), businessesController.removeMember);
+router.post("/:businessId/invitations", validate(createBusinessInvitationSchema), businessesController.createInvitation);
+router.get("/:businessId/invitations", validate(businessIdParamSchema), businessesController.listInvitations);
+router.delete("/:businessId/invitations/:invitationId", validate(businessInvitationParamsSchema), businessesController.revokeInvitation);
+router.post("/invitations/accept", validate(acceptBusinessInvitationSchema), businessesController.acceptInvitation);
 export default router;
