@@ -49,7 +49,7 @@ export const businessService = {
 
   async create(userId: string, input: {
     legalName: string; displayName: string; handle?: string; email: string; phone: string;
-    country: string; businessType: string; websiteUrl?: string; description?: string; registrationNumber?: string;
+    country: string; businessType: string; websiteUrl?: string; logoUrl?: string; description?: string; registrationNumber?: string;
   }, context: Context) {
     const handle = slugify(input.handle || input.displayName);
     if (handle.length < 3) throw AppError.badRequest("Choose a business handle with at least 3 letters or numbers", "INVALID_BUSINESS_HANDLE");
@@ -75,7 +75,7 @@ export const businessService = {
         data: {
           businessId, handle, legalName: input.legalName.trim(), displayName: input.displayName.trim(),
           email: input.email.trim().toLowerCase(), phone: input.phone.trim(), country,
-          businessType: input.businessType.trim(), websiteUrl: input.websiteUrl?.trim() || null,
+          businessType: input.businessType.trim(), websiteUrl: input.websiteUrl?.trim() || null, logoUrl: input.logoUrl?.trim() || null,
           description: input.description?.trim() || null, registrationNumber: input.registrationNumber?.trim() || null,
           ownerId: userId, emailVerificationTokenHash: tokenHash(rawVerificationToken),
           emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -100,7 +100,7 @@ export const businessService = {
 
   async update(businessId: string, userId: string, input: {
     legalName?: string; displayName?: string; email?: string; phone?: string; country?: string;
-    businessType?: string; websiteUrl?: string | null; description?: string | null; registrationNumber?: string | null;
+    businessType?: string; websiteUrl?: string | null; logoUrl?: string | null; description?: string | null; registrationNumber?: string | null;
   }, context: Context) {
     const membership = await membershipFor(businessId, userId);
     requireRole(membership.role, ownerAdmin);
@@ -122,6 +122,7 @@ export const businessService = {
     if (input.country !== undefined) data.country = input.country.trim().toUpperCase();
     if (input.businessType !== undefined) data.businessType = input.businessType.trim();
     if (input.websiteUrl !== undefined) data.websiteUrl = input.websiteUrl?.trim() || null;
+    if (input.logoUrl !== undefined) data.logoUrl = input.logoUrl?.trim() || null;
     if (input.description !== undefined) data.description = input.description?.trim() || null;
     if (input.registrationNumber !== undefined) data.registrationNumber = input.registrationNumber?.trim() || null;
     const updated = await prisma.business.update({ where: { id: businessId }, data });
