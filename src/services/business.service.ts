@@ -243,8 +243,9 @@ export const businessService = {
       await tx.business.update({ where: { id: businessId }, data: { ownerId: target.userId } });
       await tx.businessMembership.update({ where: { id: actor.id }, data: { role: BusinessMemberRole.ADMINISTRATOR } });
       await tx.businessMembership.update({ where: { id: target.id }, data: { role: BusinessMemberRole.OWNER } });
-      await tx.oAuthAccessToken.updateMany({ where: { businessId, userId: { in: [userId, target.userId] }, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.oAuthRefreshToken.updateMany({ where: { businessId, userId: { in: [userId, target.userId] }, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.businessAppConnection.updateMany({ where: { businessId, status: "ACTIVE" }, data: { status: "REVOKED", revokedAt: new Date() } });
+      await tx.oAuthAccessToken.updateMany({ where: { businessId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.oAuthRefreshToken.updateMany({ where: { businessId, revokedAt: null }, data: { revokedAt: new Date() } });
       await tx.businessAuditLog.create({ data: { businessId, actorId: userId, action: "BUSINESS_OWNERSHIP_TRANSFERRED", ipAddress: context.ipAddress, userAgent: context.userAgent, metadata: { fromUserId: userId, toUserId: target.userId } } });
     });
     return { transferred: true };
