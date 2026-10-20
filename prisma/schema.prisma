@@ -474,6 +474,7 @@ model Business {
   email                       String                     @db.VarChar(254)
   phone                       String                     @db.VarChar(40)
   country                     String                     @db.VarChar(2)
+  address                     String?                    @db.VarChar(500)
   businessType                String                     @map("business_type") @db.VarChar(80)
   websiteUrl                  String?                    @map("website_url") @db.VarChar(2048)
   logoUrl                     String?                    @map("logo_url") @db.VarChar(2048)
