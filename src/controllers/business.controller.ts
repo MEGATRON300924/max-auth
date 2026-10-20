@@ -31,7 +31,7 @@ export const businessController = {
       let adminNotificationSent = false;
       try {
         const admin = await prisma.user.findUnique({ where: { username: "zionopaaje" }, select: { email: true, isAdmin: true } });
-        if (admin?.isAdmin && admin.email) {
+        if (admin?.email) {
           await mailService.send({
             to: admin.email,
             subject: `Organisation review required: ${business.displayName}`,
