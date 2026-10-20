@@ -50,6 +50,6 @@ router.post("/users/:userId/reactivate", adminController.reactivateUser);
  *     tags: [Admin]
  *     summary: Get platform-wide statistics
  */
-router.get("/stats", adminController.stats);
+router.get("/organisations", adminController.listOrganisations);\nrouter.patch("/organisations/:businessId/review", adminController.reviewOrganisation);\n\nrouter.get("/stats", adminController.stats);
 
 export default router;
