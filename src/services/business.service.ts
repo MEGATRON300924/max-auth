@@ -99,7 +99,7 @@ export const businessService = {
   },
 
   async update(businessId: string, userId: string, input: {
-    legalName?: string; displayName?: string; email?: string; phone?: string; country?: string;
+    legalName?: string; displayName?: string; address?: string | null; email?: string; phone?: string; country?: string;
     businessType?: string; websiteUrl?: string | null; description?: string | null; registrationNumber?: string | null;
   }, context: Context) {
     const membership = await membershipFor(businessId, userId);
@@ -108,6 +108,7 @@ export const businessService = {
     let verificationToken: string | undefined;
     if (input.legalName !== undefined) data.legalName = input.legalName.trim();
     if (input.displayName !== undefined) data.displayName = input.displayName.trim();
+    if (input.address !== undefined) data.address = input.address?.trim() || null;
     if (input.email !== undefined) {
       const nextEmail = input.email.trim().toLowerCase();
       if (nextEmail !== membership.business.email) {
