@@ -91,15 +91,16 @@ export const businessService = {
     const membership = await membershipFor(businessId, userId);
     requireRole(membership.role, ownerAdmin);
     const data: Prisma.BusinessUpdateInput = {};
+    let verificationToken: string | undefined;
     if (input.legalName !== undefined) data.legalName = input.legalName.trim();
     if (input.displayName !== undefined) data.displayName = input.displayName.trim();
     if (input.email !== undefined) {
       const nextEmail = input.email.trim().toLowerCase();
       if (nextEmail !== membership.business.email) {
-        const rawToken = makeToken();
+        verificationToken = makeToken();
         data.email = nextEmail;
         data.emailVerifiedAt = null;
-        data.emailVerificationTokenHash = tokenHash(rawToken);
+        data.emailVerificationTokenHash = tokenHash(verificationToken);
         data.emailVerificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       }
     }
@@ -111,7 +112,7 @@ export const businessService = {
     if (input.registrationNumber !== undefined) data.registrationNumber = input.registrationNumber?.trim() || null;
     const updated = await prisma.business.update({ where: { id: businessId }, data });
     await logBusiness(businessId, userId, "BUSINESS_PROFILE_UPDATED", context);
-    return this.safeBusiness(updated);
+    return { business: this.safeBusiness(updated), verificationToken };
   },
 
   async verifyEmail(businessId: string, token: string, context: Context) {
