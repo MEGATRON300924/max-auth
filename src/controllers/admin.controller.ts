@@ -140,6 +140,41 @@ export const adminController = {
     } catch (err) { next(err); }
   },
 
+  async listOAuthClients(req: Request, res: Response, next: NextFunction) {
+    try {
+      const page = Math.max(1, Number.parseInt(String(req.query.page || "1"), 10) || 1);
+      const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit || "25"), 10) || 25));
+      const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+      const where: any = search ? { OR: [
+        { name: { contains: search, mode: "insensitive" } },
+        { clientId: { contains: search, mode: "insensitive" } },
+        { owner: { username: { contains: search, mode: "insensitive" } } },
+        { owner: { email: { contains: search, mode: "insensitive" } } },
+      ] } : {};
+      const [clients, total] = await Promise.all([
+        prisma.oAuthClient.findMany({ where, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: "desc" },
+          select: { id: true, clientId: true, name: true, ownerId: true, redirectUris: true, scopes: true, isConfidential: true, isActive: true, createdAt: true, updatedAt: true,
+            owner: { select: { id: true, username: true, fullName: true, email: true } } } }),
+        prisma.oAuthClient.count({ where }),
+      ]);
+      return ok(res, { clients, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+    } catch (err) { next(err); }
+  },
+
+  async updateOAuthClient(req: Request, res: Response, next: NextFunction) {
+    try {
+      const client = await prisma.oAuthClient.findUnique({ where: { id: req.params.clientId }, select: { id: true, clientId: true, name: true, ownerId: true, redirectUris: true, scopes: true, isConfidential: true, isActive: true } });
+      if (!client) throw AppError.notFound("OAuth client not found");
+      const { name, redirectUris, scopes, isConfidential } = req.body as { name?: string; redirectUris?: string[]; scopes?: string[]; isConfidential?: boolean };
+      const updated = await prisma.oAuthClient.update({ where: { id: client.id }, data: { name, redirectUris, scopes, isConfidential },
+        select: { id: true, clientId: true, name: true, ownerId: true, redirectUris: true, scopes: true, isConfidential: true, isActive: true, updatedAt: true } });
+      const ctx = getRequestContext(req);
+      await auditService.record("ADMIN_ACTION", { userId: req.user!.sub, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent,
+        metadata: { action: "OAUTH_CLIENT_ADMIN_UPDATED", clientDatabaseId: client.id, clientId: client.clientId, ownerId: client.ownerId, changedFields: Object.keys(req.body) } });
+      return ok(res, { client: updated });
+    } catch (err) { next(err); }
+  },
+
   async stats(_req: Request, res: Response, next: NextFunction) {
     try {
       const [totalUsers, verifiedUsers, activeSessions, byTier] = await Promise.all([
