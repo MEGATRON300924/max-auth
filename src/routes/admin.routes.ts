@@ -52,6 +52,13 @@ router.post("/users/:userId/reactivate", adminController.reactivateUser);
  *     tags: [Admin]
  *     summary: Get platform-wide statistics
  */
-router.get("/organisations", adminController.listOrganisations);\nrouter.patch("/organisations/:businessId/review", adminController.reviewOrganisation);\n\nrouter.get("/stats", adminController.stats);
+const reviewOrganisationSchema = z.object({ body: z.object({
+  status: z.enum(["PENDING", "VERIFIED", "REJECTED"]),
+  reason: z.string().trim().max(2000).optional(),
+}) });
+router.get("/organisations", adminController.listOrganisations);
+router.patch("/organisations/:businessId/review", validate(reviewOrganisationSchema), adminController.reviewOrganisation);
+
+router.get("/stats", adminController.stats);
 
 export default router;
