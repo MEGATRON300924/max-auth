@@ -78,4 +78,69 @@ export const businessesController = {
       return ok(res, { members });
     } catch (error) { return next(error); }
   },
+  async updateMemberRole(req: Request, res: Response, next: NextFunction) {
+    try {
+      const actorId = req.user!.sub;
+      const business = await prisma.business.findUnique({ where: { businessId: req.params.businessId } });
+      if (!business || business.status !== "ACTIVE") throw AppError.notFound("Business not found", "BUSINESS_NOT_FOUND");
+      const actor = await prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: business.id, userId: actorId } } });
+      if (!actor?.isActive) throw AppError.forbidden("You do not have access to this business", "BUSINESS_ACCESS_DENIED");
+      if (actor.role !== "OWNER" && actor.role !== "ADMINISTRATOR") throw AppError.forbidden("Only an owner or administrator can manage member roles", "BUSINESS_PERMISSION_DENIED");
+
+      const target = await prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: business.id, userId: req.params.userId } } });
+      if (!target?.isActive) throw AppError.notFound("Active business member not found", "BUSINESS_MEMBER_NOT_FOUND");
+      if (target.role === "OWNER") throw AppError.forbidden("The owner role cannot be changed here. Use an ownership-transfer flow.", "BUSINESS_OWNER_PROTECTED");
+      if (target.role === "ADMINISTRATOR" && actor.role !== "OWNER") throw AppError.forbidden("Only the owner can change an administrator's role", "BUSINESS_PERMISSION_DENIED");
+      if (req.body.role === "ADMINISTRATOR" && actor.role !== "OWNER") throw AppError.forbidden("Only the owner can promote a member to administrator", "BUSINESS_PERMISSION_DENIED");
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const member = await tx.businessMembership.update({
+          where: { id: target.id },
+          data: { role: req.body.role },
+          select: { id: true, userId: true, role: true, isActive: true, updatedAt: true },
+        });
+        await tx.businessAuditLog.create({ data: {
+          businessId: business.id,
+          actorId,
+          action: "MEMBER_ROLE_CHANGED",
+          metadata: { targetUserId: target.userId, previousRole: target.role, newRole: req.body.role },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent")?.slice(0, 1000),
+        } });
+        return member;
+      });
+      return ok(res, { member: updated });
+    } catch (error) { return next(error); }
+  },
+  async removeMember(req: Request, res: Response, next: NextFunction) {
+    try {
+      const actorId = req.user!.sub;
+      const business = await prisma.business.findUnique({ where: { businessId: req.params.businessId } });
+      if (!business || business.status !== "ACTIVE") throw AppError.notFound("Business not found", "BUSINESS_NOT_FOUND");
+      const actor = await prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: business.id, userId: actorId } } });
+      if (!actor?.isActive) throw AppError.forbidden("You do not have access to this business", "BUSINESS_ACCESS_DENIED");
+
+      const target = await prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: business.id, userId: req.params.userId } } });
+      if (!target?.isActive) throw AppError.notFound("Active business member not found", "BUSINESS_MEMBER_NOT_FOUND");
+      if (target.role === "OWNER") throw AppError.forbidden("The owner cannot be removed. Transfer ownership first.", "BUSINESS_OWNER_PROTECTED");
+      if (actor.role !== "OWNER" && actor.role !== "ADMINISTRATOR") {
+        if (target.userId !== actorId) throw AppError.forbidden("You can only leave the business yourself", "BUSINESS_PERMISSION_DENIED");
+      } else if (actor.role === "ADMINISTRATOR" && target.role === "ADMINISTRATOR") {
+        throw AppError.forbidden("Only the owner can remove an administrator", "BUSINESS_PERMISSION_DENIED");
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.businessMembership.update({ where: { id: target.id }, data: { isActive: false } });
+        await tx.businessAuditLog.create({ data: {
+          businessId: business.id,
+          actorId,
+          action: "MEMBER_REMOVED",
+          metadata: { targetUserId: target.userId, previousRole: target.role },
+          ipAddress: req.ip,
+          userAgent: req.get("user-agent")?.slice(0, 1000),
+        } });
+      });
+      return ok(res, { removed: true, userId: target.userId });
+    } catch (error) { return next(error); }
+  },
 };
