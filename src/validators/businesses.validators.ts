@@ -37,3 +37,20 @@ export const updateBusinessSchema = z.object({
 });
 
 export const businessIdParamSchema = z.object({ params: z.object({ businessId: businessIdSchema }) });
+
+export const businessMemberParamsSchema = z.object({
+  params: z.object({
+    businessId: businessIdSchema,
+    userId: z.string().uuid(),
+  }),
+});
+
+export const updateBusinessMemberSchema = z.object({
+  params: z.object({
+    businessId: businessIdSchema,
+    userId: z.string().uuid(),
+  }),
+  body: z.object({
+    role: z.enum(["ADMINISTRATOR", "MANAGER", "MEMBER", "VIEWER", "DEVELOPER"]),
+  }).strict(),
+});
