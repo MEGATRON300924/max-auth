@@ -59,6 +59,15 @@ const reviewOrganisationSchema = z.object({ body: z.object({
 router.get("/organisations", adminController.listOrganisations);
 router.patch("/organisations/:businessId/review", validate(reviewOrganisationSchema), adminController.reviewOrganisation);
 
+const adminOAuthClientUpdateSchema = z.object({ body: z.object({
+  name: z.string().trim().min(2).max(100).optional(),
+  redirectUris: z.array(z.string().url()).min(1).max(50).optional(),
+  scopes: z.array(z.string().min(1)).min(1).max(30).optional(),
+  isConfidential: z.boolean().optional(),
+}).refine((body) => Object.keys(body).length > 0, "At least one field is required") });
+router.get("/oauth-clients", adminController.listOAuthClients);
+router.patch("/oauth-clients/:clientId", validate(adminOAuthClientUpdateSchema), adminController.updateOAuthClient);
+
 router.get("/stats", adminController.stats);
 
 export default router;
