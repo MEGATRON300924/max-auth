@@ -156,6 +156,7 @@ export const businessesController = {
       if (!actor?.isActive || (actor.role !== "OWNER" && actor.role !== "ADMINISTRATOR")) throw AppError.forbidden("Only a business owner or administrator can invite members", "BUSINESS_PERMISSION_DENIED");
       if (req.body.role === "ADMINISTRATOR" && actor.role !== "OWNER") throw AppError.forbidden("Only the owner can invite an administrator", "BUSINESS_PERMISSION_DENIED");
 
+      if (env.isProduction && env.MAIL_PROVIDER === "console") throw new AppError("Business invitation email is not configured. Set MAIL_PROVIDER=resend and configure the Resend credentials before inviting team members.", 503, "BUSINESS_EMAIL_NOT_CONFIGURED");
       const email = String(req.body.email).trim().toLowerCase();
       const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true } });
       if (existingUser) {
