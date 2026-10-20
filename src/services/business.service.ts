@@ -250,6 +250,33 @@ export const businessService = {
     return { transferred: true };
   },
 
+  async listApps(businessId: string, userId: string) {
+    await membershipFor(businessId, userId);
+    return prisma.businessAppConnection.findMany({
+      where: { businessId, status: "ACTIVE" },
+      include: {
+        client: { select: { clientId: true, name: true, isActive: true } },
+        authorizedBy: { select: { id: true, username: true, displayName: true, email: true } },
+      },
+      orderBy: { connectedAt: "desc" },
+    });
+  },
+
+  async revokeApp(businessId: string, connectionId: string, userId: string, context: Context) {
+    const membership = await membershipFor(businessId, userId);
+    requireRole(membership.role, ownerAdmin);
+    const connection = await prisma.businessAppConnection.findFirst({ where: { id: connectionId, businessId, status: "ACTIVE" } });
+    if (!connection) throw AppError.notFound("Connected MAX product not found", "BUSINESS_APP_NOT_FOUND");
+    await prisma.$transaction(async (tx) => {
+      await tx.businessAppConnection.update({ where: { id: connectionId }, data: { status: "REVOKED", revokedAt: new Date() } });
+      await tx.oAuthAccessToken.updateMany({ where: { businessId, clientId: connection.clientId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.oAuthRefreshToken.updateMany({ where: { businessId, clientId: connection.clientId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.oAuthAuthorizationCode.deleteMany({ where: { businessId, clientId: connection.clientId } });
+      await tx.businessAuditLog.create({ data: { businessId, actorId: userId, action: "BUSINESS_APP_DISCONNECTED", ipAddress: context.ipAddress, userAgent: context.userAgent, metadata: { clientId: connection.clientId, connectionId } } });
+    });
+    return { disconnected: true };
+  },
+
   async listAuditLogs(businessId: string, userId: string) {
     const membership = await membershipFor(businessId, userId);
     requireRole(membership.role, ownerAdmin);
