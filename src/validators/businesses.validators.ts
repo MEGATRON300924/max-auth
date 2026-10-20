@@ -54,3 +54,19 @@ export const updateBusinessMemberSchema = z.object({
     role: z.enum(["ADMINISTRATOR", "MANAGER", "MEMBER", "VIEWER", "DEVELOPER"]),
   }).strict(),
 });
+
+export const createBusinessInvitationSchema = z.object({
+  params: z.object({ businessId: businessIdSchema }),
+  body: z.object({
+    email: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
+    role: z.enum(["ADMINISTRATOR", "MANAGER", "MEMBER", "VIEWER", "DEVELOPER"]).default("MEMBER"),
+  }).strict(),
+});
+
+export const businessInvitationParamsSchema = z.object({
+  params: z.object({ businessId: businessIdSchema, invitationId: z.string().uuid() }),
+});
+
+export const acceptBusinessInvitationSchema = z.object({
+  body: z.object({ token: z.string().length(64).regex(/^[a-f0-9]{64}$/) }).strict(),
+});
