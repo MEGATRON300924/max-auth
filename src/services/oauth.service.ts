@@ -16,16 +16,18 @@ function isDeveloperPortalClient(clientId: string) { return new Set(["max_client
 const DEVELOPER_PORTAL_ALLOWED_SCOPES = new Set(["openid", "profile", "email", "offline_access", DEVELOPER_MANAGEMENT_SCOPE]);
 function assertDeveloperScopeAllowed(clientId: string, scopes: string[]) { const officialClient = isDeveloperPortalClient(clientId); if (scopes.includes(DEVELOPER_MANAGEMENT_SCOPE) && !officialClient) throw AppError.badRequest("Developer management permission is reserved for the official MAX for Developers application", "INVALID_SCOPE", { notAllowedScopes: [DEVELOPER_MANAGEMENT_SCOPE] }); if (officialClient) { const unnecessaryScopes = scopes.filter((scope) => !DEVELOPER_PORTAL_ALLOWED_SCOPES.has(scope)); if (unnecessaryScopes.length) throw AppError.badRequest("MAX for Developers can request only the permissions it needs", "INVALID_SCOPE", { notAllowedScopes: unnecessaryScopes }); } }
 
-type OAuthIntrospectionResult = {
-  active: boolean;
-  client_id?: string;
-  user?: { id: string; email: string; username: string; displayName: string | null; avatarUrl: string | null; verificationStatus: string; status: string };
-  scopes?: string[];
-  exp?: number;
-  business_id?: string;
-  business_name?: string;
-  business_role?: string;
-};
+type OAuthIntrospectionResult =
+  | { active: false }
+  | {
+      active: true;
+      client_id: string;
+      user: { id: string; email: string; username: string; displayName: string | null; avatarUrl: string | null; verificationStatus: string; status: string };
+      scopes: string[];
+      exp: number;
+      business_id?: string;
+      business_name?: string;
+      business_role?: string;
+    };
 type AuthorizationRequest = { clientId: string; clientName: string; clientLogo?: string; clientWebsite?: string; redirectUri: string; scopes: string[]; businessId?: string; businessPublicId?: string; businessName?: string; codeChallenge: string; codeChallengeMethod: "S256"; state: string; exp: number };
 function scopesFor(requested: string[], allowed: string[]) { const scopes = [...new Set(requested.length ? requested : DEFAULT_SCOPES)]; const allowedSet = new Set(allowed.length ? allowed : DEFAULT_SCOPES); const invalidScopes = scopes.filter((scope) => !MAX_OAUTH_SCOPES.includes(scope)); if (invalidScopes.length) throw AppError.badRequest("One or more requested scopes are invalid", "INVALID_SCOPE", { invalidScopes }); const notAllowedScopes = scopes.filter((scope) => !allowedSet.has(scope)); if (notAllowedScopes.length) throw AppError.badRequest("One or more requested scopes are not allowed for this application", "INVALID_SCOPE", { notAllowedScopes }); return scopes; }
 function signAuthorizationRequest(request: Omit<AuthorizationRequest, "exp">) { const payload: AuthorizationRequest = { ...request, exp: Math.floor(Date.now() / 1000) + env.OAUTH_AUTH_CODE_TTL_MINUTES * 60 }; const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url"); const signature = createHmac("sha256", env.JWT_ACCESS_SECRET).update(encoded).digest("base64url"); return `${encoded}.${signature}`; }
