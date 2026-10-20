@@ -49,7 +49,7 @@ export const businessService = {
 
   async create(userId: string, input: {
     legalName: string; displayName: string; handle?: string; email: string; phone: string;
-    country: string; businessType: string; websiteUrl?: string; description?: string; registrationNumber?: string;
+    country: string; businessType: string; websiteUrl?: string; logoUrl?: string; description?: string; registrationNumber?: string;
   }, context: Context) {
     const handle = slugify(input.handle || input.displayName);
     if (handle.length < 3) throw AppError.badRequest("Choose a business handle with at least 3 letters or numbers", "INVALID_BUSINESS_HANDLE");
@@ -100,7 +100,7 @@ export const businessService = {
 
   async update(businessId: string, userId: string, input: {
     legalName?: string; displayName?: string; email?: string; phone?: string; country?: string;
-    businessType?: string; websiteUrl?: string | null; description?: string | null; registrationNumber?: string | null;
+    businessType?: string; websiteUrl?: string | null; logoUrl?: string | null; description?: string | null; registrationNumber?: string | null;
   }, context: Context) {
     const membership = await membershipFor(businessId, userId);
     requireRole(membership.role, ownerAdmin);
