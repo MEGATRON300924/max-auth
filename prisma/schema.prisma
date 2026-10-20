@@ -123,6 +123,11 @@ enum BusinessInvitationStatus {
   EXPIRED
 }
 
+enum BusinessAppConnectionStatus {
+  ACTIVE
+  REVOKED
+}
+
 model User {
   id                 String             @id @default(uuid()) @db.Uuid
   username           String             @unique @db.VarChar(32)
@@ -162,6 +167,8 @@ model User {
   ownedBusinesses     Business[] @relation("BusinessOwner")
   businessMemberships BusinessMembership[]
   businessInvitationsSent BusinessInvitation[] @relation("BusinessInvitationInviter")
+  businessAppConnections BusinessAppConnection[] @relation("BusinessAppConnectionAuthorizer")
+  businessAppConnections BusinessAppConnection[] @relation("BusinessAppConnectionAuthorizer")
   @@index([email])
   @@index([username])
   @@index([status])
@@ -484,6 +491,7 @@ model Business {
   memberships                 BusinessMembership[]
   invitations                 BusinessInvitation[]
   auditLogs                   BusinessAuditLog[]
+  appConnections              BusinessAppConnection[]
   oauthAuthorizationCodes     OAuthAuthorizationCode[]
   oauthAccessTokens           OAuthAccessToken[]
   oauthRefreshTokens          OAuthRefreshToken[]
@@ -541,4 +549,25 @@ model BusinessAuditLog {
   @@index([businessId, createdAt])
   @@index([actorId, createdAt])
   @@map("business_audit_logs")
+}
+
+
+model BusinessAppConnection {
+  id             String                    @id @default(uuid()) @db.Uuid
+  businessId     String                    @map("business_id") @db.Uuid
+  business       Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  clientId       String                    @map("client_id") @db.Uuid
+  client         OAuthClient               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  authorizedById String                    @map("authorized_by_id") @db.Uuid
+  authorizedBy   User                      @relation("BusinessAppConnectionAuthorizer", fields: [authorizedById], references: [id], onDelete: Restrict)
+  scopes         String[]
+  status         BusinessAppConnectionStatus @default(ACTIVE)
+  connectedAt    DateTime                  @default(now()) @map("connected_at")
+  revokedAt      DateTime?                 @map("revoked_at")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  @@unique([businessId, clientId])
+  @@index([businessId, status])
+  @@index([authorizedById])
+  @@map("business_app_connections")
 }
