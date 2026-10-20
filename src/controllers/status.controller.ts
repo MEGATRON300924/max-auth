@@ -65,7 +65,7 @@ export const statusController = {
       const updatedAt = timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null;
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       res.setHeader("Pragma", "no-cache");
-      return ok(res, { status, services, updatedAt });
+      return res.status(200).json({ success: true, status, services, updatedAt, updatedBy: null });
     } catch (err) {
       return next(err);
     }
