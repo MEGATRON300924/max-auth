@@ -76,3 +76,30 @@ ALTER TABLE "business_audit_logs" ADD CONSTRAINT "business_audit_logs_businessId
   FOREIGN KEY ("businessId") REFERENCES "businesses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "business_audit_logs" ADD CONSTRAINT "business_audit_logs_actorId_fkey"
   FOREIGN KEY ("actorId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+
+-- Business invitations use hashed, single-use tokens; raw tokens are emailed only.
+CREATE TABLE "business_invitations" (
+  "id" UUID NOT NULL,
+  "businessId" UUID NOT NULL,
+  "inviterId" UUID NOT NULL,
+  "email" VARCHAR(255) NOT NULL,
+  "role" "BusinessRole" NOT NULL DEFAULT 'MEMBER',
+  "tokenHash" VARCHAR(64) NOT NULL,
+  "expiresAt" TIMESTAMP(3) NOT NULL,
+  "acceptedAt" TIMESTAMP(3),
+  "revokedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "business_invitations_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "business_invitations_tokenHash_key" ON "business_invitations"("tokenHash");
+CREATE UNIQUE INDEX "business_invitations_businessId_email_key" ON "business_invitations"("businessId", "email");
+CREATE INDEX "business_invitations_businessId_expiresAt_idx" ON "business_invitations"("businessId", "expiresAt");
+CREATE INDEX "business_invitations_email_acceptedAt_revokedAt_idx" ON "business_invitations"("email", "acceptedAt", "revokedAt");
+
+ALTER TABLE "business_invitations" ADD CONSTRAINT "business_invitations_businessId_fkey"
+  FOREIGN KEY ("businessId") REFERENCES "businesses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "business_invitations" ADD CONSTRAINT "business_invitations_inviterId_fkey"
+  FOREIGN KEY ("inviterId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
