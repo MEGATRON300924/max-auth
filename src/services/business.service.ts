@@ -77,7 +77,7 @@ export const businessService = {
           email: input.email.trim().toLowerCase(), phone: input.phone.trim(), country, address: input.address.trim(),
           businessType: input.businessType.trim(), websiteUrl: input.websiteUrl?.trim() || null,
           description: input.description?.trim() || null, registrationNumber: input.registrationNumber?.trim() || null,
-          ownerId: userId, emailVerificationTokenHash: tokenHash(rawVerificationToken),
+          ownerId: userId, verificationStatus: "PENDING", emailVerificationTokenHash: tokenHash(rawVerificationToken),
           emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
           memberships: { create: { userId, role: BusinessMemberRole.OWNER } },
         },
