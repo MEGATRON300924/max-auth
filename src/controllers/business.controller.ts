@@ -100,6 +100,10 @@ export const businessController = {
     try { return ok(res, await businessService.acceptInvitation(req.user!.sub, req.body.token, context(req))); } catch (err) { next(err); }
   },
 
+  async invitations(req: Request, res: Response, next: NextFunction) {
+    try { return ok(res, { invitations: await businessService.listInvitations(req.params.businessId, req.user!.sub) }); } catch (err) { next(err); }
+  },
+
   async revokeInvitation(req: Request, res: Response, next: NextFunction) {
     try { return ok(res, await businessService.revokeInvitation(req.params.businessId, req.params.invitationId, req.user!.sub, context(req))); } catch (err) { next(err); }
   },
