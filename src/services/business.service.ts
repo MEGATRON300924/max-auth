@@ -54,13 +54,27 @@ export const businessService = {
     const handle = slugify(input.handle || input.displayName);
     if (handle.length < 3) throw AppError.badRequest("Choose a business handle with at least 3 letters or numbers", "INVALID_BUSINESS_HANDLE");
     if (await prisma.business.findUnique({ where: { handle } })) throw AppError.conflict("That business handle is already in use", "BUSINESS_HANDLE_TAKEN");
+    const normalizedLegalName = input.legalName.trim();
+    const country = input.country.trim().toUpperCase();
+    const duplicateByOwner = await prisma.business.findFirst({
+      where: { ownerId: userId, country, legalName: { equals: normalizedLegalName, mode: "insensitive" }, status: { not: BusinessStatus.DEACTIVATED } },
+      select: { id: true },
+    });
+    if (duplicateByOwner) throw AppError.conflict("You already own a business with this legal name in that country. Add another property to the existing business instead.", "DUPLICATE_BUSINESS");
+    if (input.registrationNumber?.trim()) {
+      const duplicateRegistration = await prisma.business.findFirst({
+        where: { country, registrationNumber: { equals: input.registrationNumber.trim(), mode: "insensitive" }, status: { not: BusinessStatus.DEACTIVATED } },
+        select: { id: true },
+      });
+      if (duplicateRegistration) throw AppError.conflict("A business with that registration number already exists in this country.", "DUPLICATE_BUSINESS_REGISTRATION");
+    }
     const rawVerificationToken = makeToken();
     const businessId = `maxbiz_${randomBytes(10).toString("hex")}`;
     const business = await prisma.$transaction(async (tx) => {
       const created = await tx.business.create({
         data: {
           businessId, handle, legalName: input.legalName.trim(), displayName: input.displayName.trim(),
-          email: input.email.trim().toLowerCase(), phone: input.phone.trim(), country: input.country.trim().toUpperCase(),
+          email: input.email.trim().toLowerCase(), phone: input.phone.trim(), country,
           businessType: input.businessType.trim(), websiteUrl: input.websiteUrl?.trim() || null,
           description: input.description?.trim() || null, registrationNumber: input.registrationNumber?.trim() || null,
           ownerId: userId, emailVerificationTokenHash: tokenHash(rawVerificationToken),
@@ -113,6 +127,19 @@ export const businessService = {
     const updated = await prisma.business.update({ where: { id: businessId }, data });
     await logBusiness(businessId, userId, "BUSINESS_PROFILE_UPDATED", context);
     return { business: this.safeBusiness(updated), verificationToken };
+  },
+
+  async resendEmailVerification(businessId: string, userId: string, context: Context) {
+    const membership = await membershipFor(businessId, userId);
+    requireRole(membership.role, ownerAdmin);
+    if (membership.business.emailVerifiedAt) throw AppError.conflict("This business email is already verified", "BUSINESS_EMAIL_ALREADY_VERIFIED");
+    const verificationToken = makeToken();
+    const business = await prisma.business.update({
+      where: { id: businessId },
+      data: { emailVerificationTokenHash: tokenHash(verificationToken), emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+    });
+    await logBusiness(businessId, userId, "BUSINESS_EMAIL_VERIFICATION_RESENT", context);
+    return { business: this.safeBusiness(business), verificationToken };
   },
 
   async verifyEmail(businessId: string, token: string, context: Context) {
