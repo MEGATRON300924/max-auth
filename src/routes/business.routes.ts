@@ -16,6 +16,7 @@ const createSchema = z.object({ body: z.object({
   country: z.string().trim().length(2),
   businessType: z.string().trim().min(2).max(80),
   websiteUrl: z.string().url().max(2048).optional(),
+  logoUrl: z.string().url().max(2048).optional(),
   description: z.string().trim().max(2000).optional(),
   registrationNumber: z.string().trim().max(120).optional(),
 }) });
@@ -27,6 +28,7 @@ const updateSchema = z.object({ body: z.object({
   country: z.string().trim().length(2).optional(),
   businessType: z.string().trim().min(2).max(80).optional(),
   websiteUrl: z.string().url().max(2048).nullable().optional(),
+  logoUrl: z.string().url().max(2048).nullable().optional(),
   description: z.string().trim().max(2000).nullable().optional(),
   registrationNumber: z.string().trim().max(120).nullable().optional(),
 }).refine((body) => Object.keys(body).length > 0, "At least one business field is required") });
