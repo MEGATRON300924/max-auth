@@ -158,6 +158,7 @@ model User {
   ownedBusinesses     Business[] @relation("BusinessOwner")
   businessMemberships BusinessMembership[]
   businessAuditEvents BusinessAuditLog[]
+  sentBusinessInvitations BusinessInvitation[] @relation("BusinessInvitationSender")
   @@index([email])
   @@index([username])
   @@index([status])
@@ -463,6 +464,7 @@ model Business {
   owner              User                       @relation("BusinessOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   memberships        BusinessMembership[]
   auditLogs          BusinessAuditLog[]
+  invitations        BusinessInvitation[]
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   @@index([ownerId, createdAt])
@@ -500,4 +502,25 @@ model BusinessAuditLog {
   @@index([businessId, createdAt])
   @@index([actorId, createdAt])
   @@map("business_audit_logs")
+}
+
+
+model BusinessInvitation {
+  id          String       @id @default(uuid()) @db.Uuid
+  businessId  String       @db.Uuid
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  inviterId   String       @db.Uuid
+  inviter     User         @relation("BusinessInvitationSender", fields: [inviterId], references: [id], onDelete: Cascade)
+  email       String       @db.VarChar(255)
+  role        BusinessRole @default(MEMBER)
+  tokenHash   String       @unique @db.VarChar(64)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  @@unique([businessId, email])
+  @@index([businessId, expiresAt])
+  @@index([email, acceptedAt, revokedAt])
+  @@map("business_invitations")
 }
