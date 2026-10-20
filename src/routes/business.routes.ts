@@ -45,6 +45,7 @@ router.post("/", sensitiveActionRateLimiter, validate(createSchema), businessCon
 router.post("/invitations/accept", sensitiveActionRateLimiter, validate(acceptInvitationSchema), businessController.acceptInvitation);
 router.get("/:businessId", businessController.get);
 router.patch("/:businessId", validate(updateSchema), businessController.update);
+router.post("/:businessId/resend-email-verification", sensitiveActionRateLimiter, businessController.resendEmailVerification);
 router.get("/:businessId/members", businessController.members);
 router.post("/:businessId/invitations", sensitiveActionRateLimiter, validate(inviteSchema), businessController.invite);
 router.delete("/:businessId/invitations/:invitationId", businessController.revokeInvitation);
