@@ -48,6 +48,7 @@ router.patch("/:businessId", validate(updateSchema), businessController.update);
 router.post("/:businessId/resend-email-verification", sensitiveActionRateLimiter, businessController.resendEmailVerification);
 router.get("/:businessId/members", businessController.members);
 router.post("/:businessId/invitations", sensitiveActionRateLimiter, validate(inviteSchema), businessController.invite);
+router.get("/:businessId/invitations", businessController.invitations);
 router.delete("/:businessId/invitations/:invitationId", businessController.revokeInvitation);
 router.patch("/:businessId/members/:membershipId", validate(memberRoleSchema), businessController.updateMember);
 router.delete("/:businessId/members/:membershipId", businessController.removeMember);
