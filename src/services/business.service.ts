@@ -206,8 +206,13 @@ export const businessService = {
     if (!target) throw AppError.notFound("Business member not found", "BUSINESS_MEMBER_NOT_FOUND");
     if (target.role === BusinessMemberRole.OWNER || role === BusinessMemberRole.OWNER) throw AppError.badRequest("Use the ownership-transfer flow to change the owner", "OWNER_TRANSFER_REQUIRED");
     if (actor.role !== BusinessMemberRole.OWNER && (target.role === BusinessMemberRole.ADMINISTRATOR || role === BusinessMemberRole.ADMINISTRATOR)) throw AppError.forbidden("Only the owner can manage administrator roles", "BUSINESS_PERMISSION_DENIED");
-    const updated = await prisma.businessMembership.update({ where: { id: membershipId }, data: { role } });
-    await logBusiness(businessId, userId, "BUSINESS_MEMBER_ROLE_CHANGED", context, { membershipId, role });
+    const updated = await prisma.$transaction(async (tx) => {
+      const member = await tx.businessMembership.update({ where: { id: membershipId }, data: { role } });
+      await tx.oAuthAccessToken.updateMany({ where: { businessId, userId: target.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.oAuthRefreshToken.updateMany({ where: { businessId, userId: target.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.businessAuditLog.create({ data: { businessId, actorId: userId, action: "BUSINESS_MEMBER_ROLE_CHANGED", ipAddress: context.ipAddress, userAgent: context.userAgent, metadata: { membershipId, role } } });
+      return member;
+    });
     return updated;
   },
 
@@ -218,8 +223,13 @@ export const businessService = {
     if (!target) throw AppError.notFound("Business member not found", "BUSINESS_MEMBER_NOT_FOUND");
     if (target.role === BusinessMemberRole.OWNER) throw AppError.badRequest("The final owner cannot be removed. Transfer ownership first.", "BUSINESS_OWNER_REQUIRED");
     if (actor.role !== BusinessMemberRole.OWNER && target.role === BusinessMemberRole.ADMINISTRATOR) throw AppError.forbidden("Only the owner can remove an administrator", "BUSINESS_PERMISSION_DENIED");
-    const updated = await prisma.businessMembership.update({ where: { id: membershipId }, data: { status: BusinessMemberStatus.REMOVED } });
-    await logBusiness(businessId, userId, "BUSINESS_MEMBER_REMOVED", context, { membershipId });
+    const updated = await prisma.$transaction(async (tx) => {
+      const member = await tx.businessMembership.update({ where: { id: membershipId }, data: { status: BusinessMemberStatus.REMOVED } });
+      await tx.oAuthAccessToken.updateMany({ where: { businessId, userId: target.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.oAuthRefreshToken.updateMany({ where: { businessId, userId: target.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.businessAuditLog.create({ data: { businessId, actorId: userId, action: "BUSINESS_MEMBER_REMOVED", ipAddress: context.ipAddress, userAgent: context.userAgent, metadata: { membershipId } } });
+      return member;
+    });
     return updated;
   },
 
@@ -233,6 +243,8 @@ export const businessService = {
       await tx.business.update({ where: { id: businessId }, data: { ownerId: target.userId } });
       await tx.businessMembership.update({ where: { id: actor.id }, data: { role: BusinessMemberRole.ADMINISTRATOR } });
       await tx.businessMembership.update({ where: { id: target.id }, data: { role: BusinessMemberRole.OWNER } });
+      await tx.oAuthAccessToken.updateMany({ where: { businessId, userId: { in: [userId, target.userId] }, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.oAuthRefreshToken.updateMany({ where: { businessId, userId: { in: [userId, target.userId] }, revokedAt: null }, data: { revokedAt: new Date() } });
       await tx.businessAuditLog.create({ data: { businessId, actorId: userId, action: "BUSINESS_OWNERSHIP_TRANSFERRED", ipAddress: context.ipAddress, userAgent: context.userAgent, metadata: { fromUserId: userId, toUserId: target.userId } } });
     });
     return { transferred: true };
