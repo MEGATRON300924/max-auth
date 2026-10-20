@@ -108,6 +108,7 @@ export const adminController = {
       const businessId = req.params.businessId;
       const status = req.body.status as BusinessVerificationStatus;
       const reason = typeof req.body.reason === "string" ? req.body.reason.trim().slice(0, 2000) : "";
+      if (status === "REJECTED" && !reason) throw AppError.badRequest("A reason is required when rejecting an organisation", "REVIEW_REASON_REQUIRED");
       const business = await prisma.business.findUnique({ where: { id: businessId } });
       if (!business) throw AppError.notFound("Organisation not found", "BUSINESS_NOT_FOUND");
       const updated = await prisma.$transaction(async (tx) => {
