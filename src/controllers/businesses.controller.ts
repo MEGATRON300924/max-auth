@@ -253,4 +253,28 @@ export const businessesController = {
       return ok(res, { accepted: true, business: { businessId: invitation.business.businessId, displayName: invitation.business.displayName, handle: invitation.business.handle }, role: invitation.role });
     } catch (error) { return next(error); }
   },
+  async listAuditLogs(req: Request, res: Response, next: NextFunction) {
+    try {
+      const actorId = req.user!.sub;
+      const business = await prisma.business.findUnique({ where: { businessId: req.params.businessId } });
+      if (!business || business.status !== "ACTIVE") throw AppError.notFound("Business not found", "BUSINESS_NOT_FOUND");
+      const actor = await prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: business.id, userId: actorId } } });
+      if (!actor?.isActive || (actor.role !== "OWNER" && actor.role !== "ADMINISTRATOR")) {
+        throw AppError.forbidden("Only a business owner or administrator can view the audit history", "BUSINESS_PERMISSION_DENIED");
+      }
+      const events = await prisma.businessAuditLog.findMany({
+        where: { businessId: business.id },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: {
+          id: true,
+          action: true,
+          metadata: true,
+          createdAt: true,
+          actor: { select: { username: true, displayName: true, fullName: true } },
+        },
+      });
+      return ok(res, { events });
+    } catch (error) { return next(error); }
+  },
 };
