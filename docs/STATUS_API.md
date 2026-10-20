@@ -6,13 +6,12 @@ The MAX ecosystem status API backs the public status page with persistent Postgr
 
 `GET /api/v1/status`
 
-No access token is required. Response uses the standard MAX Auth envelope:
+No access token is required. Response is intentionally shaped for direct consumption by the existing `status.html` page (which reads the top-level `status` object):
 
 ```json
 {
   "success": true,
-  "data": {
-    "status": {
+  "status": {
       "MAX Auth": {
         "status": "green",
         "reason": "",
@@ -20,10 +19,10 @@ No access token is required. Response uses the standard MAX Auth envelope:
         "updatedAt": null,
         "updatedById": null
       }
-    },
-    "services": [],
-    "updatedAt": null
-  }
+  },
+  "services": [],
+  "updatedAt": null,
+  "updatedBy": null
 }
 ```
 
