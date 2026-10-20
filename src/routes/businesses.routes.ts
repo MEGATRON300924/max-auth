@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { businessesController } from "../controllers/businesses.controller";
+import { authenticate } from "../middleware/authenticate";
+import { validate } from "../middleware/validate";
+import { createBusinessSchema, updateBusinessSchema, businessIdParamSchema } from "../validators/businesses.validators";
+const router = Router();
+router.use(authenticate);
+router.post("/", validate(createBusinessSchema), businessesController.create);
+router.get("/", businessesController.listMine);
+router.get("/:businessId", validate(businessIdParamSchema), businessesController.get);
+router.patch("/:businessId", validate(updateBusinessSchema), businessesController.update);
+router.get("/:businessId/members", validate(businessIdParamSchema), businessesController.listMembers);
+export default router;
