@@ -39,6 +39,7 @@ router.get("/authorize", oauthRateLimiter, oauthController.authorize);
 router.post("/authorize/approve", authenticate, oauthRateLimiter, validate(approveSchema), oauthController.approve);
 router.post("/token", oauthRateLimiter, oauthController.token);
 router.post("/revoke", oauthRateLimiter, validate(revokeSchema), oauthController.revoke);
+router.get("/business-context", oauthController.businessContext);
 router.get("/introspect", oauthController.introspect);
 router.post("/introspect", oauthController.introspect);
 router.get("/userinfo", oauthController.userinfo);
