@@ -391,6 +391,8 @@ model OAuthAuthorizationCode {
   userId       String   @db.Uuid
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   redirectUri  String
+  businessId   String?  @db.Uuid @map("business_id")
+  businessContext Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   scopes       String[]
   codeChallenge String?
   codeChallengeMethod String?
@@ -399,6 +401,7 @@ model OAuthAuthorizationCode {
   createdAt    DateTime @default(now())
   @@index([clientId])
   @@index([userId])
+  @@index([businessId])
   @@map("oauth_authorization_codes")
 }
 
@@ -409,6 +412,8 @@ model OAuthAccessToken {
   client     OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId     String   @db.Uuid
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String?  @db.Uuid @map("business_id")
+  businessContext Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   scopes     String[]
   grantType  OAuthGrantType @default(AUTHORIZATION_CODE)
   expiresAt  DateTime
@@ -416,6 +421,7 @@ model OAuthAccessToken {
   createdAt  DateTime @default(now())
   @@index([clientId])
   @@index([userId])
+  @@index([businessId])
   @@map("oauth_access_tokens")
 }
 
@@ -426,12 +432,15 @@ model OAuthRefreshToken {
   client     OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId     String   @db.Uuid
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String?  @db.Uuid @map("business_id")
+  businessContext Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   scopes     String[]
   expiresAt  DateTime
   revokedAt  DateTime?
   createdAt  DateTime @default(now())
   @@index([clientId])
   @@index([userId])
+  @@index([businessId])
   @@map("oauth_refresh_tokens")
 }
 
@@ -475,6 +484,9 @@ model Business {
   memberships                 BusinessMembership[]
   invitations                 BusinessInvitation[]
   auditLogs                   BusinessAuditLog[]
+  oauthAuthorizationCodes     OAuthAuthorizationCode[]
+  oauthAccessTokens           OAuthAccessToken[]
+  oauthRefreshTokens          OAuthRefreshToken[]
   @@index([ownerId])
   @@index([status, verificationStatus])
   @@index([email])
