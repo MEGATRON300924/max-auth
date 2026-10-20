@@ -51,6 +51,8 @@ router.delete("/:businessId/invitations/:invitationId", businessController.revok
 router.patch("/:businessId/members/:membershipId", validate(memberRoleSchema), businessController.updateMember);
 router.delete("/:businessId/members/:membershipId", businessController.removeMember);
 router.post("/:businessId/transfer-ownership", sensitiveActionRateLimiter, validate(transferSchema), businessController.transferOwnership);
+router.get("/:businessId/apps", businessController.apps);
+router.delete("/:businessId/apps/:connectionId", businessController.revokeApp);
 router.get("/:businessId/audit-logs", businessController.auditLogs);
 
 export default router;
