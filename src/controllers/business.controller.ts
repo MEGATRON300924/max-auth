@@ -36,7 +36,22 @@ export const businessController = {
   },
 
   async update(req: Request, res: Response, next: NextFunction) {
-    try { return ok(res, { business: await businessService.update(req.params.businessId, req.user!.sub, req.body, context(req)) }); } catch (err) { next(err); }
+    try {
+      const result = await businessService.update(req.params.businessId, req.user!.sub, req.body, context(req));
+      let emailVerificationSent = true;
+      if (result.verificationToken) {
+        const verificationUrl = \`https://api.max-ai.name.ng/business/verify-email?businessId=\${encodeURIComponent(result.business.id)}&token=\${encodeURIComponent(result.verificationToken)}\`;
+        try {
+          await mailService.send({
+            to: result.business.email,
+            subject: "Verify your updated business email for MAX",
+            text: \`Verify the new business email address within 24 hours: \${verificationUrl}\\n\\nThis verifies control of the email address only.\`,
+            html: \`<p>Verify your new business email address.</p><p><a href="\${verificationUrl}">Verify business email</a></p><p>This link expires in 24 hours and does not certify legal registration.</p>\`,
+          });
+        } catch { emailVerificationSent = false; }
+      }
+      return ok(res, { business: result.business, ...(result.verificationToken ? { emailVerificationSent } : {}) });
+    } catch (err) { next(err); }
   },
 
   async verifyEmail(req: Request, res: Response, next: NextFunction) {
