@@ -49,7 +49,7 @@ export const businessService = {
 
   async create(userId: string, input: {
     legalName: string; displayName: string; handle?: string; email: string; phone: string;
-    country: string; businessType: string; websiteUrl?: string; description?: string; registrationNumber?: string;
+    country: string; address: string; businessType: string; websiteUrl?: string; description?: string; registrationNumber?: string;
   }, context: Context) {
     const handle = slugify(input.handle || input.displayName);
     if (handle.length < 3) throw AppError.badRequest("Choose a business handle with at least 3 letters or numbers", "INVALID_BUSINESS_HANDLE");
@@ -74,7 +74,7 @@ export const businessService = {
       const created = await tx.business.create({
         data: {
           businessId, handle, legalName: input.legalName.trim(), displayName: input.displayName.trim(),
-          email: input.email.trim().toLowerCase(), phone: input.phone.trim(), country,
+          email: input.email.trim().toLowerCase(), phone: input.phone.trim(), country, address: input.address.trim(),
           businessType: input.businessType.trim(), websiteUrl: input.websiteUrl?.trim() || null,
           description: input.description?.trim() || null, registrationNumber: input.registrationNumber?.trim() || null,
           ownerId: userId, emailVerificationTokenHash: tokenHash(rawVerificationToken),
@@ -120,6 +120,7 @@ export const businessService = {
     }
     if (input.phone !== undefined) data.phone = input.phone.trim();
     if (input.country !== undefined) data.country = input.country.trim().toUpperCase();
+    if (input.address !== undefined) data.address = input.address?.trim() || null;
     if (input.businessType !== undefined) data.businessType = input.businessType.trim();
     if (input.websiteUrl !== undefined) data.websiteUrl = input.websiteUrl?.trim() || null;
     if (input.description !== undefined) data.description = input.description?.trim() || null;
