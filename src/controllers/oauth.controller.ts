@@ -126,6 +126,27 @@ export const oauthController = {
   async token(req: Request, res: Response, next: NextFunction) { try { noStore(res); const body = req.body || {}; const credentials = clientCredentials(req); if (body.grant_type === "authorization_code") return res.json(await oauthService.exchangeCode({ code: body.code, clientId: credentials.clientId, redirectUri: body.redirect_uri, codeVerifier: body.code_verifier, clientSecret: credentials.clientSecret })); if (body.grant_type === "refresh_token") return res.json(await oauthService.refreshAccessToken(body.refresh_token, credentials.clientId, credentials.clientSecret)); throw AppError.badRequest("Unsupported grant type", "UNSUPPORTED_GRANT_TYPE"); } catch (err) { next(err); } },
   async revoke(req: Request, res: Response, next: NextFunction) { try { noStore(res); const credentials = clientCredentials(req); await oauthService.revokeToken(req.body?.token, credentials.clientId, credentials.clientSecret); return res.status(200).json({}); } catch (err) { next(err); } },
   async introspect(req: Request, res: Response, next: NextFunction) { try { noStore(res); requireInternalService(req); return res.json(await oauthService.introspect(bearer(req) || String(req.body?.token || ""))); } catch (err) { next(err); } },
+  async businessContext(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const token = bearer(req);
+      if (!token) throw AppError.unauthorized("A business-scoped OAuth access token is required", "INVALID_TOKEN");
+      const result = await oauthService.introspect(token);
+      if (!result.active || !result.user || !result.scopes || !result.business_id || !result.business_role) {
+        throw AppError.unauthorized("This token has no active business context", "BUSINESS_CONTEXT_REQUIRED");
+      }
+      const businessScopes = result.scopes.filter((scope) => scope.startsWith("business:"));
+      if (!businessScopes.some((scope) => ["business:read", "business:manage", "business:members:read", "business:members:manage", "business:apps:manage"].includes(scope))) {
+        throw AppError.forbidden("The token is missing business permissions", "INSUFFICIENT_SCOPE");
+      }
+      return ok(res, {
+        user: { id: result.user.id, email: result.user.email, username: result.user.username, displayName: result.user.displayName },
+        business: { businessId: result.business_id, displayName: result.business_name, role: result.business_role },
+        scopes: businessScopes,
+        expiresAt: result.exp,
+      });
+    } catch (err) { next(err); }
+  },
   async userinfo(req: Request, res: Response, next: NextFunction) { try { noStore(res); const result = await authorizedOAuthContext(req); const claims: Record<string, unknown> = { sub: result.user.id }; if (result.scopes.includes("identity:read")) claims.user_id = result.user.id; if (result.scopes.includes("profile") || result.scopes.includes("profile:read")) Object.assign(claims, { name: result.user.displayName, preferred_username: result.user.username, picture: result.user.avatarUrl }); if (result.scopes.includes("email") || result.scopes.includes("email:read")) Object.assign(claims, { email: result.user.email, email_verified: result.user.verificationStatus === "VERIFIED" }); if (result.scopes.includes("memory:read")) claims.memory = await oauthMemoryService.getAuthorizedMemory(bearer(req) || ""); return res.json(claims); } catch (err) { next(err); } },
   async memory(req: Request, res: Response, next: NextFunction) { try { noStore(res); const result = await authorizedOAuthContext(req); if (!result.scopes.includes("memory:read")) throw AppError.forbidden("The access token does not include MAX Memory permission", "INSUFFICIENT_SCOPE"); return res.json(await oauthMemoryService.getAuthorizedMemory(bearer(req) || "")); } catch (err) { next(err); } },
   discovery(_req: Request, res: Response) { return res.json({ issuer: env.OIDC_ISSUER, authorization_endpoint: `${env.APP_URL}/api/v1/oauth/authorize`, token_endpoint: `${env.APP_URL}/api/v1/oauth/token`, userinfo_endpoint: `${env.APP_URL}/api/v1/oauth/userinfo`, memory_endpoint: `${env.APP_URL}/api/v1/oauth/memory`, introspection_endpoint: `${env.APP_URL}/api/v1/oauth/introspect`, revocation_endpoint: `${env.APP_URL}/api/v1/oauth/revoke`, jwks_uri: `${env.APP_URL}/.well-known/jwks.json`, response_types_supported: ["code"], response_modes_supported: ["query"], grant_types_supported: ["authorization_code", "refresh_token"], code_challenge_methods_supported: ["S256"], subject_types_supported: ["public"], id_token_signing_alg_values_supported: ["RS256"], scopes_supported: MAX_OAUTH_SCOPES.filter((scope) => scope !== "developer:manage"), claims_supported: ["sub", "user_id", "name", "preferred_username", "email", "email_verified", "picture", "memory"] }); },
