@@ -88,6 +88,46 @@ enum OAuthGrantType {
   CLIENT_CREDENTIALS
 }
 
+enum BusinessStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum BusinessVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum BusinessMemberRole {
+  OWNER
+  ADMINISTRATOR
+  MANAGER
+  MEMBER
+  VIEWER
+  DEVELOPER
+}
+
+enum BusinessMemberStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum BusinessInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum BusinessAppConnectionStatus {
+  ACTIVE
+  REVOKED
+}
+
 model User {
   id                 String             @id @default(uuid()) @db.Uuid
   username           String             @unique @db.VarChar(32)
@@ -124,6 +164,10 @@ model User {
   oauthRefreshTokens  OAuthRefreshToken[]
   oauthConsents       OAuthConsent[]
   ownedOAuthClients   OAuthClient[]
+  ownedBusinesses     Business[] @relation("BusinessOwner")
+  businessMemberships BusinessMembership[]
+  businessInvitationsSent BusinessInvitation[] @relation("BusinessInvitationInviter")
+  businessAppConnections BusinessAppConnection[] @relation("BusinessAppConnectionAuthorizer")
   @@index([email])
   @@index([username])
   @@index([status])
@@ -342,6 +386,7 @@ model OAuthClient {
   accessTokens    OAuthAccessToken[]
   refreshTokens   OAuthRefreshToken[]
   consents        OAuthConsent[]
+  businessConnections BusinessAppConnection[]
   @@map("oauth_clients")
 }
 
@@ -353,6 +398,8 @@ model OAuthAuthorizationCode {
   userId       String   @db.Uuid
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   redirectUri  String
+  businessId   String?  @db.Uuid @map("business_id")
+  businessContext Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   scopes       String[]
   codeChallenge String?
   codeChallengeMethod String?
@@ -361,6 +408,7 @@ model OAuthAuthorizationCode {
   createdAt    DateTime @default(now())
   @@index([clientId])
   @@index([userId])
+  @@index([businessId])
   @@map("oauth_authorization_codes")
 }
 
@@ -371,6 +419,8 @@ model OAuthAccessToken {
   client     OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId     String   @db.Uuid
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String?  @db.Uuid @map("business_id")
+  businessContext Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   scopes     String[]
   grantType  OAuthGrantType @default(AUTHORIZATION_CODE)
   expiresAt  DateTime
@@ -378,6 +428,7 @@ model OAuthAccessToken {
   createdAt  DateTime @default(now())
   @@index([clientId])
   @@index([userId])
+  @@index([businessId])
   @@map("oauth_access_tokens")
 }
 
@@ -388,12 +439,15 @@ model OAuthRefreshToken {
   client     OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId     String   @db.Uuid
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String?  @db.Uuid @map("business_id")
+  businessContext Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   scopes     String[]
   expiresAt  DateTime
   revokedAt  DateTime?
   createdAt  DateTime @default(now())
   @@index([clientId])
   @@index([userId])
+  @@index([businessId])
   @@map("oauth_refresh_tokens")
 }
 
@@ -408,4 +462,112 @@ model OAuthConsent {
   revokedAt  DateTime?
   @@unique([clientId, userId])
   @@map("oauth_consents")
+}
+
+
+model Business {
+  id                          String                     @id @default(uuid()) @db.Uuid
+  businessId                  String                     @unique @map("business_id") @db.VarChar(48)
+  handle                      String                     @unique @db.VarChar(64)
+  legalName                   String                     @map("legal_name") @db.VarChar(180)
+  displayName                 String                     @map("display_name") @db.VarChar(120)
+  email                       String                     @db.VarChar(254)
+  phone                       String                     @db.VarChar(40)
+  country                     String                     @db.VarChar(2)
+  businessType                String                     @map("business_type") @db.VarChar(80)
+  websiteUrl                  String?                    @map("website_url") @db.VarChar(2048)
+  logoUrl                     String?                    @map("logo_url") @db.VarChar(2048)
+  description                 String?                    @db.VarChar(2000)
+  registrationNumber          String?                    @map("registration_number") @db.VarChar(120)
+  ownerId                     String                     @map("owner_id") @db.Uuid
+  owner                       User                       @relation("BusinessOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  status                      BusinessStatus              @default(ACTIVE)
+  verificationStatus           BusinessVerificationStatus @default(UNVERIFIED) @map("verification_status")
+  emailVerifiedAt             DateTime?                  @map("email_verified_at")
+  emailVerificationTokenHash  String?                    @unique @map("email_verification_token_hash")
+  emailVerificationExpiresAt  DateTime?                  @map("email_verification_expires_at")
+  createdAt                   DateTime                   @default(now()) @map("created_at")
+  updatedAt                   DateTime                   @updatedAt @map("updated_at")
+  memberships                 BusinessMembership[]
+  invitations                 BusinessInvitation[]
+  auditLogs                   BusinessAuditLog[]
+  appConnections              BusinessAppConnection[]
+  oauthAuthorizationCodes     OAuthAuthorizationCode[]
+  oauthAccessTokens           OAuthAccessToken[]
+  oauthRefreshTokens          OAuthRefreshToken[]
+  @@index([ownerId])
+  @@index([status, verificationStatus])
+  @@index([email])
+  @@map("businesses")
+}
+
+model BusinessMembership {
+  id         String              @id @default(uuid()) @db.Uuid
+  businessId String              @map("business_id") @db.Uuid
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     String              @map("user_id") @db.Uuid
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       BusinessMemberRole  @default(MEMBER)
+  status     BusinessMemberStatus @default(ACTIVE)
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+  @@unique([businessId, userId])
+  @@index([userId, status])
+  @@index([businessId, role, status])
+  @@map("business_memberships")
+}
+
+model BusinessInvitation {
+  id          String                  @id @default(uuid()) @db.Uuid
+  businessId  String                  @map("business_id") @db.Uuid
+  business    Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  email       String                  @db.VarChar(254)
+  role        BusinessMemberRole
+  tokenHash   String                  @unique @map("token_hash")
+  invitedById String                  @map("invited_by_id") @db.Uuid
+  invitedBy   User                    @relation("BusinessInvitationInviter", fields: [invitedById], references: [id], onDelete: Restrict)
+  status      BusinessInvitationStatus @default(PENDING)
+  expiresAt   DateTime                @map("expires_at")
+  acceptedAt  DateTime?               @map("accepted_at")
+  revokedAt   DateTime?               @map("revoked_at")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  @@index([businessId, status, expiresAt])
+  @@index([email, status])
+  @@map("business_invitations")
+}
+
+model BusinessAuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(80)
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@index([businessId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("business_audit_logs")
+}
+
+
+model BusinessAppConnection {
+  id             String                    @id @default(uuid()) @db.Uuid
+  businessId     String                    @map("business_id") @db.Uuid
+  business       Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  clientId       String                    @map("client_id") @db.Uuid
+  client         OAuthClient               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  authorizedById String                    @map("authorized_by_id") @db.Uuid
+  authorizedBy   User                      @relation("BusinessAppConnectionAuthorizer", fields: [authorizedById], references: [id], onDelete: Restrict)
+  scopes         String[]
+  status         BusinessAppConnectionStatus @default(ACTIVE)
+  connectedAt    DateTime                  @default(now()) @map("connected_at")
+  revokedAt      DateTime?                 @map("revoked_at")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  @@unique([businessId, clientId])
+  @@index([businessId, status])
+  @@index([authorizedById])
+  @@map("business_app_connections")
 }
