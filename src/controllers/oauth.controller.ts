@@ -132,15 +132,16 @@ export const oauthController = {
       const token = bearer(req);
       if (!token) throw AppError.unauthorized("A business-scoped OAuth access token is required", "INVALID_TOKEN");
       const result = await oauthService.introspect(token);
-      if (!result.active || !result.user || !result.scopes || !result.business_id || !result.business_role) {
+      if (!result.active) throw AppError.unauthorized("This token is inactive", "INVALID_TOKEN");
+      const user = result.user;
+      const scopes = result.scopes;
+      if (!user || !scopes || !result.business_id || !result.business_role) {
         throw AppError.unauthorized("This token has no active business context", "BUSINESS_CONTEXT_REQUIRED");
       }
-      const businessScopes = result.scopes.filter((scope) => scope.startsWith("business:"));
-      if (!businessScopes.some((scope) => ["business:read", "business:manage", "business:members:read", "business:members:manage", "business:apps:manage"].includes(scope))) {
-        throw AppError.forbidden("The token is missing business permissions", "INSUFFICIENT_SCOPE");
-      }
+      const businessScopes = scopes.filter((scope) => scope.startsWith("business:"));
+      if (!businessScopes.length) throw AppError.forbidden("The token is missing business permissions", "INSUFFICIENT_SCOPE");
       return ok(res, {
-        user: { id: result.user.id, email: result.user.email, username: result.user.username, displayName: result.user.displayName },
+        user: { id: user.id, email: user.email, username: user.username, displayName: user.displayName },
         business: { businessId: result.business_id, displayName: result.business_name, role: result.business_role },
         scopes: businessScopes,
         expiresAt: result.exp,
