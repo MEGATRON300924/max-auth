@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { oauthController } from "../controllers/oauth.controller";
+import { adminController } from "../controllers/admin.controller";
+import { requireAdmin } from "../middleware/requireAdmin";
 import { oauthClientConfigController } from "../controllers/oauth-client-config.controller";
 import { oauthClientLogoController } from "../controllers/oauth-client-logo.controller";
 import { oauthManifestController } from "../controllers/oauth-manifest.controller";
@@ -21,6 +23,9 @@ const approveSchema = z.object({ body: z.object({ clientId: z.string().min(1), r
 const revokeSchema = z.object({ body: z.object({ token: z.string().min(1), token_type_hint: z.string().optional(), client_id: z.string().optional(), client_secret: z.string().optional() }) });
 
 router.get("/clients/:clientId/logo", oauthClientLogoController.publicLogo);
+// Admin cross-owner access accepts the developer OAuth token, then checks the database-backed admin flag.
+router.get("/admin-clients", authenticateDeveloper, requireAdmin, adminController.listOAuthClients);
+router.patch("/admin-clients/:clientId", authenticateDeveloper, requireAdmin, validate(updateClientSchema), adminController.updateOAuthClient);
 router.post("/clients", authenticateDeveloper, validate(createClientSchema), oauthController.createClient);
 router.get("/clients", authenticateDeveloper, oauthController.listClients);
 router.patch("/clients/:clientId", authenticateDeveloper, validate(updateClientSchema), oauthController.updateClient);
