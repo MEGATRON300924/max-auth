@@ -75,7 +75,7 @@ export const businessService = {
         data: {
           businessId, handle, legalName: input.legalName.trim(), displayName: input.displayName.trim(),
           email: input.email.trim().toLowerCase(), phone: input.phone.trim(), country,
-          businessType: input.businessType.trim(), websiteUrl: input.websiteUrl?.trim() || null,
+          businessType: input.businessType.trim(), websiteUrl: input.websiteUrl?.trim() || null, logoUrl: input.logoUrl?.trim() || null,
           description: input.description?.trim() || null, registrationNumber: input.registrationNumber?.trim() || null,
           ownerId: userId, emailVerificationTokenHash: tokenHash(rawVerificationToken),
           emailVerificationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -122,6 +122,7 @@ export const businessService = {
     if (input.country !== undefined) data.country = input.country.trim().toUpperCase();
     if (input.businessType !== undefined) data.businessType = input.businessType.trim();
     if (input.websiteUrl !== undefined) data.websiteUrl = input.websiteUrl?.trim() || null;
+    if (input.logoUrl !== undefined) data.logoUrl = input.logoUrl?.trim() || null;
     if (input.description !== undefined) data.description = input.description?.trim() || null;
     if (input.registrationNumber !== undefined) data.registrationNumber = input.registrationNumber?.trim() || null;
     const updated = await prisma.business.update({ where: { id: businessId }, data });
