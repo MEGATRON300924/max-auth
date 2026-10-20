@@ -10,6 +10,7 @@ router.get("/", businessesController.listMine);
 router.get("/:businessId", validate(businessIdParamSchema), businessesController.get);
 router.patch("/:businessId", validate(updateBusinessSchema), businessesController.update);
 router.get("/:businessId/members", validate(businessIdParamSchema), businessesController.listMembers);
+router.get("/:businessId/audit-logs", validate(businessIdParamSchema), businessesController.listAuditLogs);
 router.patch("/:businessId/members/:userId", validate(updateBusinessMemberSchema), businessesController.updateMemberRole);
 router.delete("/:businessId/members/:userId", validate(businessMemberParamsSchema), businessesController.removeMember);
 router.post("/:businessId/invitations", validate(createBusinessInvitationSchema), businessesController.createInvitation);
