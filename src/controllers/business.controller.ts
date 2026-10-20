@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { businessService } from "../services/business.service";
 import { mailService } from "../services/mail.service";
 import { ok } from "../utils/response";
+import { prisma } from "../database/prisma";
 
 function context(req: Request) {
   return { ipAddress: req.ip, userAgent: req.get("user-agent") };
@@ -27,7 +28,20 @@ export const businessController = {
       } catch {
         emailVerificationSent = false;
       }
-      return ok(res, { business, emailVerificationSent }, 201);
+      let adminNotificationSent = false;
+      try {
+        const admin = await prisma.user.findUnique({ where: { username: "zionopaaje" }, select: { email: true, isAdmin: true } });
+        if (admin?.email) {
+          await mailService.send({
+            to: admin.email,
+            subject: `Organisation review required: ${business.displayName}`,
+            text: `A new organisation has registered for MAX and is awaiting TTFL review.\n\nOrganisation: ${business.displayName}\nLegal name: ${business.legalName}\nMAX Business ID: ${business.businessId}\nAddress: ${business.address || "Not provided"}\nBusiness email: ${business.email}\nPhone: ${business.phone}\nCountry: ${business.country}\nType: ${business.businessType}\nRegistration number: ${business.registrationNumber || "Not provided"}\nReview notifications are routed to MAX Auth administrator @zionopaaje.\n\nReview organisation: https://api.max-ai.name.ng/admin/organisations\n\nBusiness email verification confirms mailbox control only; it does not approve the organisation.`,
+            html: `<h2>New organisation awaiting review</h2><p>A new organisation has registered for MAX and needs review by The Tron Forge Limited.</p><ul><li><strong>Organisation:</strong> ${business.displayName.replace(/[&<>"]/g, "")}</li><li><strong>Legal name:</strong> ${business.legalName.replace(/[&<>"]/g, "")}</li><li><strong>MAX Business ID:</strong> ${business.businessId}</li><li><strong>Address:</strong> ${(business.address || "Not provided").replace(/[&<>"]/g, "")}</li><li><strong>Business email:</strong> ${business.email}</li><li><strong>Phone:</strong> ${business.phone}</li><li><strong>Country:</strong> ${business.country}</li><li><strong>Type:</strong> ${business.businessType.replace(/[&<>"]/g, "")}</li><li><strong>Registration number:</strong> ${(business.registrationNumber || "Not provided").replace(/[&<>"]/g, "")}</li></ul><p><a href="https://api.max-ai.name.ng/admin/organisations">Open the organisation review dashboard</a></p><p>Email verification does not constitute business approval.</p>`,
+          });
+          adminNotificationSent = true;
+        }
+      } catch { adminNotificationSent = false; }
+      return ok(res, { business, emailVerificationSent, adminNotificationSent }, 201);
     } catch (err) { next(err); }
   },
 
