@@ -1,10 +1,69 @@
 import { Router } from "express";
+import { ConnectedProvider } from "@prisma/client";
+import { prisma } from "../database/prisma";
 import { authenticateMaxService } from "../middleware/serviceAuthenticate";
+import { authenticateMaxServiceOnly } from "../middleware/serviceAuthenticateOnly";
 import { personalizationController } from "../controllers/personalization.controller";
 import { internalGoogleController } from "../controllers/internalGoogle.controller";
 import { internalSpotifyController } from "../controllers/internalSpotify.controller";
+import { ok } from "../utils/response";
 
 const router = Router();
+
+// Reverse lookup used by MAX's Discord bot after Discord OAuth linking.
+// Only returns the minimum profile needed to map a Discord identity to MAX Auth.
+router.get("/discord/identity", authenticateMaxServiceOnly, async (req, res, next) => {
+  try {
+    const discordUserId = typeof req.query.discordUserId === "string" ? req.query.discordUserId : "";
+    if (!/^\d{5,25}$/.test(discordUserId)) {
+      return res.status(400).json({ success: false, error: { code: "DISCORD_USER_ID_INVALID", message: "A valid Discord user ID is required" } });
+    }
+
+    const account = await prisma.connectedAccount.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: ConnectedProvider.DISCORD,
+          providerAccountId: discordUserId,
+        },
+      },
+      select: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+            displayName: true,
+            status: true,
+            subscriptionTier: true,
+            language: true,
+            timezone: true,
+          },
+        },
+      },
+    });
+
+    const user = account?.user;
+    if (!user || user.status !== "ACTIVE") {
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { linked: false });
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    return ok(res, {
+      linked: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName || user.fullName || user.username,
+        tier: user.subscriptionTier,
+        locale: user.language,
+        timezone: user.timezone,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.use(authenticateMaxService);
 
@@ -50,7 +109,6 @@ router.get("/users/:userId/google/youtube/channels", internalGoogleController.yo
 router.get("/users/:userId/google/youtube/subscriptions", internalGoogleController.youtubeSubscriptions);
 router.get("/users/:userId/google/youtube/search", internalGoogleController.youtubeSearch);
 router.get("/users/:userId/google/youtube/videos", internalGoogleController.youtubeVideos);
-
 
 router.get("/users/:userId/spotify/search", internalSpotifyController.search);
 router.get("/users/:userId/spotify/me", internalSpotifyController.me);
