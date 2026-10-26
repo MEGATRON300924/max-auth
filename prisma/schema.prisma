@@ -159,6 +159,7 @@ model User {
   connectedAccounts   ConnectedAccount[]
   oauthIntegrationStates OAuthIntegrationState[]
   aiProfile           AIProfile?
+  aiConversations     AIConversation[]
   oauthAuthCodes      OAuthAuthorizationCode[]
   oauthAccessTokens   OAuthAccessToken[]
   oauthRefreshTokens  OAuthRefreshToken[]
@@ -571,4 +572,16 @@ model BusinessAppConnection {
   @@index([businessId, status])
   @@index([authorizedById])
   @@map("business_app_connections")
+}
+
+model AIConversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String   @db.VarChar(160)
+  messages  Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, updatedAt])
+  @@map("ai_conversations")
 }
