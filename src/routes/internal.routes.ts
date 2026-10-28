@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { prisma } from "../database/prisma";
+import { ok } from "../utils/response";
 import { authenticateMaxService } from "../middleware/serviceAuthenticate";
 import { personalizationController } from "../controllers/personalization.controller";
 import { internalGoogleController } from "../controllers/internalGoogle.controller";
@@ -7,6 +9,15 @@ import { internalSpotifyController } from "../controllers/internalSpotify.contro
 const router = Router();
 
 router.use(authenticateMaxService);
+
+router.get("/users/:userId/family-status", async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.userId }, select: { id: true, status: true } });
+    if (!user) return res.status(404).json({ success: false, error: { code: "USER_NOT_FOUND", message: "MAX Auth account not found." } });
+    const consent = await prisma.familyConsentRequest.findUnique({ where: { childUserId: user.id }, select: { ageGroup: true, status: true } });
+    return ok(res, { accountStatus: user.status, ageGroup: consent?.ageGroup ?? null, parentalConsentStatus: consent?.status ?? null, canUseAdultRole: user.status === "ACTIVE" && consent === null });
+  } catch (error) { next(error); }
+});
 
 router.get("/users/:userId/personalization", personalizationController.snapshot);
 router.patch("/users/:userId/personalization", personalizationController.updateProfile);
