@@ -13,12 +13,21 @@ export const registerSchema = z.object({
     fullName: z.string().trim().min(1).max(128),
     displayName: z.string().trim().min(1).max(64),
     ageConfirmed: z.literal(true),
+    ageGroup: z.enum(["UNDER_16", "AGE_16_17", "AGE_18_PLUS"]),
+    parentEmail: z.string().trim().email().max(255).optional(),
     email: z.string().email().max(255),
     password: passwordSchema,
     country: z.string().length(2).optional(),
     language: z.string().max(10).optional(),
     timezone: z.string().max(64).optional(),
     rememberMe: z.boolean().optional().default(true),
+  }).superRefine((body, ctx) => {
+    if (body.ageGroup !== "AGE_18_PLUS" && !body.parentEmail) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["parentEmail"], message: "A parent or guardian email is required for accounts under 18." });
+    }
+    if (body.parentEmail && body.parentEmail.toLowerCase() === body.email.toLowerCase()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["parentEmail"], message: "Use a parent or guardian email address, not your own." });
+    }
   }),
 });
 
