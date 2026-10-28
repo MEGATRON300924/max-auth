@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authenticate } from "../middleware/authenticate";
+import { prisma } from "../database/prisma";
 import { familyService } from "../services/family.service";
 import { ok } from "../utils/response";
 import { AppError } from "../utils/AppError";
@@ -33,10 +34,10 @@ router.post("/parental-consent/approve-with-account", authenticate, async (req, 
     const parsed = approveSchema.safeParse(req.body);
     if (!parsed.success) throw AppError.badRequest("Confirm that you are the child's parent or legal guardian.", "VALIDATION_ERROR");
     const user = req.user as { sub: string; email?: string };
-    const profile = await import("../services/user.service").then((module) => module.userService.getProfile(user.sub));
+    const profile = await prisma.user.findUnique({ where: { id: user.sub }, select: { email: true } });
     return ok(res, await familyService.approve(parsed.data.token, {
       parentUserId: user.sub,
-      parentEmail: profile.email,
+      parentEmail: profile?.email,
       guardianAttestation: true
     }));
   } catch (error) { next(error); }
