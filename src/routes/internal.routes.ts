@@ -11,7 +11,7 @@ import { env } from "../config/env";
 
 const router = Router();
 
-router.use(authenticateMaxService);
+router.use("/users/:userId", authenticateMaxService);
 
 const internalEmailSchema = z.object({
   to: z.string().trim().email().max(255),
