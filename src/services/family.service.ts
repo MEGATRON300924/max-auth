@@ -10,6 +10,8 @@ function digest(rawToken: string) {
   return hashToken(rawToken);
 }
 
+function escapeHtml(value: string) { return value.replace(/[&<>"\']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "\'": "&#39;" }[character] || character)); }
+
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
   if (!local || !domain) return "your email address";
@@ -40,11 +42,12 @@ export const familyService = {
     const intro = almostEighteen
       ? `${childLabel} is 16–17 and is requesting a MAX Account. Some services may remain restricted until they turn 18.`
       : `${childLabel} is requesting a MAX Account and needs parent or guardian approval.`;
+    const introHtml = escapeHtml(intro);
     await mailService.send({
       to: parentEmail,
       subject: "Your child's MAX Account needs your approval",
       text: `${intro}\n\nReview the request securely: ${approvalUrl}\n\nThis link expires in 7 days. If you do not recognise this request, you can ignore this email.`,
-      html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f5f7fb;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#172033"><main style="max-width:560px;margin:0 auto;padding:28px 16px"><section style="background:#fff;border:1px solid #e4e8f0;border-radius:22px;overflow:hidden"><header style="padding:30px 28px 16px;text-align:center"><img src="https://api.max-ai.name.ng/logo.png" width="52" height="52" alt="MAX Auth" style="display:block;margin:0 auto 14px;border-radius:14px"><p style="margin:0;color:#2563eb;font-size:12px;font-weight:700;letter-spacing:2px">MAX FAMILY</p><h1 style="margin:12px 0 8px;font-size:25px;line-height:1.25;color:#111827">Your child's account needs approval</h1><p style="margin:0;color:#5b6475;font-size:15px;line-height:1.7">${intro}</p></header><div style="padding:12px 28px 30px"><a href="${approvalUrl}" style="display:block;background:#2563eb;color:#fff;text-decoration:none;text-align:center;font-size:15px;font-weight:600;padding:15px 20px;border-radius:12px">Review approval request</a><p style="margin:20px 0 0;color:#7b8494;font-size:12px;line-height:1.7">This secure link expires in 7 days. If you did not expect this request, you can ignore this message. Email access alone does not independently verify age; please approve only if you are the child's parent or legal guardian.</p></div></section><p style="margin:18px 8px 0;text-align:center;color:#7b8494;font-size:12px">The MAX AI Ecosystem · One account across MAX.</p></main></body></html>`
+      html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f5f7fb;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#172033"><main style="max-width:560px;margin:0 auto;padding:28px 16px"><section style="background:#fff;border:1px solid #e4e8f0;border-radius:22px;overflow:hidden"><header style="padding:30px 28px 16px;text-align:center"><img src="https://api.max-ai.name.ng/logo.png" width="52" height="52" alt="MAX Auth" style="display:block;margin:0 auto 14px;border-radius:14px"><p style="margin:0;color:#2563eb;font-size:12px;font-weight:700;letter-spacing:2px">MAX FAMILY</p><h1 style="margin:12px 0 8px;font-size:25px;line-height:1.25;color:#111827">Your child's account needs approval</h1><p style="margin:0;color:#5b6475;font-size:15px;line-height:1.7">${introHtml}</p></header><div style="padding:12px 28px 30px"><a href="${approvalUrl}" style="display:block;background:#2563eb;color:#fff;text-decoration:none;text-align:center;font-size:15px;font-weight:600;padding:15px 20px;border-radius:12px">Review approval request</a><p style="margin:20px 0 0;color:#7b8494;font-size:12px;line-height:1.7">This secure link expires in 7 days. If you did not expect this request, you can ignore this message. Email access alone does not independently verify age; please approve only if you are the child's parent or legal guardian.</p></div></section><p style="margin:18px 8px 0;text-align:center;color:#7b8494;font-size:12px">The MAX AI Ecosystem · One account across MAX.</p></main></body></html>`
     });
     return { expiresAt, parentEmail: maskEmail(parentEmail) };
   },
