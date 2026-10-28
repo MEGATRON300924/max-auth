@@ -39,7 +39,7 @@ export const authService = {
   async login(identifier: string, password: string, ctx: RequestContext, rememberMe = true, mfaCode?: string) {
     const user = await userRepository.findByIdentifier(identifier);
     if (!user) { await verifyPassword("$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHQ$invalidinvalidinvalidinvalid", password).catch(() => undefined); throw AppError.unauthorized("Invalid email/username or password", "INVALID_CREDENTIALS"); }
-    if (user.status !== "ACTIVE") { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: `account_${user.status.toLowerCase()}` }); throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE"); }
+    if (user.status !== "ACTIVE") { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: `account_${user.status.toLowerCase()}` }); if (user.status === "PENDING_PARENTAL_APPROVAL") throw AppError.forbidden("Your MAX Account is waiting for parent or guardian approval.", "PARENTAL_APPROVAL_PENDING"); throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE"); }
     const validPassword = await verifyPassword(user.passwordHash, password);
     if (!validPassword) { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: "invalid_password" }); await auditService.record("LOGIN_FAILED", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent }); throw AppError.unauthorized("Invalid email/username or password", "INVALID_CREDENTIALS"); }
     await mfaService.verifyLoginFactor(user.id, mfaCode);
