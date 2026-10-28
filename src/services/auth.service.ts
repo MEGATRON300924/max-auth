@@ -10,22 +10,27 @@ import { AppError } from "../utils/AppError";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { mfaService } from "./mfa.service";
+import { familyService } from "./family.service";
 
 interface RequestContext { ipAddress?: string; userAgent?: string; clientHint?: string; }
 const PASSWORD_HISTORY_LIMIT = 5;
 
 export const authService = {
-  async register(input: { username: string; email: string; password: string; fullName: string; displayName: string; ageConfirmed: true; country?: string; language?: string; timezone?: string; rememberMe?: boolean }, ctx: RequestContext) {
+  async register(input: { username: string; email: string; password: string; fullName: string; displayName: string; ageConfirmed: true; ageGroup: "UNDER_16" | "AGE_16_17" | "AGE_18_PLUS"; parentEmail?: string; country?: string; language?: string; timezone?: string; rememberMe?: boolean }, ctx: RequestContext) {
     const email = input.email.toLowerCase();
     const [existingEmail, existingUsername] = await Promise.all([userRepository.findByEmail(email), userRepository.findByUsername(input.username)]);
     if (existingEmail) throw AppError.conflict("An account with this email already exists", "EMAIL_TAKEN");
     if (existingUsername) throw AppError.conflict("This username is already taken", "USERNAME_TAKEN");
     if (!isPasswordStrongEnough(input.password)) throw AppError.badRequest("Password does not meet strength requirements", "WEAK_PASSWORD");
     const passwordHash = await hashPassword(input.password);
-    const user = await prisma.user.create({ data: { username: input.username, email, passwordHash, fullName: input.fullName.trim(), displayName: input.displayName.trim(), country: input.country, language: input.language, timezone: input.timezone, aiProfile: { create: {} } } });
+    const isMinor = input.ageGroup !== "AGE_18_PLUS";
+    const user = await prisma.user.create({ data: { username: input.username, email, passwordHash, fullName: input.fullName.trim(), displayName: input.displayName.trim(), status: isMinor ? "PENDING_PARENTAL_APPROVAL" : "ACTIVE", country: input.country, language: input.language, timezone: input.timezone, aiProfile: { create: {} } } });
     await prisma.passwordHistory.create({ data: { userId: user.id, passwordHash } });
     await auditService.record("REGISTER", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, metadata: { ageConfirmed: input.ageConfirmed, ageAttestationVersion: "MAX_ACCOUNT_AGE_V1" } });
     await this.sendEmailVerification(user.id, ctx);
+    if (isMinor && input.parentEmail) {
+      await familyService.createParentalConsentRequest({ childUserId: user.id, childName: user.displayName || user.fullName || user.username, parentEmail: input.parentEmail, ageGroup: input.ageGroup as "UNDER_16" | "AGE_16_17" });
+    }
     const device = await deviceService.identifyOrCreateDevice(user.id, ctx, ctx.clientHint);
     const tokens = await tokenService.issueTokenPair(user, { deviceId: device.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe: input.rememberMe });
     return { user, ...tokens };
@@ -34,7 +39,7 @@ export const authService = {
   async login(identifier: string, password: string, ctx: RequestContext, rememberMe = true, mfaCode?: string) {
     const user = await userRepository.findByIdentifier(identifier);
     if (!user) { await verifyPassword("$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHQ$invalidinvalidinvalidinvalid", password).catch(() => undefined); throw AppError.unauthorized("Invalid email/username or password", "INVALID_CREDENTIALS"); }
-    if (user.status !== "ACTIVE") { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: `account_${user.status.toLowerCase()}` }); throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE"); }
+    if (user.status !== "ACTIVE") { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: `account_${user.status.toLowerCase()}` }); if (user.status === "PENDING_PARENTAL_APPROVAL") throw AppError.forbidden("Your MAX Account is waiting for parent or guardian approval.", "PARENTAL_APPROVAL_PENDING"); throw AppError.forbidden("This account is not active", "ACCOUNT_NOT_ACTIVE"); }
     const validPassword = await verifyPassword(user.passwordHash, password);
     if (!validPassword) { await auditService.recordLogin({ userId: user.id, success: false, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, reason: "invalid_password" }); await auditService.record("LOGIN_FAILED", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent }); throw AppError.unauthorized("Invalid email/username or password", "INVALID_CREDENTIALS"); }
     await mfaService.verifyLoginFactor(user.id, mfaCode);
