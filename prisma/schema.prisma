@@ -33,6 +33,7 @@ enum AccountStatus {
   BANNED
   DELETED
   DEACTIVATED
+  PENDING_PARENTAL_APPROVAL
 }
 
 enum TokenPurpose {
@@ -168,6 +169,8 @@ model User {
   businessMemberships BusinessMembership[]
   businessInvitationsSent BusinessInvitation[] @relation("BusinessInvitationInviter")
   businessAppConnections BusinessAppConnection[] @relation("BusinessAppConnectionAuthorizer")
+  familyConsentAsChild FamilyConsentRequest[] @relation("FamilyConsentChild")
+  familyConsentAsParent FamilyConsentRequest[] @relation("FamilyConsentParent")
   @@index([email])
   @@index([username])
   @@index([status])
@@ -571,4 +574,38 @@ model BusinessAppConnection {
   @@index([businessId, status])
   @@index([authorizedById])
   @@map("business_app_connections")
+}
+
+
+enum FamilyConsentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum FamilyAgeGroup {
+  UNDER_16
+  AGE_16_17
+}
+
+model FamilyConsentRequest {
+  id           String             @id @default(uuid()) @db.Uuid
+  childUserId  String             @unique @db.Uuid
+  childUser    User               @relation("FamilyConsentChild", fields: [childUserId], references: [id], onDelete: Cascade)
+  parentEmail  String             @db.VarChar(255)
+  ageGroup     FamilyAgeGroup
+  tokenHash    String             @unique
+  status       FamilyConsentStatus @default(PENDING)
+  expiresAt    DateTime
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  parentUserId String?            @db.Uuid
+  parentUser   User?              @relation("FamilyConsentParent", fields: [parentUserId], references: [id], onDelete: SetNull)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([parentEmail, status])
+  @@index([status, expiresAt])
+  @@map("family_consent_requests")
 }
