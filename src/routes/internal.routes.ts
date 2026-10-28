@@ -1,14 +1,54 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../database/prisma";
 import { ok } from "../utils/response";
 import { authenticateMaxService } from "../middleware/serviceAuthenticate";
 import { personalizationController } from "../controllers/personalization.controller";
 import { internalGoogleController } from "../controllers/internalGoogle.controller";
 import { internalSpotifyController } from "../controllers/internalSpotify.controller";
+import { mailService } from "../services/mail.service";
+import { env } from "../config/env";
 
 const router = Router();
 
 router.use(authenticateMaxService);
+
+const internalEmailSchema = z.object({
+  to: z.string().trim().email().max(255),
+  subject: z.string().trim().min(1).max(200),
+  text: z.string().min(1).max(10000),
+  html: z.string().max(30000).optional()
+});
+
+router.get("/users/:userId/lookup/username/:username", async (req, res, next) => {
+  try {
+    const username = String(req.params.username || "").trim();
+    if (!/^[a-zA-Z0-9_.]{3,32}$/.test(username)) {
+      return res.status(400).json({ success: false, error: { code: "INVALID_USERNAME", message: "A valid MAX Auth username is required." } });
+    }
+    const user = await prisma.user.findFirst({
+      where: { username: { equals: username, mode: "insensitive" } },
+      select: { id: true, username: true, email: true }
+    });
+    if (!user) return res.status(404).json({ success: false, error: { code: "USER_NOT_FOUND", message: "MAX Auth account not found." } });
+    if (!user.email) return res.status(422).json({ success: false, error: { code: "USER_EMAIL_UNAVAILABLE", message: "This MAX Auth account does not have an email address." } });
+    return ok(res, { user: { username: user.username, email: user.email } });
+  } catch (error) { next(error); }
+});
+
+router.post("/users/:userId/email/send", async (req, res, next) => {
+  const parsed = internalEmailSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ success: false, error: { code: "INVALID_EMAIL_PAYLOAD", message: "A recipient, subject, and message are required." } });
+  if (env.MAIL_PROVIDER !== "resend" || !env.RESEND_API_KEY) {
+    return res.status(503).json({ success: false, error: { code: "EMAIL_DELIVERY_NOT_CONFIGURED", message: "MAX Auth email delivery is not configured for production. Configure MAIL_PROVIDER=resend, RESEND_API_KEY, and MAIL_FROM in the MAX Auth service." } });
+  }
+  try {
+    await mailService.send(parsed.data);
+    return ok(res, { sent: true });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get("/users/:userId/family-status", async (req, res, next) => {
   try {
