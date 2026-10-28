@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { prisma } from "../database/prisma";
 import { generateOpaqueToken, hashToken } from "../security/tokens";
 import { mailService } from "./mail.service";
