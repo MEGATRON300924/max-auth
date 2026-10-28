@@ -10,7 +10,10 @@ function digest(rawToken: string) {
   return hashToken(rawToken);
 }
 
-function escapeHtml(value: string) { return value.replace(/[&<>"\']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "\'": "&#39;" }[character] || character)); }
+function escapeHtml(value: string) {
+  const entities: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" };
+  return value.replace(/[&<>"']/g, (character) => entities[character] || character);
+}
 
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
