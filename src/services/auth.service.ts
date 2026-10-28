@@ -23,10 +23,14 @@ export const authService = {
     if (existingUsername) throw AppError.conflict("This username is already taken", "USERNAME_TAKEN");
     if (!isPasswordStrongEnough(input.password)) throw AppError.badRequest("Password does not meet strength requirements", "WEAK_PASSWORD");
     const passwordHash = await hashPassword(input.password);
-    const user = await prisma.user.create({ data: { username: input.username, email, passwordHash, fullName: input.fullName.trim(), displayName: input.displayName.trim(), country: input.country, language: input.language, timezone: input.timezone, aiProfile: { create: {} } } });
+    const isMinor = input.ageGroup !== "AGE_18_PLUS";
+    const user = await prisma.user.create({ data: { username: input.username, email, passwordHash, fullName: input.fullName.trim(), displayName: input.displayName.trim(), status: isMinor ? "PENDING_PARENTAL_APPROVAL" : "ACTIVE", country: input.country, language: input.language, timezone: input.timezone, aiProfile: { create: {} } } });
     await prisma.passwordHistory.create({ data: { userId: user.id, passwordHash } });
     await auditService.record("REGISTER", { userId: user.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, metadata: { ageConfirmed: input.ageConfirmed, ageAttestationVersion: "MAX_ACCOUNT_AGE_V1" } });
     await this.sendEmailVerification(user.id, ctx);
+    if (isMinor && input.parentEmail) {
+      await familyService.createParentalConsentRequest({ childUserId: user.id, childName: user.displayName || user.fullName || user.username, parentEmail: input.parentEmail, ageGroup: input.ageGroup as "UNDER_16" | "AGE_16_17" });
+    }
     const device = await deviceService.identifyOrCreateDevice(user.id, ctx, ctx.clientHint);
     const tokens = await tokenService.issueTokenPair(user, { deviceId: device.id, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe: input.rememberMe });
     return { user, ...tokens };
