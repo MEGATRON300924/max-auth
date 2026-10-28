@@ -10,12 +10,13 @@ import { AppError } from "../utils/AppError";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { mfaService } from "./mfa.service";
+import { familyService } from "./family.service";
 
 interface RequestContext { ipAddress?: string; userAgent?: string; clientHint?: string; }
 const PASSWORD_HISTORY_LIMIT = 5;
 
 export const authService = {
-  async register(input: { username: string; email: string; password: string; fullName: string; displayName: string; ageConfirmed: true; country?: string; language?: string; timezone?: string; rememberMe?: boolean }, ctx: RequestContext) {
+  async register(input: { username: string; email: string; password: string; fullName: string; displayName: string; ageConfirmed: true; ageGroup: "UNDER_16" | "AGE_16_17" | "AGE_18_PLUS"; parentEmail?: string; country?: string; language?: string; timezone?: string; rememberMe?: boolean }, ctx: RequestContext) {
     const email = input.email.toLowerCase();
     const [existingEmail, existingUsername] = await Promise.all([userRepository.findByEmail(email), userRepository.findByUsername(input.username)]);
     if (existingEmail) throw AppError.conflict("An account with this email already exists", "EMAIL_TAKEN");
