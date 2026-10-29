@@ -77,6 +77,7 @@ enum ConnectedProvider {
   X
   INSTAGRAM
   SPOTIFY
+  YOUTUBE_MUSIC
   DISCORD
   GITHUB
   MICROSOFT
