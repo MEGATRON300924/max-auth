@@ -209,7 +209,7 @@ export const connectedAccountsService = {
   async createGoogleCalendarAuthorizationUrl(userId: string) {
     ensureGoogleConfigured();
     const existingGoogle = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
-    if (!existingGoogle) throw AppError.badRequest("Connect your Google identity to MAX before connecting Google Calendar", "GOOGLE_IDENTITY_REQUIRED");
+    if (!existingGoogle) throw AppError.badRequest("Connect your Google identity to MAX before connecting Google services", "GOOGLE_IDENTITY_REQUIRED");
     const verifier = randomBase64Url(64);
     const state = randomBase64Url(32);
     await prisma.oAuthIntegrationState.create({ data: { provider: ConnectedProvider.GOOGLE, stateHash: stateHash(state), userId, verifierEnc: googleEncrypt(verifier), expiresAt: new Date(Date.now() + STATE_TTL_MS) } });
@@ -217,31 +217,57 @@ export const connectedAccountsService = {
     return GOOGLE_AUTHORIZE_URL + "?" + params.toString();
   },
 
-  async handleGoogleCalendarCallback(query: { code?: string; state?: string; error?: string }) {
+  async createYouTubeMusicAuthorizationUrl(userId: string) {
+    ensureGoogleConfigured();
+    const verifier = randomBase64Url(64);
+    const state = randomBase64Url(32);
+    await prisma.oAuthIntegrationState.create({ data: { provider: ConnectedProvider.YOUTUBE_MUSIC, stateHash: stateHash(state), userId, verifierEnc: googleEncrypt(verifier), expiresAt: new Date(Date.now() + STATE_TTL_MS) } });
+    const scopes = ["openid", "email", "profile", "https://www.googleapis.com/auth/youtube.readonly"];
+    const params = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, redirect_uri: env.GOOGLE_REDIRECT_URI, response_type: "code", access_type: "offline", prompt: "consent", scope: scopes.join(" "), state, code_challenge: pkceChallenge(verifier), code_challenge_method: "S256" });
+    return GOOGLE_AUTHORIZE_URL + "?" + params.toString();
+  },
+
+  async handleGoogleCalendarCallback(query: { code?: string; state?: string; error?: string }, req?: Request) {
     ensureGoogleConfigured();
     if (query.error) {
-      if (query.state) await prisma.oAuthIntegrationState.deleteMany({ where: { provider: ConnectedProvider.GOOGLE, stateHash: stateHash(query.state) } });
-      throw AppError.badRequest("Google Calendar authorization was cancelled", "GOOGLE_ACCESS_DENIED");
+      if (query.state) await prisma.oAuthIntegrationState.deleteMany({ where: { stateHash: stateHash(query.state) } });
+      throw AppError.badRequest("Google authorization was cancelled", "GOOGLE_ACCESS_DENIED");
     }
     if (!query.code || !query.state) throw AppError.badRequest("Google authorization response was incomplete", "GOOGLE_CALLBACK_INVALID");
     const oauthState = await prisma.oAuthIntegrationState.findUnique({ where: { stateHash: stateHash(query.state) } });
-    if (!oauthState || oauthState.provider !== ConnectedProvider.GOOGLE || oauthState.usedAt || oauthState.expiresAt.getTime() <= Date.now()) throw AppError.badRequest("Invalid or expired Google authorization state", "GOOGLE_STATE_INVALID");
+    const allowedProviders = [ConnectedProvider.GOOGLE, ConnectedProvider.YOUTUBE_MUSIC];
+    if (!oauthState || !allowedProviders.includes(oauthState.provider) || oauthState.usedAt || oauthState.expiresAt.getTime() <= Date.now()) throw AppError.badRequest("Invalid or expired Google authorization state", "GOOGLE_STATE_INVALID");
     const claimed = await prisma.oAuthIntegrationState.updateMany({ where: { id: oauthState.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
     if (claimed.count !== 1) throw AppError.badRequest("Google authorization state has already been used", "GOOGLE_STATE_REPLAYED");
     const verifier = googleDecrypt(oauthState.verifierEnc);
     const token = await googleRequest(GOOGLE_TOKEN_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, code: query.code, grant_type: "authorization_code", redirect_uri: env.GOOGLE_REDIRECT_URI, code_verifier: verifier }) });
     const profile = await googleRequest(GOOGLE_USERINFO_URL, { headers: { Authorization: "Bearer " + token.access_token } });
     if (!profile.sub) throw AppError.badRequest("Google did not return a stable account identifier", "GOOGLE_PROFILE_INVALID");
-    const identity = await prisma.connectedAccount.findFirst({ where: { userId: oauthState.userId, provider: ConnectedProvider.GOOGLE } });
-    if (!identity || identity.providerAccountId !== profile.sub) throw AppError.badRequest("The selected Google account does not match the Google identity already connected to MAX", "GOOGLE_ACCOUNT_MISMATCH");
-    await prisma.connectedAccount.update({ where: { id: identity.id }, data: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : identity.refreshTokenEnc, scope: token.scope || GOOGLE_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) } });
-    await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, metadata: { provider: "GOOGLE", service: "calendar" } });
-    return { status: "connected" as const };
+
+    const provider = oauthState.provider;
+    if (provider === ConnectedProvider.GOOGLE) {
+      const identity = await prisma.connectedAccount.findFirst({ where: { userId: oauthState.userId, provider: ConnectedProvider.GOOGLE } });
+      if (!identity || identity.providerAccountId !== profile.sub) throw AppError.badRequest("The selected Google account does not match the Google identity already connected to MAX", "GOOGLE_ACCOUNT_MISMATCH");
+      await prisma.connectedAccount.update({ where: { id: identity.id }, data: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : identity.refreshTokenEnc, scope: token.scope || GOOGLE_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) } });
+      await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req?.ip, userAgent: req?.headers["user-agent"], metadata: { provider: "GOOGLE", service: "google_services" } });
+      return { status: "connected" as const, service: "google_calendar" as const };
+    }
+
+    const existing = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub } } });
+    if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This Google account is already connected to another MAX Account for YouTube Music");
+    const scopes = ["openid", "email", "profile", "https://www.googleapis.com/auth/youtube.readonly"];
+    await prisma.connectedAccount.upsert({
+      where: { provider_providerAccountId: { provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub } },
+      create: { userId: oauthState.userId, provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub, accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      update: { userId: oauthState.userId, accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existing?.refreshTokenEnc ?? null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+    });
+    await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req?.ip, userAgent: req?.headers["user-agent"], metadata: { provider: "YOUTUBE_MUSIC", service: "youtube_music" } });
+    return { status: "connected" as const, service: "youtube_music" as const };
   },
 
   async googleAccessToken(userId: string, requiredScopes: string[]) {
     ensureGoogleConfigured();
-    const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
+    const wantsYouTube = requiredScopes.includes("https://www.googleapis.com/auth/youtube.readonly");\n    const account = wantsYouTube\n      ? await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.YOUTUBE_MUSIC } }) || await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } })\n      : await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Google is not connected");
     const granted = new Set((account.scope || "").split(/\s+/).filter(Boolean));
     const missing = requiredScopes.filter((scope) => !granted.has(scope));
