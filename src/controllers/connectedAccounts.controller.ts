@@ -42,7 +42,7 @@ export const connectedAccountsController = {
       return res.redirect(env.FRONTEND_URL + `/connected-apps?${queryKey}=${result.status}`);
     } catch (err) {
       res.setHeader("Cache-Control", "no-store");
-      const queryKey = req.query.service === "youtube_music" ? "youtube_music" : "google_calendar";
+      const queryKey = (typeof req.query.state === "string" && req.query.state.startsWith("ym_")) ? "youtube_music" : "google_calendar";
       return res.redirect(env.FRONTEND_URL + `/connected-apps?${queryKey}=error`);
     }
   },
