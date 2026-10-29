@@ -63,6 +63,7 @@ router.get("/google/youtube/videos", connectedAccountsController.googleYouTubeVi
 
 router.get("/spotify/connect", oauthRateLimiter, connectedAccountsController.spotifyConnect);
 router.get("/google/calendar/connect", oauthRateLimiter, connectedAccountsController.googleCalendarConnect);
+router.get("/google/youtube-music/connect", oauthRateLimiter, connectedAccountsController.youTubeMusicConnect);
 router.post("/spotify/refresh", oauthRateLimiter, connectedAccountsController.spotifyRefresh);
 router.get("/discord/connect", oauthRateLimiter, discordController.connect);
 router.get("/microsoft/connect", oauthRateLimiter, microsoftController.connect);
