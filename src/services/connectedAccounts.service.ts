@@ -220,7 +220,7 @@ export const connectedAccountsService = {
   async createYouTubeMusicAuthorizationUrl(userId: string) {
     ensureGoogleConfigured();
     const verifier = randomBase64Url(64);
-    const state = randomBase64Url(32);
+    const state = "ym_" + randomBase64Url(32);
     await prisma.oAuthIntegrationState.create({ data: { provider: ConnectedProvider.YOUTUBE_MUSIC, stateHash: stateHash(state), userId, verifierEnc: googleEncrypt(verifier), expiresAt: new Date(Date.now() + STATE_TTL_MS) } });
     const scopes = ["openid", "email", "profile", "https://www.googleapis.com/auth/youtube.readonly"];
     const params = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, redirect_uri: env.GOOGLE_REDIRECT_URI, response_type: "code", access_type: "offline", prompt: "consent", scope: scopes.join(" "), state, code_challenge: pkceChallenge(verifier), code_challenge_method: "S256" });
