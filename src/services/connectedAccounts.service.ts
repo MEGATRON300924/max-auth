@@ -267,7 +267,8 @@ export const connectedAccountsService = {
 
   async googleAccessToken(userId: string, requiredScopes: string[]) {
     ensureGoogleConfigured();
-    const wantsYouTube = requiredScopes.includes("https://www.googleapis.com/auth/youtube.readonly");\n    const account = wantsYouTube\n      ? await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.YOUTUBE_MUSIC } }) || await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } })\n      : await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
+    const wantsYouTube = requiredScopes.includes("https://www.googleapis.com/auth/youtube.readonly");
+    const account = wantsYouTube\n      ? await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.YOUTUBE_MUSIC } }) || await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } })\n      : await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Google is not connected");
     const granted = new Set((account.scope || "").split(/\s+/).filter(Boolean));
     const missing = requiredScopes.filter((scope) => !granted.has(scope));
