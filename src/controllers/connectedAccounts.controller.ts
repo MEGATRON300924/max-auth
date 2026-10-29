@@ -14,6 +14,14 @@ export const connectedAccountsController = {
     }
   },
 
+  async youTubeMusicConnect(req: Request, res: Response, next: NextFunction) {
+    try {
+      const authorizationUrl = await connectedAccountsService.createYouTubeMusicAuthorizationUrl(req.user!.sub);
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { authorizationUrl });
+    } catch (err) { next(err); }
+  },
+
   async googleCalendarConnect(req: Request, res: Response, next: NextFunction) {
     try {
       const authorizationUrl = await connectedAccountsService.createGoogleCalendarAuthorizationUrl(req.user!.sub);
@@ -28,12 +36,14 @@ export const connectedAccountsController = {
         code: typeof req.query.code === "string" ? req.query.code : undefined,
         state: typeof req.query.state === "string" ? req.query.state : undefined,
         error: typeof req.query.error === "string" ? req.query.error : undefined,
-      });
+      }, req);
       res.setHeader("Cache-Control", "no-store");
-      return res.redirect(env.FRONTEND_URL + `/connected-apps?google_calendar=${result.status}`);
+      const queryKey = result.service === "youtube_music" ? "youtube_music" : "google_calendar";
+      return res.redirect(env.FRONTEND_URL + `/connected-apps?${queryKey}=${result.status}`);
     } catch (err) {
       res.setHeader("Cache-Control", "no-store");
-      return res.redirect(env.FRONTEND_URL + "/connected-apps?google_calendar=error");
+      const queryKey = req.query.service === "youtube_music" ? "youtube_music" : "google_calendar";
+      return res.redirect(env.FRONTEND_URL + `/connected-apps?${queryKey}=error`);
     }
   },
 
