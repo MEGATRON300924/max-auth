@@ -105,8 +105,20 @@ async function spotifyRequest(url: string, options: RequestInit): Promise<any> {
   const response = await fetch(url, options);
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = body?.error_description || body?.error?.message || "Spotify request failed";
-    throw AppError.badRequest(message, "SPOTIFY_REQUEST_FAILED");
+    // Spotify token endpoints commonly return { error: "invalid_grant" } rather
+    // than error_description. Preserve that code so refreshSpotify can correctly
+    // detect revoked/expired refresh tokens and request a fresh OAuth connection.
+    const providerError = typeof body?.error === "string" ? body.error : body?.error?.message;
+    const message = body?.error_description || providerError || "Spotify request failed";
+    console.warn("[spotify] Provider request rejected", {
+      status: response.status,
+      error: String(providerError || "unknown").slice(0, 120),
+      hasErrorDescription: Boolean(body?.error_description)
+    });
+    throw AppError.badRequest(String(message), "SPOTIFY_REQUEST_FAILED", {
+      status: response.status,
+      providerError: String(providerError || "unknown").slice(0, 120)
+    });
   }
   return body;
 }
