@@ -539,11 +539,22 @@ export const connectedAccountsService = {
   },
 
   async spotifyApiRequest(userId: string, path: string, init: RequestInit = {}) {
-    const accessToken = await this.spotifyAccessToken(userId);
-    const response = await fetch("https://api.spotify.com/v1" + path, {
+    const requestWithToken = (accessToken: string) => fetch("https://api.spotify.com/v1" + path, {
       ...init,
       headers: { Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}), Authorization: "Bearer " + accessToken },
     });
+
+    let accessToken = await this.spotifyAccessToken(userId);
+    let response = await requestWithToken(accessToken);
+
+    // Spotify may invalidate an access token before its recorded expiry. Refresh once
+    // on 401, then retry the same request; never loop or replay more than once.
+    if (response.status === 401) {
+      await this.refreshSpotify(userId);
+      accessToken = await this.spotifyAccessToken(userId);
+      response = await requestWithToken(accessToken);
+    }
+
     const body: any = await response.json().catch(() => ({}));
     if (!response.ok) throw AppError.badRequest(body?.error?.message || "Spotify request failed", "SPOTIFY_REQUEST_FAILED", { status: response.status });
     return body;
