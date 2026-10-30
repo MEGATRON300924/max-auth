@@ -567,6 +567,44 @@ export const connectedAccountsService = {
     return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/videos?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
   },
 
+  async searchYouTubeMusic(userId: string, query: string, options: { maxResults?: number; pageToken?: string } = {}) {
+    if (!query.trim()) throw AppError.badRequest("A YouTube Music search query is required", "YOUTUBE_MUSIC_QUERY_REQUIRED");
+    const params = new URLSearchParams({
+      part: "snippet",
+      q: query.trim().slice(0, 200),
+      type: "video",
+      videoCategoryId: "10",
+      maxResults: String(Math.min(Math.max(options.maxResults || 15, 1), 50)),
+    });
+    if (options.pageToken) params.set("pageToken", options.pageToken);
+    return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/search?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
+  },
+
+  async listYouTubeMusicPlaylists(userId: string, options: { maxResults?: number; pageToken?: string } = {}) {
+    const params = new URLSearchParams({
+      part: "snippet,contentDetails,status",
+      mine: "true",
+      maxResults: String(Math.min(Math.max(options.maxResults || 25, 1), 50)),
+    });
+    if (options.pageToken) params.set("pageToken", options.pageToken);
+    return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/playlists?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
+  },
+
+  async listYouTubeMusicPlaylistItems(userId: string, playlistId: string, options: { maxResults?: number; pageToken?: string } = {}) {
+    if (!playlistId.trim()) throw AppError.badRequest("A YouTube Music playlist ID is required", "YOUTUBE_MUSIC_PLAYLIST_ID_REQUIRED");
+    const params = new URLSearchParams({
+      part: "snippet,contentDetails",
+      playlistId: playlistId.trim(),
+      maxResults: String(Math.min(Math.max(options.maxResults || 25, 1), 50)),
+    });
+    if (options.pageToken) params.set("pageToken", options.pageToken);
+    return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/playlistItems?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
+  },
+
+  async listYouTubeMusicLikedSongs(userId: string, options: { maxResults?: number; pageToken?: string } = {}) {
+    return this.listYouTubeMusicPlaylistItems(userId, "LL", options);
+  },
+
   async spotifyAccessToken(userId: string) {
     ensureConfigured();
     let account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
