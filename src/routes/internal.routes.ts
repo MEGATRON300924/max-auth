@@ -36,6 +36,27 @@ router.get("/users/:userId/lookup/username/:username", async (req, res, next) =>
   } catch (error) { next(error); }
 });
 
+// Minimal household-safe identity fields for trusted MAX ecosystem services.
+router.get("/users/:userId/profile", async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.userId },
+      select: { id: true, username: true, displayName: true, avatarUrl: true, status: true }
+    });
+    if (!user || user.status !== "ACTIVE") {
+      return res.status(404).json({ success: false, error: { code: "USER_NOT_FOUND", message: "Active MAX Auth profile not found." } });
+    }
+    return ok(res, {
+      profile: {
+        userId: user.id,
+        username: user.username,
+        displayName: user.displayName?.trim() || user.username,
+        avatarUrl: user.avatarUrl
+      }
+    });
+  } catch (error) { next(error); }
+});
+
 router.post("/users/:userId/email/send", async (req, res, next) => {
   const parsed = internalEmailSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: "INVALID_EMAIL_PAYLOAD", message: "A recipient, subject, and message are required." } });
