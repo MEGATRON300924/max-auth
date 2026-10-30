@@ -235,7 +235,7 @@ export const connectedAccountsService = {
     }
     if (!query.code || !query.state) throw AppError.badRequest("Google authorization response was incomplete", "GOOGLE_CALLBACK_INVALID");
     const oauthState = await prisma.oAuthIntegrationState.findUnique({ where: { stateHash: stateHash(query.state) } });
-    const allowedProviders = [ConnectedProvider.GOOGLE, ConnectedProvider.YOUTUBE_MUSIC];
+    const allowedProviders: ConnectedProvider[] = [ConnectedProvider.GOOGLE, ConnectedProvider.YOUTUBE_MUSIC];
     if (!oauthState || !allowedProviders.includes(oauthState.provider) || oauthState.usedAt || oauthState.expiresAt.getTime() <= Date.now()) throw AppError.badRequest("Invalid or expired Google authorization state", "GOOGLE_STATE_INVALID");
     const claimed = await prisma.oAuthIntegrationState.updateMany({ where: { id: oauthState.id, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
     if (claimed.count !== 1) throw AppError.badRequest("Google authorization state has already been used", "GOOGLE_STATE_REPLAYED");
