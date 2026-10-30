@@ -22,6 +22,50 @@ export const connectedAccountsController = {
     } catch (err) { next(err); }
   },
 
+  async youTubeMusicSearch(req: Request, res: Response, next: NextFunction) {
+    try {
+      const results = await connectedAccountsService.searchYouTubeMusic(req.user!.sub, String(req.query.q || ""), {
+        maxResults: typeof req.query.maxResults === "string" ? Number(req.query.maxResults) : undefined,
+        pageToken: typeof req.query.pageToken === "string" ? req.query.pageToken : undefined,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { results });
+    } catch (err) { next(err); }
+  },
+
+  async youTubeMusicPlaylists(req: Request, res: Response, next: NextFunction) {
+    try {
+      const playlists = await connectedAccountsService.listYouTubeMusicPlaylists(req.user!.sub, {
+        maxResults: typeof req.query.maxResults === "string" ? Number(req.query.maxResults) : undefined,
+        pageToken: typeof req.query.pageToken === "string" ? req.query.pageToken : undefined,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { playlists });
+    } catch (err) { next(err); }
+  },
+
+  async youTubeMusicPlaylistItems(req: Request, res: Response, next: NextFunction) {
+    try {
+      const items = await connectedAccountsService.listYouTubeMusicPlaylistItems(req.user!.sub, String(req.query.playlistId || ""), {
+        maxResults: typeof req.query.maxResults === "string" ? Number(req.query.maxResults) : undefined,
+        pageToken: typeof req.query.pageToken === "string" ? req.query.pageToken : undefined,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { items });
+    } catch (err) { next(err); }
+  },
+
+  async youTubeMusicLikedSongs(req: Request, res: Response, next: NextFunction) {
+    try {
+      const items = await connectedAccountsService.listYouTubeMusicLikedSongs(req.user!.sub, {
+        maxResults: typeof req.query.maxResults === "string" ? Number(req.query.maxResults) : undefined,
+        pageToken: typeof req.query.pageToken === "string" ? req.query.pageToken : undefined,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { items });
+    } catch (err) { next(err); }
+  },
+
   async googleCalendarConnect(req: Request, res: Response, next: NextFunction) {
     try {
       const authorizationUrl = await connectedAccountsService.createGoogleCalendarAuthorizationUrl(req.user!.sub);
