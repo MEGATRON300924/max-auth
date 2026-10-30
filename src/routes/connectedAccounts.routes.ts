@@ -60,6 +60,10 @@ router.get("/google/youtube/channels", connectedAccountsController.googleYouTube
 router.get("/google/youtube/subscriptions", connectedAccountsController.googleYouTubeSubscriptions);
 router.get("/google/youtube/search", connectedAccountsController.googleYouTubeSearch);
 router.get("/google/youtube/videos", connectedAccountsController.googleYouTubeVideos);
+router.get("/youtube-music/search", connectedAccountsController.youTubeMusicSearch);
+router.get("/youtube-music/playlists", connectedAccountsController.youTubeMusicPlaylists);
+router.get("/youtube-music/playlist-items", connectedAccountsController.youTubeMusicPlaylistItems);
+router.get("/youtube-music/liked-songs", connectedAccountsController.youTubeMusicLikedSongs);
 
 router.get("/spotify/connect", oauthRateLimiter, connectedAccountsController.spotifyConnect);
 router.get("/google/calendar/connect", oauthRateLimiter, connectedAccountsController.googleCalendarConnect);
