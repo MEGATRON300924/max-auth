@@ -23,6 +23,7 @@ const OAUTH_SCOPE_LABELS: Record<string, string> = {
   openid: "Sign you in to this app",
   profile: "View your basic MAX profile",
   "profile:read": "Read your MAX profile",
+  "profile:write": "Update your MAX profile details",
   email: "View your email address",
   "email:read": "Read your email address",
   "account:read": "Read basic account information",
