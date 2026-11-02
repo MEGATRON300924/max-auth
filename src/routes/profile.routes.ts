@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { profileController } from "../controllers/profile.controller";
-import { authenticate } from "../middleware/authenticate";
+import { authenticateProfile } from "../middleware/authenticateProfile";
 import { validate } from "../middleware/validate";
 import { updateProfileSchema, updateAIProfileSchema } from "../validators/profile.validators";
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticateProfile);
 
 /**
  * @openapi
