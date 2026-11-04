@@ -24,6 +24,7 @@ export function createApp() {
     "https://developers.max-ai.name.ng",
     "https://home.max-ai.name.ng",
     "https://chat.max-ai.name.ng",
+    "https://max-spotlight-graph.vercel.app",
   ];
   const allowedOrigins = [...new Set([...env.CORS_ALLOWED_ORIGINS, ...firstPartyOrigins])];
 
