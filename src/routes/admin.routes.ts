@@ -4,6 +4,7 @@ import { validate } from "../middleware/validate";
 import { adminController } from "../controllers/admin.controller";
 import { authenticate } from "../middleware/authenticate";
 import { requireAdmin } from "../middleware/requireAdmin";
+import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
 
 const router = Router();
 
@@ -67,6 +68,10 @@ const adminOAuthClientUpdateSchema = z.object({ body: z.object({
 }).refine((body) => Object.keys(body).length > 0, "At least one field is required") });
 router.get("/oauth-clients", adminController.listOAuthClients);
 router.patch("/oauth-clients/:clientId", validate(adminOAuthClientUpdateSchema), adminController.updateOAuthClient);
+
+router.get("/entity-reviewers", spotlightReviewAccessController.list);
+router.post("/entity-reviewers", validate(z.object({ body: z.object({ username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_.]+$/) }) })), spotlightReviewAccessController.grant);
+router.delete("/entity-reviewers/:userId", spotlightReviewAccessController.revoke);
 
 router.get("/stats", adminController.stats);
 

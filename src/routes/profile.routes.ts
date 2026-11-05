@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { profileController } from "../controllers/profile.controller";
+import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
 import { authenticateProfile } from "../middleware/authenticateProfile";
 import { validate } from "../middleware/validate";
 import { updateProfileSchema, updateAIProfileSchema } from "../validators/profile.validators";
@@ -16,6 +17,7 @@ router.use(authenticateProfile);
  *     summary: Get the authenticated user's profile
  */
 router.get("/", profileController.getProfile);
+router.get("/permissions", spotlightReviewAccessController.myPermission);
 
 /**
  * @openapi
