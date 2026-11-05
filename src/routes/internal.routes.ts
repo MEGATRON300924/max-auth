@@ -8,6 +8,7 @@ import { internalGoogleController } from "../controllers/internalGoogle.controll
 import { internalSpotifyController } from "../controllers/internalSpotify.controller";
 import { mailService } from "../services/mail.service";
 import { env } from "../config/env";
+import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
 
 const router = Router();
 
@@ -19,6 +20,8 @@ const internalEmailSchema = z.object({
   text: z.string().min(1).max(10000),
   html: z.string().max(30000).optional()
 });
+
+router.get("/users/:userId/spotlight-entity-access", spotlightReviewAccessController.servicePermission);
 
 router.get("/users/:userId/lookup/username/:username", async (req, res, next) => {
   try {
