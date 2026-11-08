@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { cloudinaryService } from "../services/cloudinary.service";
 import { userService } from "../services/user.service";
-import { ok } from "../utils/response";
+import { ok, sanitizeUser } from "../utils/response";
 import { getRequestContext } from "../utils/requestContext";
 
 export const avatarController = {
@@ -15,7 +15,7 @@ export const avatarController = {
       const publicId = String(req.body?.publicId || "");
       const avatarUrl = cloudinaryService.getAvatarUrl(req.user!.sub, publicId);
       const user = await userService.updateProfile(req.user!.sub, { avatarUrl }, getRequestContext(req));
-      return ok(res, { user: (await import("../utils/response")).sanitizeUser(user), avatarUrl });
+      return ok(res, { user: sanitizeUser(user), avatarUrl });
     } catch (error) { next(error); }
   }
 };
