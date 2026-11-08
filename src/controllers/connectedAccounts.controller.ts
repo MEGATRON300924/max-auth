@@ -5,6 +5,14 @@ import { ok } from "../utils/response";
 import { env } from "../config/env";
 
 export const connectedAccountsController = {
+  async identity(req: Request, res: Response, next: NextFunction) {
+    try {
+      const accounts = await connectedAccountsService.listIdentity(req.user!.sub);
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { accounts });
+    } catch (err) { next(err); }
+  },
+
   async list(req: Request, res: Response, next: NextFunction) {
     try {
       const accounts = await connectedAccountsService.list(req.user!.sub);
