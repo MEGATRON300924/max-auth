@@ -124,6 +124,14 @@ async function spotifyRequest(url: string, options: RequestInit): Promise<any> {
 }
 
 export const connectedAccountsService = {
+  listIdentity(userId: string) {
+    return prisma.connectedAccount.findMany({
+      where: { userId },
+      select: { provider: true, providerAccountId: true, linkedAt: true, updatedAt: true },
+      orderBy: { provider: "asc" },
+    });
+  },
+
   list(userId: string) {
     return prisma.connectedAccount.findMany({
       where: { userId },
