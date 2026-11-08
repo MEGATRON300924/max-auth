@@ -4,7 +4,7 @@ import { AppError } from "../utils/AppError";
 
 function config() {
   if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_KEY || !env.CLOUDINARY_API_SECRET) {
-    throw AppError.serviceUnavailable("Profile image uploads are temporarily unavailable.");
+    throw new AppError("Profile image uploads are temporarily unavailable.", 503, "UPLOADS_NOT_CONFIGURED");
   }
   return { cloudName: env.CLOUDINARY_CLOUD_NAME, apiKey: env.CLOUDINARY_API_KEY, apiSecret: env.CLOUDINARY_API_SECRET };
 }
