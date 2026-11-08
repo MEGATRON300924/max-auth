@@ -21,6 +21,7 @@ router.get("/instagram/callback", instagramController.callback);
 router.get("/tiktok/callback", tiktokController.callback);
 
 router.use(authenticate);
+router.get("/identity", connectedAccountsController.identity);
 
 router.get("/google/calendar", connectedAccountsController.googleCalendarList);
 router.get("/google/calendar/events", connectedAccountsController.googleCalendarEvents);
