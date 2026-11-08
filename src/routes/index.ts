@@ -12,11 +12,13 @@ import healthRoutes from "./health.routes";
 import internalRoutes from "./internal.routes";
 import businessRoutes from "./business.routes";
 import familyRoutes from "./family.routes";
+import avatarRoutes from "./avatar.routes";
 
 const router = Router();
 
 router.use("/auth", authRoutes);
 router.use("/profile", profileRoutes);
+router.use("/profile/avatar", avatarRoutes);
 router.use("/devices", deviceRoutes);
 router.use("/security", securityRoutes);
 router.use("/mfa", mfaRoutes);
