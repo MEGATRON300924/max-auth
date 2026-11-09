@@ -37,7 +37,7 @@ export const cloudinaryService = {
     const safeEntityId = entityPublicId.trim();
     if (!/^MX-[A-Z0-9-]{4,64}$/i.test(safeEntityId)) throw AppError.badRequest("Invalid Spotlight entity identifier.");
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const folder = "max-spotlight/" + safeEntityId;
+    const folder = "max-spotlight/" + safeEntityId + "/" + userId;
     const publicId = "image-" + crypto.randomBytes(10).toString("hex");
     const params = { folder, overwrite: "false", public_id: publicId, timestamp };
     return {
