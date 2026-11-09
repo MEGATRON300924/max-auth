@@ -7,7 +7,7 @@ import { env } from "../config/env";
 import jwt from "jsonwebtoken";
 import { createHmac, timingSafeEqual } from "crypto";
 
-export const MAX_OAUTH_SCOPES = ["openid", "profile", "email", "offline_access", "profile:read", "profile:write", "email:read", "account:read", "identity:read", "memory:read", "developer:manage", "business:read", "business:manage", "business:members:read", "business:members:manage", "business:apps:manage"];
+export const MAX_OAUTH_SCOPES = ["openid", "profile", "email", "offline_access", "profile:read", "profile:write", "email:read", "account:read", "identity:read", "memory:read", "connected-apps:read", "developer:manage", "business:read", "business:manage", "business:members:read", "business:members:manage", "business:apps:manage"];
 const DEFAULT_SCOPES = ["openid", "profile", "email"];
 const expiry = (minutes: number) => new Date(Date.now() + minutes * 60 * 1000);
 const days = (value: number) => new Date(Date.now() + value * 24 * 60 * 60 * 1000);
