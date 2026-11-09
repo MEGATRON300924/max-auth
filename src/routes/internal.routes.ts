@@ -28,7 +28,7 @@ function authenticateMaxServiceToken(req: import("express").Request, res: import
 router.get("/identity/discord/:providerAccountId", authenticateMaxServiceToken, async (req, res, next) => {
   try {
     const providerAccountId = String(req.params.providerAccountId || "").trim();
-    if (!/^\\d{17,20}$/.test(providerAccountId)) {
+    if (!/^\d{17,20}$/.test(providerAccountId)) {
       return res.status(400).json({ success: false, error: { code: "INVALID_DISCORD_ID", message: "A valid Discord account ID is required." } });
     }
     const account = await prisma.connectedAccount.findUnique({
