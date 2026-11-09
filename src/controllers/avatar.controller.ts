@@ -10,6 +10,12 @@ export const avatarController = {
       return ok(res, cloudinaryService.createAvatarUpload(req.user!.sub));
     } catch (error) { next(error); }
   },
+  signSpotlightUpload(req: Request, res: Response, next: NextFunction) {
+    try {
+      const entityPublicId = String(req.body?.entityPublicId || "");
+      return ok(res, cloudinaryService.createSpotlightUpload(req.user!.sub, entityPublicId));
+    } catch (error) { next(error); }
+  },
   async completeUpload(req: Request, res: Response, next: NextFunction) {
     try {
       const publicId = String(req.body?.publicId || "");
