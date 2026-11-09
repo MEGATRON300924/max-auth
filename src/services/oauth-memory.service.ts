@@ -21,7 +21,7 @@ export const oauthMemoryService = {
   async getAuthorizedMemory(accessToken: string) {
     if (!accessToken) throw new AppError("Invalid OAuth access token", 401, "INVALID_TOKEN");
 
-    const backendBase = env.MAX_AI_BACKEND_URL.replace(/\\/+$/, "").replace(/\\/api\\/v1$/i, "");
+    const backendBase = env.MAX_AI_BACKEND_URL.replace(/\/+$/, "").replace(/\/api\/v1$/i, "");
     const memoryUrl = `${backendBase}/api/v1/memory/oauth`;
     let response: Response | undefined;
 
