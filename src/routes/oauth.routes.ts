@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { oauthController } from "../controllers/oauth.controller";
+import { oauthConnectedAppsController } from "../controllers/oauth-connected-apps.controller";
 import { oauthClientConfigController } from "../controllers/oauth-client-config.controller";
 import { oauthClientLogoController } from "../controllers/oauth-client-logo.controller";
 import { oauthManifestController } from "../controllers/oauth-manifest.controller";
@@ -44,4 +45,5 @@ router.get("/introspect", oauthController.introspect);
 router.post("/introspect", oauthController.introspect);
 router.get("/userinfo", oauthController.userinfo);
 router.get("/memory", oauthController.memory);
+router.get("/connected-apps", oauthConnectedAppsController.list);
 export default router;
