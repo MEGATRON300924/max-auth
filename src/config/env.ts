@@ -15,7 +15,7 @@ const cookieDomain = configuredCookieDomain && !(configuredCookieDomain === "loc
 
 export const env = {
   NODE_ENV: optional("NODE_ENV", "development"), PORT: parseInt(optional("PORT", "4000"), 10), APP_NAME: optional("APP_NAME", "MAX Auth"), APP_URL: appUrl, FRONTEND_URL: optional("FRONTEND_URL", "http://localhost:3000"),
-  MAX_AI_BACKEND_URL: optional("MAX_AI_BACKEND_URL", "https://api.max-ai.name.ng"),
+  MAX_AI_BACKEND_URL: optional("MAX_AI_BACKEND_URL", "https://max-backend-z0ee.onrender.com"),
   MAX_AUTH_SERVICE_TOKEN: optional("MAX_AUTH_SERVICE_TOKEN", ""),
   CLOUDINARY_CLOUD_NAME: optional("CLOUDINARY_CLOUD_NAME", ""),
   CLOUDINARY_API_KEY: optional("CLOUDINARY_API_KEY", ""),
