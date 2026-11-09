@@ -49,7 +49,7 @@ export const oauthService = {
       const notAllowedScopes = request.scopes.filter((scope) =>
         !client.scopes.includes(scope) &&
         !(isDeveloperPortalClient(client.clientId) && scope === DEVELOPER_MANAGEMENT_SCOPE) &&
-        !(client.clientId === MAX_CHAT_CLIENT_ID && ["profile:write", "memory:read", "connected-apps:read"].includes(scope))
+        !(client.clientId === MAX_CHAT_CLIENT_ID && ["profile:write", "memory:read", "memory:write", "connected-apps:read"].includes(scope))
       );
       throw AppError.badRequest("Authorization request permissions have changed", "INVALID_SCOPE", { notAllowedScopes });
     } let businessContext: { businessId: string; displayName: string } | null = null; if (request.businessId) { const business = await prisma.business.findUnique({ where: { id: request.businessId }, select: { businessId: true, displayName: true, status: true, verificationStatus: true } }); if (!business || business.status !== "ACTIVE" || business.verificationStatus !== "VERIFIED" || business.businessId !== request.businessPublicId) throw AppError.badRequest("The requested business is unavailable", "BUSINESS_NOT_AVAILABLE"); businessContext = { businessId: business.businessId, displayName: business.displayName }; } return { clientId: client.clientId, clientName: request.clientName, clientLogo: request.clientLogo, clientWebsite: request.clientWebsite, redirectUri: request.redirectUri, scopes, ...(businessContext ? { businessId: businessContext.businessId, businessName: businessContext.displayName } : {}), codeChallenge: request.codeChallenge, codeChallengeMethod: request.codeChallengeMethod, state: request.state, expiresAt: request.exp }; },
