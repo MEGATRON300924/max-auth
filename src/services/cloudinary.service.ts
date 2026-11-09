@@ -32,6 +32,27 @@ export const cloudinaryService = {
       allowedFormats: ["jpg", "jpeg", "png", "webp", "avif"]
     };
   },
+  createSpotlightUpload(userId: string, entityPublicId: string) {
+    const c = config();
+    const safeEntityId = entityPublicId.trim();
+    if (!/^MX-[A-Z0-9-]{4,64}$/i.test(safeEntityId)) throw AppError.badRequest("Invalid Spotlight entity identifier.");
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const folder = "max-spotlight/" + safeEntityId;
+    const publicId = "image-" + crypto.randomBytes(10).toString("hex");
+    const params = { folder, overwrite: "false", public_id: publicId, timestamp };
+    return {
+      cloudName: c.cloudName,
+      apiKey: c.apiKey,
+      uploadUrl: "https://api.cloudinary.com/v1_1/" + c.cloudName + "/image/upload",
+      folder,
+      publicId,
+      signature: signature(params, c.apiSecret),
+      timestamp: Number(timestamp),
+      uploadParams: params,
+      maxBytes: 10 * 1024 * 1024,
+      allowedFormats: ["jpg", "jpeg", "png", "webp", "avif"]
+    };
+  },
   getAvatarUrl(userId: string, publicId: string) {
     const c = config();
     if (publicId !== "max-auth/avatars/" + userId + "/profile") {
