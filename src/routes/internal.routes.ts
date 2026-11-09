@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { z } from "zod";
 import { prisma } from "../database/prisma";
 import { ok } from "../utils/response";
@@ -11,6 +12,49 @@ import { env } from "../config/env";
 import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
 
 const router = Router();
+
+// Trusted service-only identity lookup for external MAX channels (for example Discord).
+function authenticateMaxServiceToken(req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) {
+  const supplied = req.header("x-max-auth-service-token") || "";
+  const expected = env.MAX_AUTH_SERVICE_TOKEN || "";
+  const left = Buffer.from(supplied);
+  const right = Buffer.from(expected);
+  if (!expected || left.length !== right.length || !crypto.timingSafeEqual(left, right)) {
+    return res.status(401).json({ success: false, error: { code: "SERVICE_UNAUTHORIZED", message: "Invalid MAX service authorization." } });
+  }
+  next();
+}
+
+router.get("/identity/discord/:providerAccountId", authenticateMaxServiceToken, async (req, res, next) => {
+  try {
+    const providerAccountId = String(req.params.providerAccountId || "").trim();
+    if (!/^\\d{17,20}$/.test(providerAccountId)) {
+      return res.status(400).json({ success: false, error: { code: "INVALID_DISCORD_ID", message: "A valid Discord account ID is required." } });
+    }
+    const account = await prisma.connectedAccount.findUnique({
+      where: { provider_providerAccountId: { provider: "DISCORD", providerAccountId } },
+      select: {
+        user: { select: { id: true, username: true, displayName: true, avatarUrl: true, status: true } }
+      }
+    });
+    if (!account || account.user.status !== "ACTIVE") {
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, { matched: false, provider: "DISCORD", identityVerified: false });
+    }
+    res.setHeader("Cache-Control", "no-store");
+    return ok(res, {
+      matched: true,
+      provider: "DISCORD",
+      identityVerified: true,
+      identity: {
+        maxUserId: account.user.id,
+        username: account.user.username,
+        displayName: account.user.displayName?.trim() || account.user.username,
+        avatarUrl: account.user.avatarUrl
+      }
+    });
+  } catch (error) { next(error); }
+});
 
 router.use("/users/:userId", authenticateMaxService);
 
