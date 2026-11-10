@@ -39,7 +39,7 @@ export const oauthMemoryService = {
       // MAX Auth and MAX Backend share the same Supabase database. Read the
       // memory schema directly so OAuth userinfo does not depend on a second
       // public HTTP request to the Render backend service.
-      const rows = await prisma.$queryRaw<MemoryRow[]>\`
+      const rows = await prisma.$queryRaw<MemoryRow[]>`
         SELECT
           m.id::text AS id,
           m.type::text AS type,
@@ -59,7 +59,7 @@ export const oauthMemoryService = {
           AND (m.expires_at IS NULL OR m.expires_at > NOW())
         ORDER BY m.updated_at DESC
         LIMIT 500
-      \`;
+      `;
 
       const memories: MemoryItem[] = [];
       for (const row of rows) {
