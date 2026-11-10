@@ -35,7 +35,6 @@ export const oauthMemoryService = {
             Accept: "application/json",
             Authorization: `Bearer ${accessToken}`,
           },
-          cache: "no-store",
           signal: AbortSignal.timeout(15000),
         });
         if (response.ok || ![502, 503, 504].includes(response.status) || attempt === 2) break;
