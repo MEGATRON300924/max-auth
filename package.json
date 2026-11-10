@@ -58,5 +58,9 @@
     "tsx": "^4.16.5",
     "typescript": "^5.5.4",
     "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "glob": "^14.0.4",
+    "minimatch": "^11.0.1"
   }
 }
