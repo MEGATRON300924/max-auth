@@ -25,7 +25,7 @@ export const revokeSessionSchema = z.object({
 export const updateAIProfileSchema = z.object({
   body: z.object({
     interests: z.array(z.string()).max(50).optional(),
-    preferences: z.record(z.any()).optional(),
+    preferences: z.record(z.string(), z.any()).optional(),
     languages: z.array(z.string()).max(10).optional(),
     connectedServices: z.array(z.string()).max(20).optional(),
   }),
@@ -33,7 +33,7 @@ export const updateAIProfileSchema = z.object({
 
 export const paginationSchema = z.object({
   query: z.object({
-    page: z.string().regex(/^\d+$/).optional(),
-    limit: z.string().regex(/^\d+$/).optional(),
+    page: z.string().regex(/^\\d+$/).optional(),
+    limit: z.string().regex(/^\\d+$/).optional(),
   }),
 });
