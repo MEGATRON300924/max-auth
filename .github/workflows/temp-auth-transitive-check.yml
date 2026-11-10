@@ -1,0 +1,47 @@
+name: Temporary auth transitive dependency compatibility check
+
+on:
+  push:
+    branches:
+      - feat/github-app-user-access
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test patched glob and minimatch overrides
+        run: |
+          set -e
+          npm pkg set 'overrides.glob=^14.0.4' 'overrides.minimatch=^11.0.1'
+          npm install
+          npx prisma generate
+          npm run build
+          npm test
+          npm audit
+      - name: Commit only after zero-vulnerability validation
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git rm .github/workflows/temp-auth-transitive-check.yml
+          git commit -m "fix: patch auth glob and minimatch dependencies"
+          git push origin HEAD:${{ github.ref_name }}
+      - name: Remove temporary workflow after failed validation
+        if: failure()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/temp-auth-transitive-check.yml || true
+          git commit -m "chore: remove temporary auth transitive check" || true
+          git push origin HEAD:${{ github.ref_name }} || true
