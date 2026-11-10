@@ -1,7 +1,7 @@
-// Runs before any test file is imported (see jest.config.js -> setupFiles).
+// Runs before any test file is imported (see vitest.config.ts -> setupFiles).
 // config/env.ts throws at import time if required vars are missing, and
 // several security/service modules import env transitively — so these
-// dummy values must be in place before Jest loads any test file.
+// dummy values must be in place before Vitest loads any test file.
 
 process.env.NODE_ENV = process.env.NODE_ENV || "test";
 process.env.DATABASE_URL =
