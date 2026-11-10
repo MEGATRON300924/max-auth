@@ -16,7 +16,7 @@ function appConfig() {
   if (!env.GITHUB_APP_ID || !env.GITHUB_APP_SLUG || !env.GITHUB_APP_PRIVATE_KEY) {
     throw new AppError("MAX GitHub App installation is not configured yet", 503, "SERVICE_UNAVAILABLE");
   }
-  return { appId: env.GITHUB_APP_ID, slug: env.GITHUB_APP_SLUG, privateKey: env.GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, "\n") };
+  return { appId: env.GITHUB_APP_ID, slug: env.GITHUB_APP_SLUG, privateKey: env.GITHUB_APP_PRIVATE_KEY.split(String.fromCharCode(92) + "n").join(String.fromCharCode(10)) };
 }
 function appJwt() {
   const { appId, privateKey } = appConfig();
