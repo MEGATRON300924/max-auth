@@ -159,6 +159,7 @@ model User {
   recoveryCodes       RecoveryCode[]
   passkeys            Passkey[]
   connectedAccounts   ConnectedAccount[]
+  githubAppInstallations GitHubAppInstallation[]
   oauthIntegrationStates OAuthIntegrationState[]
   aiProfile           AIProfile?
   oauthAuthCodes      OAuthAuthorizationCode[]
@@ -178,6 +179,22 @@ model User {
   @@index([username])
   @@index([status])
   @@map("users")
+}
+
+model GitHubAppInstallation {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @db.Uuid
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installationId      String   @unique @map("installation_id")
+  accountLogin        String   @map("account_login")
+  accountType         String   @map("account_type")
+  repositorySelection String   @map("repository_selection")
+  permissions         Json?
+  suspendedAt         DateTime? @map("suspended_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  @@index([userId])
+  @@map("github_app_installations")
 }
 
 model Session {

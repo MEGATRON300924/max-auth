@@ -67,6 +67,26 @@ const internalEmailSchema = z.object({
 
 router.get("/users/:userId/spotlight-entity-access", spotlightReviewAccessController.servicePermission);
 
+// Installation metadata for trusted MAX services. No GitHub credentials are exposed.
+router.get("/users/:userId/github/installations", async (req, res, next) => {
+  try {
+    const userId = z.string().uuid().parse(req.params.userId);
+    const installations = await prisma.gitHubAppInstallation.findMany({
+      where: { userId, suspendedAt: null },
+      select: {
+        installationId: true,
+        accountLogin: true,
+        accountType: true,
+        repositorySelection: true,
+        permissions: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    res.setHeader("Cache-Control", "no-store");
+    return ok(res, { installations });
+  } catch (error) { next(error); }
+});
+
 router.get("/users/:userId/lookup/username/:username", async (req, res, next) => {
   try {
     const username = String(req.params.username || "").trim();
