@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { oauthService, MAX_OAUTH_SCOPES } from "../services/oauth.service";
 import { oauthClientConfigService } from "../services/oauth-client-config.service";
 import { oauthMemoryService } from "../services/oauth-memory.service";
+import { businessService } from "../services/business.service";
 import { ok } from "../utils/response";
 import { AppError } from "../utils/AppError";
 import { env } from "../config/env";
@@ -129,6 +130,26 @@ export const oauthController = {
   async token(req: Request, res: Response, next: NextFunction) { try { noStore(res); const body = req.body || {}; const credentials = clientCredentials(req); if (body.grant_type === "authorization_code") return res.json(await oauthService.exchangeCode({ code: body.code, clientId: credentials.clientId, redirectUri: body.redirect_uri, codeVerifier: body.code_verifier, clientSecret: credentials.clientSecret })); if (body.grant_type === "refresh_token") return res.json(await oauthService.refreshAccessToken(body.refresh_token, credentials.clientId, credentials.clientSecret)); throw AppError.badRequest("Unsupported grant type", "UNSUPPORTED_GRANT_TYPE"); } catch (err) { next(err); } },
   async revoke(req: Request, res: Response, next: NextFunction) { try { noStore(res); const credentials = clientCredentials(req); await oauthService.revokeToken(req.body?.token, credentials.clientId, credentials.clientSecret); return res.status(200).json({}); } catch (err) { next(err); } },
   async introspect(req: Request, res: Response, next: NextFunction) { try { noStore(res); requireInternalService(req); return res.json(await oauthService.introspect(bearer(req) || String(req.body?.token || ""))); } catch (err) { next(err); } },
+  async businesses(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const header = req.header("authorization") || "";
+      const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+      if (!token) throw AppError.unauthorized("A MAX Account access token is required", "INVALID_TOKEN");
+      const result = await oauthService.introspect(token);
+      if (!result.active || !result.user || !result.scopes?.includes("openid")) throw AppError.unauthorized("This MAX Account session is inactive", "INVALID_TOKEN");
+      const businesses = (await businessService.listForUser(result.user.id))
+        .filter((business) => business.verificationStatus === "VERIFIED" && Boolean(business.emailVerifiedAt))
+        .map((business) => ({
+          businessId: business.businessId,
+          displayName: business.displayName,
+          role: business.role,
+          country: business.country,
+          businessType: business.businessType,
+        }));
+      return ok(res, { businesses });
+    } catch (err) { next(err); }
+  },
   async businessContext(req: Request, res: Response, next: NextFunction) {
     try {
       noStore(res);
