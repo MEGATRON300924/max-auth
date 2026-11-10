@@ -98,7 +98,7 @@ export const githubAppService = {
       update: {
         userId: state.userId, accountLogin: installation.account.login,
         accountType: installation.account.type, repositorySelection: installation.repository_selection,
-        permissions: installation.permissions ?? {},
+        permissions: (installation.permissions ?? {}) as Prisma.InputJsonValue,
         suspendedAt: installation.suspended_at ? new Date(installation.suspended_at) : null,
       },
     });
