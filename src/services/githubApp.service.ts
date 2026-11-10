@@ -64,7 +64,7 @@ export const githubAppService = {
 
   async handleInstallCallback(input: { installationId?: string; state?: string; setupAction?: string }) {
     appConfig();
-    if (!input.installationId || !/^\\d{1,20}$/.test(input.installationId) || !input.state) {
+    if (!input.installationId || !/^\d{1,20}$/.test(input.installationId) || !input.state) {
       throw new AppError("GitHub installation response was incomplete", 400, "GITHUB_APP_CALLBACK_INVALID");
     }
     const state = await prisma.oAuthIntegrationState.findUnique({ where: { stateHash: stateHash(input.state) } });
