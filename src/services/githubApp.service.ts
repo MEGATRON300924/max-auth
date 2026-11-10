@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { ConnectedProvider } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
@@ -91,7 +92,7 @@ export const githubAppService = {
         userId: state.userId, installationId: String(installation.id),
         accountLogin: installation.account.login, accountType: installation.account.type,
         repositorySelection: installation.repository_selection,
-        permissions: installation.permissions ?? {},
+        permissions: (installation.permissions ?? {}) as Prisma.InputJsonValue,
         suspendedAt: installation.suspended_at ? new Date(installation.suspended_at) : null,
       },
       update: {
