@@ -36,6 +36,31 @@ export const oauthConnectedAppsController = {
     }
   },
 
+  async youTubeCreatorResearch(req: Request, res: Response, next: NextFunction) {
+    try {
+      const context = await oauthService.introspect(bearer(req));
+      if (!context.active || !context.user) {
+        throw AppError.unauthorized("Invalid OAuth access token", "INVALID_TOKEN");
+      }
+      if (!context.scopes.includes("connected-apps:read")) {
+        throw AppError.forbidden(
+          "YouTube creator research requires the connected-apps:read permission.",
+          "INSUFFICIENT_SCOPE"
+        );
+      }
+
+      const result = await connectedAccountsService.researchYouTubeCreator(
+        context.user.id,
+        String(req.query.q || ""),
+        { maxResults: typeof req.query.maxResults === "string" ? Number(req.query.maxResults) : undefined },
+      );
+      res.setHeader("Cache-Control", "no-store");
+      return ok(res, result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async list(req: Request, res: Response, next: NextFunction) {
     try {
       const context = await oauthService.introspect(bearer(req));
