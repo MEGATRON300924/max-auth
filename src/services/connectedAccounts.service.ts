@@ -618,12 +618,23 @@ export const connectedAccountsService = {
     // Prefer an exact channel-title match; otherwise return candidates so the
     // client can avoid silently attributing another creator's uploads.
     const norm = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
-    const exact = candidates.find((candidate: any) => norm(candidate.title) === norm(normalizedQuery));
-    if (!exact) return { query: normalizedQuery, candidates, channel: null, uploads: [] };
+    const queryKey = norm(normalizedQuery);
+    const exact = candidates.find((candidate: any) => norm(candidate.title) === queryKey);
+    const closeMatch = exact || candidates.find((candidate: any) => {
+      const titleKey = norm(candidate.title);
+      return titleKey.length >= 4 && (queryKey.includes(titleKey) || titleKey.includes(queryKey));
+    });
+    // Only auto-resolve a unique close match. Ambiguous results are returned
+    // to the client for clarification instead of attributing the wrong channel.
+    const selected = exact || (candidates.filter((candidate: any) => {
+      const titleKey = norm(candidate.title);
+      return titleKey.length >= 4 && (queryKey.includes(titleKey) || titleKey.includes(queryKey));
+    }).length === 1 ? closeMatch : null);
+    if (!selected) return { query: normalizedQuery, candidates, channel: null, uploads: [] };
 
     const channelsParams = new URLSearchParams({
       part: "snippet,contentDetails",
-      id: exact.channelId,
+      id: selected.channelId,
       maxResults: "1",
     });
     const channelResponse = await this.googleApiRequest(
@@ -634,7 +645,7 @@ export const connectedAccountsService = {
     );
     const channel = channelResponse.items?.[0];
     const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads;
-    if (!uploadsPlaylistId) return { query: normalizedQuery, candidates, channel: exact, uploads: [] };
+    if (!uploadsPlaylistId) return { query: normalizedQuery, candidates, channel: selected, uploads: [] };
 
     const uploadsParams = new URLSearchParams({
       part: "snippet,contentDetails",
@@ -660,7 +671,7 @@ export const connectedAccountsService = {
       query: normalizedQuery,
       candidates,
       channel: {
-        ...exact,
+        ...selected,
         title: channel?.snippet?.title || exact.title,
         description: channel?.snippet?.description || exact.description,
         customUrl: channel?.snippet?.customUrl || null,
