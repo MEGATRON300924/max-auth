@@ -47,5 +47,6 @@ router.post("/introspect", oauthController.introspect);
 router.get("/userinfo", oauthController.userinfo);
 router.get("/memory", oauthController.memory);
 router.get("/connected-apps/youtube-music/search", oauthConnectedAppsController.youTubeMusicSearch);
+router.get("/connected-apps/youtube/creator", oauthConnectedAppsController.youTubeCreatorResearch);
 router.get("/connected-apps", oauthConnectedAppsController.list);
 export default router;
