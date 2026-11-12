@@ -1,0 +1,9 @@
+MAX AUTH INTEGRATION AUDIT — 2026-11-12
+- Created this plan.txt because no plan.txt existed at the repository root when the audit began.
+- Confirmed src/routes/connectedAccounts.routes.ts exposes authenticated YouTube channel, subscription, search, video, and YouTube Music endpoints.
+- Confirmed src/services/connectedAccounts.service.ts uses the user's stored Google OAuth token with https://www.googleapis.com/auth/youtube.readonly for YouTube search and creator research. This is appropriate for account-scoped data such as the user's own channel/subscriptions, but public creator uploads should not require a personal Google connection.
+- Confirmed the creator research service resolves a channel, reads its uploads playlist, and returns upload title, publication time, thumbnail, and video URL. However, the service uses the authenticated user's YouTube OAuth token.
+- MAX Chat's existing creator handler calls /api/v1/oauth/connected-apps/youtube/creator, but the handler is currently unreachable from the active chat flow and the active page uses the MAX backend orchestrator.
+- No MAX Auth application code changed during this audit.
+- Next: retain authenticated MAX Auth YouTube endpoints for private/account-scoped features; add or expose a public read-only creator-upload lookup that does not require Google OAuth, using a server-held YouTube Data API key or a public channel feed where appropriate. Do not expose API keys to the browser.
+- Coordinate any new endpoint with max-backend and max-chat, then test public channel lookup, account-scoped YouTube features, auth boundaries, and error handling before deployment.
