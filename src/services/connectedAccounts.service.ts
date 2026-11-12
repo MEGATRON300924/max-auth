@@ -588,6 +588,87 @@ export const connectedAccountsService = {
     return this.googleApiRequest(userId, "https://www.googleapis.com/youtube/v3", "/search?" + params.toString(), ["https://www.googleapis.com/auth/youtube.readonly"]);
   },
 
+  async researchYouTubeCreator(userId: string, query: string, options: { maxResults?: number } = {}) {
+    const normalizedQuery = query.trim().slice(0, 200);
+    if (!normalizedQuery) throw AppError.badRequest("A YouTube creator name is required", "YOUTUBE_CREATOR_QUERY_REQUIRED");
+
+    const searchParams = new URLSearchParams({
+      part: "snippet",
+      q: normalizedQuery,
+      type: "channel",
+      maxResults: String(Math.min(Math.max(options.maxResults || 5, 1), 10)),
+    });
+    const search = await this.googleApiRequest(
+      userId,
+      "https://www.googleapis.com/youtube/v3",
+      "/search?" + searchParams.toString(),
+      ["https://www.googleapis.com/auth/youtube.readonly"],
+    );
+    const candidates = (search.items || [])
+      .filter((item: any) => item?.id?.channelId)
+      .map((item: any) => ({
+        channelId: item.id.channelId,
+        title: item.snippet?.title || "Unknown channel",
+        description: item.snippet?.description || "",
+        thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url || "",
+        channelUrl: "https://www.youtube.com/channel/" + encodeURIComponent(item.id.channelId),
+      }));
+    if (!candidates.length) return { query: normalizedQuery, candidates: [], channel: null, uploads: [] };
+
+    // Prefer an exact channel-title match; otherwise return candidates so the
+    // client can avoid silently attributing another creator's uploads.
+    const norm = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+    const exact = candidates.find((candidate: any) => norm(candidate.title) === norm(normalizedQuery));
+    if (!exact) return { query: normalizedQuery, candidates, channel: null, uploads: [] };
+
+    const channelsParams = new URLSearchParams({
+      part: "snippet,contentDetails",
+      id: exact.channelId,
+      maxResults: "1",
+    });
+    const channelResponse = await this.googleApiRequest(
+      userId,
+      "https://www.googleapis.com/youtube/v3",
+      "/channels?" + channelsParams.toString(),
+      ["https://www.googleapis.com/auth/youtube.readonly"],
+    );
+    const channel = channelResponse.items?.[0];
+    const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads;
+    if (!uploadsPlaylistId) return { query: normalizedQuery, candidates, channel: exact, uploads: [] };
+
+    const uploadsParams = new URLSearchParams({
+      part: "snippet,contentDetails",
+      playlistId: uploadsPlaylistId,
+      maxResults: String(Math.min(Math.max(options.maxResults || 5, 1), 10)),
+    });
+    const uploadsResponse = await this.googleApiRequest(
+      userId,
+      "https://www.googleapis.com/youtube/v3",
+      "/playlistItems?" + uploadsParams.toString(),
+      ["https://www.googleapis.com/auth/youtube.readonly"],
+    );
+    const uploads = (uploadsResponse.items || []).map((item: any) => ({
+      videoId: item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || "",
+      title: item.snippet?.title || "Untitled video",
+      description: item.snippet?.description || "",
+      publishedAt: item.contentDetails?.videoPublishedAt || item.snippet?.publishedAt || null,
+      thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
+      videoUrl: item.contentDetails?.videoId ? "https://www.youtube.com/watch?v=" + encodeURIComponent(item.contentDetails.videoId) : "",
+    })).filter((item: any) => /^[A-Za-z0-9_-]{11}$/.test(item.videoId));
+
+    return {
+      query: normalizedQuery,
+      candidates,
+      channel: {
+        ...exact,
+        title: channel?.snippet?.title || exact.title,
+        description: channel?.snippet?.description || exact.description,
+        customUrl: channel?.snippet?.customUrl || null,
+      },
+      uploads,
+    };
+  },
+
   async listYouTubeMusicPlaylists(userId: string, options: { maxResults?: number; pageToken?: string } = {}) {
     const params = new URLSearchParams({
       part: "snippet,contentDetails,status",
