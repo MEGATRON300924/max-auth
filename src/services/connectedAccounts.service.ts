@@ -672,8 +672,8 @@ export const connectedAccountsService = {
       candidates,
       channel: {
         ...selected,
-        title: channel?.snippet?.title || exact.title,
-        description: channel?.snippet?.description || exact.description,
+        title: channel?.snippet?.title || selected.title,
+        description: channel?.snippet?.description || selected.description,
         customUrl: channel?.snippet?.customUrl || null,
       },
       uploads,
