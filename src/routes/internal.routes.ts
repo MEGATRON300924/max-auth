@@ -10,6 +10,7 @@ import { internalSpotifyController } from "../controllers/internalSpotify.contro
 import { mailService } from "../services/mail.service";
 import { env } from "../config/env";
 import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
+import { verifyAccessToken } from "../security/jwt";
 
 const router = Router();
 
@@ -70,7 +71,6 @@ router.post("/users/:userId/mfa/step-up/consume", async (req, res, next) => {
   const parsed = sensitiveActionConsumeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: "INVALID_STEP_UP_PROOF", message: "A valid step-up proof and action context are required." } });
   try {
-    const { verifyAccessToken } = await import("../security/jwt");
     const access = verifyAccessToken(parsed.data.accessToken);
     if (access.sub !== req.params.userId) {
       return res.status(401).json({ success: false, error: { code: "STEP_UP_IDENTITY_MISMATCH", message: "The step-up proof does not belong to this MAX Auth account." } });
