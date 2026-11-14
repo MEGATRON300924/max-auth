@@ -11,6 +11,16 @@ function noStore(res: Response) {
 }
 
 export const mfaController = {
+  async issueSensitiveActionProof(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const result = await mfaService.issueSensitiveActionProof(
+        req.user!.sub, req.user!.sessionId, req.body.password, req.body.code,
+        req.body.action, req.body.homeId, req.body.resourceId, getRequestContext(req)
+      );
+      return ok(res, result);
+    } catch (err) { next(err); }
+  },
   async status(req: Request, res: Response, next: NextFunction) {
     try { noStore(res); return ok(res, await mfaService.status(req.user!.sub)); } catch (err) { next(err); }
   },
