@@ -13,6 +13,8 @@ import internalRoutes from "./internal.routes";
 import businessRoutes from "./business.routes";
 import familyRoutes from "./family.routes";
 import avatarRoutes from "./avatar.routes";
+import statusRoutes from "./status.routes";
+import adminStatusRoutes from "./adminStatus.routes";
 
 const router = Router();
 
@@ -25,6 +27,8 @@ router.use("/mfa", mfaRoutes);
 router.use("/connected-accounts", connectedAccountsRoutes);
 router.use("/oauth", oauthRoutes);
 router.use("/webhooks", webhookRoutes);
+router.use("/status", statusRoutes);
+router.use("/admin/status", adminStatusRoutes);
 router.use("/admin", adminRoutes);
 router.use("/health", healthRoutes);
 router.use("/internal", internalRoutes);
