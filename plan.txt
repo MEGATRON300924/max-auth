@@ -55,3 +55,11 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 ### Migration consistency fix (2026-11-14)
 - Aligned the SQL defaults for the system_status primary key and updated_at column with the Prisma model: id defaults to global, while updated_at is populated by Prisma @updatedAt or explicitly in the seed row.
 - Migration correction commit: 60c439e5026bf93a7be277c5c246400d967728c5.
+
+
+### Merge and release update (2026-11-14)
+- PR #30 was squash-merged after the user said to continue: https://github.com/MEGATRON300924/max-auth/pull/30.
+- Merge commit: 11d4d6e55acf2e485d02e501b6cb0d4c7af0d304.
+- GitHub CI run #505: Prisma client generation, TypeScript build, security tests, and critical dependency vulnerability check passed; production dependency high-risk advisory check failed. This change does not modify package manifests or lockfiles.
+- Render auto-deploy was observed starting for the merge commit: deploy dep-dbsdf7k9v7es73bqtibg. Build/deploy and migration application are still pending at this checkpoint.
+- Live status API, admin CRUD, persistence-after-restart, and direct verification of the zionopaaje isAdmin row remain pending.
