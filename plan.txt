@@ -51,3 +51,7 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 - The current Render max-auth service is still on main commit 0a0a302c2d5b6fd5a304a354f4b44789217a3a11. Render startup logs on 2026-11-12 show Prisma migrations starting and then reporting migrations up to date.
 - The existing founder-admin grant migration is already present on main and is included in the applied migration history. A direct query of the users row was not performed in this session.
 - The new system_status migration and endpoints are in PR #30 and are not yet deployed.
+
+### Migration consistency fix (2026-11-14)
+- Aligned the SQL defaults for the system_status primary key and updated_at column with the Prisma model: id defaults to global, while updated_at is populated by Prisma @updatedAt or explicitly in the seed row.
+- Migration correction commit: 60c439e5026bf93a7be277c5c246400d967728c5.
