@@ -66,7 +66,7 @@ Cookie-based routes (`/auth/refresh`, `/auth/logout`) additionally require an
 | GET | `/mfa` | Read MFA status |
 | POST | `/mfa/step-up` | Verify password plus TOTP/recovery code and issue a single-use, 90-second proof bound to one home, resource, action and current MAX Auth session |
 
-`POST /mfa/step-up` body: `{ password, code, action, homeId, resourceId }`. Supported actions: `door.unlock`, `garage.open`, `alarm.disarm`, `camera.view`. MFA must already be enabled. Treat the returned proof as a secret.
+`POST /mfa/step-up` body: `{ password, code, action, homeId, resourceId }`. Supported actions: `door.unlock`, `garage.open`, `alarm.arm`, `alarm.disarm`, `camera.view`. MFA must already be enabled. Treat the returned proof as a secret.
 
 The trusted MAX Home backend consumes a proof through `POST /internal/users/:userId/mfa/step-up/consume`, using the MAX Auth service token, matching `x-max-user-id`, the original current MAX Auth access token, and the exact proof/action/home/resource tuple. Proofs expire after 90 seconds, are session-bound, and can be consumed once. A mismatched, expired, invalid-session or previously consumed proof is rejected.
 

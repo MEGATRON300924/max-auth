@@ -10,7 +10,7 @@ export const mfaStepUpSchema = z.object({
   body: z.object({
     password,
     code,
-    action: z.enum(["door.unlock", "garage.open", "alarm.disarm", "camera.view"]),
+    action: z.enum(["door.unlock", "garage.open", "alarm.arm", "alarm.disarm", "camera.view"]),
     homeId: z.string().uuid(),
     resourceId: z.string().uuid()
   }).strict()

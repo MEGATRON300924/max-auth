@@ -21,3 +21,10 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - GitHub Actions run 43638260732 passed Prisma client generation, TypeScript build, security tests and the critical-dependency check.
 - The final production dependency audit gate failed on existing dependency advisories: body-parser (high) and zod (high), plus moderate fast-uri/glob/minimatch/qs advisories. This is a dependency-security backlog, not a TypeScript or step-up implementation failure. No forced major-version dependency upgrades were applied.
 - Pull request #29 remains open; migration for sensitive_action_proofs has not been applied to production.
+
+
+2026-11-14 integration update:
+- Extended the MAX Auth step-up issue and consume action allowlists to include alarm.arm, matching the MAX Home permission model.
+- MAX Home verifies household role and explicit per-device grants before consuming these proofs. Its integration remains verification-only; no device command is executed.
+- PR #29 remains draft pending CI and resolution of the production dependency audit gate (high body-parser/zod advisories and moderate fast-uri/glob/minimatch/qs advisories).
+- No production migration has been applied.

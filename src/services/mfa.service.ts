@@ -202,7 +202,7 @@ export const mfaService = {
 
   async issueSensitiveActionProof(
     userId: string, sessionId: string, password: string, code: string,
-    action: "door.unlock" | "garage.open" | "alarm.disarm" | "camera.view",
+    action: "door.unlock" | "garage.open" | "alarm.arm" | "alarm.disarm" | "camera.view",
     homeId: string, resourceId: string,
     ctx: { ipAddress?: string; userAgent?: string }
   ) {

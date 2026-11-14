@@ -62,7 +62,7 @@ router.use("/users/:userId", authenticateMaxService);
 
 const sensitiveActionConsumeSchema = z.object({
   proof: z.string().min(32).max(256),
-  action: z.enum(["door.unlock", "garage.open", "alarm.disarm", "camera.view"]),
+  action: z.enum(["door.unlock", "garage.open", "alarm.arm", "alarm.disarm", "camera.view"]),
   homeId: z.string().uuid(),
   resourceId: z.string().uuid(),
   accessToken: z.string().min(20).max(10000)
