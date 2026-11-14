@@ -28,3 +28,12 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - MAX Home verifies household role and explicit per-device grants before consuming these proofs. Its integration remains verification-only; no device command is executed.
 - PR #29 remains draft pending CI and resolution of the production dependency audit gate (high body-parser/zod advisories and moderate fast-uri/glob/minimatch/qs advisories).
 - No production migration has been applied.
+
+
+2026-11-14 dependency audit follow-up:
+- Latest GitHub Actions run 43643274874 completed: Prisma generation, TypeScript build, security tests and the critical-level audit passed; the production high-severity audit failed.
+- Confirmed the lockfile currently resolves body-parser 1.20.8 through Express 4.22.3; the advisory requires body-parser 1.20.9 or newer in the compatible 1.x line. This should be resolved with a normal lockfile refresh, not a forced dependency upgrade.
+- Confirmed zod is currently 3.25.76. The advisory fix reported by npm is zod 4.6.7, a major-version migration. Current code uses Zod 3 APIs/types including AnyZodObject, ZodError.errors, and the one-argument z.record(z.any()) form; these must be migrated and regression-tested before changing the major version.
+- npm audit also reports moderate advisories in fast-uri, glob/minimatch and qs. Some have compatible lockfile-only fixes; review the resulting tree and test before merging.
+- No dependency versions were changed and no audit was suppressed. PR #29 remains draft and unmerged; no production migration has been applied.
+- Next: prepare one controlled dependency-remediation batch, update the lockfile with compatible patches, migrate Zod v3 usage to v4 deliberately, then run the complete CI and production dependency audit before making the PR ready.
