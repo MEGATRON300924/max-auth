@@ -217,7 +217,7 @@ export const mfaService = {
     await prisma.sensitiveActionProof.create({
       data: { tokenHash: hashToken(rawToken), userId, sessionId, homeId, resourceId, action, expiresAt }
     });
-    await auditService.record("SECURITY_SETTING_CHANGED" as any, {
+    await auditService.record("ADMIN_ACTION", {
       userId, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent,
       metadata: { event: "SENSITIVE_HOME_ACTION_STEP_UP_ISSUED", action, homeId, resourceId }
     });
