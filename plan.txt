@@ -7,3 +7,33 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - No MAX Auth application code changed during this audit.
 - Next: retain authenticated MAX Auth YouTube endpoints for private/account-scoped features; add or expose a public read-only creator-upload lookup that does not require Google OAuth, using a server-held YouTube Data API key or a public channel feed where appropriate. Do not expose API keys to the browser.
 - Coordinate any new endpoint with max-backend and max-chat, then test public channel lookup, account-scoped YouTube features, auth boundaries, and error handling before deployment.
+
+
+2026-11-14: Sensitive home action step-up implementation started on feat/sensitive-action-step-up.
+- Added an MFA-protected step-up endpoint requiring the user's current password and an enabled MAX Auth TOTP/recovery factor.
+- Proofs are opaque, hashed at rest, short-lived (90 seconds), bound to the current MAX Auth session plus exact home/resource/action, and single-use.
+- Added a trusted MAX Home service-only consume endpoint. It checks the original current MAX Auth access token and consumes the proof atomically.
+- Added Prisma model and SQL migration for one-time proofs; no production migration has been applied.
+- This Auth change only establishes identity verification/proof issuance and consumption. MAX Home must still enforce household role and per-resource permission before any security command is queued.
+
+
+2026-11-14 validation update:
+- GitHub Actions run 43638260732 passed Prisma client generation, TypeScript build, security tests and the critical-dependency check.
+- The final production dependency audit gate failed on existing dependency advisories: body-parser (high) and zod (high), plus moderate fast-uri/glob/minimatch/qs advisories. This is a dependency-security backlog, not a TypeScript or step-up implementation failure. No forced major-version dependency upgrades were applied.
+- Pull request #29 remains open; migration for sensitive_action_proofs has not been applied to production.
+
+
+2026-11-14 integration update:
+- Extended the MAX Auth step-up issue and consume action allowlists to include alarm.arm, matching the MAX Home permission model.
+- MAX Home verifies household role and explicit per-device grants before consuming these proofs. Its integration remains verification-only; no device command is executed.
+- PR #29 remains draft pending CI and resolution of the production dependency audit gate (high body-parser/zod advisories and moderate fast-uri/glob/minimatch/qs advisories).
+- No production migration has been applied.
+
+
+2026-11-14 dependency audit follow-up:
+- Latest GitHub Actions run 43643274874 completed: Prisma generation, TypeScript build, security tests and the critical-level audit passed; the production high-severity audit failed.
+- Confirmed the lockfile currently resolves body-parser 1.20.8 through Express 4.22.3; the advisory requires body-parser 1.20.9 or newer in the compatible 1.x line. This should be resolved with a normal lockfile refresh, not a forced dependency upgrade.
+- Confirmed zod is currently 3.25.76. The advisory fix reported by npm is zod 4.6.7, a major-version migration. Current code uses Zod 3 APIs/types including AnyZodObject, ZodError.errors, and the one-argument z.record(z.any()) form; these must be migrated and regression-tested before changing the major version.
+- npm audit also reports moderate advisories in fast-uri, glob/minimatch and qs. Some have compatible lockfile-only fixes; review the resulting tree and test before merging.
+- No dependency versions were changed and no audit was suppressed. PR #29 remains draft and unmerged; no production migration has been applied.
+- Next: prepare one controlled dependency-remediation batch, update the lockfile with compatible patches, migrate Zod v3 usage to v4 deliberately, then run the complete CI and production dependency audit before making the PR ready.

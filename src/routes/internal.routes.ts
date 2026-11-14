@@ -10,6 +10,8 @@ import { internalSpotifyController } from "../controllers/internalSpotify.contro
 import { mailService } from "../services/mail.service";
 import { env } from "../config/env";
 import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
+import { verifyAccessToken } from "../security/jwt";
+import { sessionRepository } from "../repositories/session.repository";
 
 const router = Router();
 
@@ -57,6 +59,44 @@ router.get("/identity/discord/:providerAccountId", authenticateMaxServiceToken, 
 });
 
 router.use("/users/:userId", authenticateMaxService);
+
+const sensitiveActionConsumeSchema = z.object({
+  proof: z.string().min(32).max(256),
+  action: z.enum(["door.unlock", "garage.open", "alarm.arm", "alarm.disarm", "camera.view"]),
+  homeId: z.string().uuid(),
+  resourceId: z.string().uuid(),
+  accessToken: z.string().min(20).max(10000)
+}).strict();
+
+router.post("/users/:userId/mfa/step-up/consume", async (req, res, next) => {
+  const parsed = sensitiveActionConsumeSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ success: false, error: { code: "INVALID_STEP_UP_PROOF", message: "A valid step-up proof and action context are required." } });
+  try {
+    const access = verifyAccessToken(parsed.data.accessToken);
+    if (access.sub !== req.params.userId) {
+      return res.status(401).json({ success: false, error: { code: "STEP_UP_IDENTITY_MISMATCH", message: "The step-up proof does not belong to this MAX Auth account." } });
+    }
+    const session = await sessionRepository.findById(access.sessionId);
+    const now = new Date();
+    if (!session || session.isRevoked || session.expiresAt <= now || session.userId !== access.sub || session.user.status !== "ACTIVE") {
+      return res.status(401).json({ success: false, error: { code: "STEP_UP_SESSION_INVALID", message: "The MAX Auth session is no longer valid." } });
+    }
+    const consumed = await prisma.sensitiveActionProof.updateMany({
+      where: {
+        tokenHash: crypto.createHash("sha256").update(parsed.data.proof).digest("hex"),
+        userId: access.sub, sessionId: access.sessionId,
+        homeId: parsed.data.homeId, resourceId: parsed.data.resourceId,
+        action: parsed.data.action, usedAt: null, expiresAt: { gt: now }
+      },
+      data: { usedAt: now }
+    });
+    res.setHeader("Cache-Control", "no-store");
+    if (consumed.count !== 1) return res.status(403).json({ success: false, error: { code: "STEP_UP_PROOF_INVALID_OR_EXPIRED", message: "The verification proof is invalid, expired, already used, or does not match this action." } });
+    return ok(res, { verified: true, action: parsed.data.action, homeId: parsed.data.homeId, resourceId: parsed.data.resourceId, sessionId: access.sessionId });
+  } catch (error) { next(error); }
+});
+
+
 
 const internalEmailSchema = z.object({
   to: z.string().trim().email().max(255),

@@ -153,8 +153,11 @@ export const mfaService = {
       const matches = await prisma.recoveryCode.findMany({ where: { userId, usedAt: null } });
       const match = matches.find((item) => crypto.timingSafeEqual(Buffer.from(item.codeHash), Buffer.from(hashToken(normalized))));
       if (match) {
-        await prisma.recoveryCode.update({ where: { id: match.id }, data: { usedAt: new Date() } });
-        return;
+        const consumed = await prisma.recoveryCode.updateMany({
+          where: { id: match.id, usedAt: null },
+          data: { usedAt: new Date() }
+        });
+        if (consumed.count === 1) return;
       }
     }
     throw AppError.unauthorized("Invalid multi-factor authentication code", "INVALID_MFA_CODE");
@@ -195,5 +198,32 @@ export const mfaService = {
     ]);
     await auditService.record("TWO_FA_DISABLED", { userId, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent });
     return { disabled: true };
+  },
+
+  async issueSensitiveActionProof(
+    userId: string, sessionId: string, password: string, code: string,
+    action: "door.unlock" | "garage.open" | "alarm.arm" | "alarm.disarm" | "camera.view",
+    homeId: string, resourceId: string,
+    ctx: { ipAddress?: string; userAgent?: string }
+  ) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !(await verifyPassword(user.passwordHash, password))) {
+      throw AppError.unauthorized("Password verification failed", "INVALID_PASSWORD");
+    }
+    const mfaStatus = await this.status(userId);
+    if (!mfaStatus.enabled) {
+      throw AppError.forbidden("Enable MAX Auth authenticator MFA before approving sensitive home actions", "MFA_ENROLLMENT_REQUIRED");
+    }
+    await this.verifyLoginFactor(userId, code);
+    const rawToken = generateOpaqueToken(32);
+    const expiresAt = new Date(Date.now() + 90_000);
+    await prisma.sensitiveActionProof.create({
+      data: { tokenHash: hashToken(rawToken), userId, sessionId, homeId, resourceId, action, expiresAt }
+    });
+    await auditService.record("ADMIN_ACTION", {
+      userId, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent,
+      metadata: { event: "SENSITIVE_HOME_ACTION_STEP_UP_ISSUED", action, homeId, resourceId }
+    });
+    return { proof: rawToken, action, homeId, resourceId, expiresAt: expiresAt.toISOString(), singleUse: true };
   },
 };
