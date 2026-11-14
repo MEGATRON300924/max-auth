@@ -1,9 +1,9 @@
 CREATE TABLE "system_status" (
-  "id" VARCHAR(32) NOT NULL,
+  "id" VARCHAR(32) NOT NULL DEFAULT 'global',
   "status" JSONB NOT NULL,
   "updated_by" VARCHAR(100) NOT NULL DEFAULT 'The Tron Forge Limited',
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "system_status_pkey" PRIMARY KEY ("id")
 );
 
