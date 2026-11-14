@@ -44,3 +44,10 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 - Run TypeScript build and tests.
 - Deploy MAX Auth and confirm the new migration applies.
 - Verify the admin grant and status CRUD through live authenticated requests.
+
+### CI and deployment update (2026-11-14)
+- PR #30: https://github.com/MEGATRON300924/max-auth/pull/30.
+- GitHub CI run #501: Prisma client generation, TypeScript build, security tests, and critical dependency vulnerability check passed. The production dependency high-risk advisory check failed; this PR does not change package manifests or lockfiles, so no dependency changes were introduced by this work.
+- The current Render max-auth service is still on main commit 0a0a302c2d5b6fd5a304a354f4b44789217a3a11. Render startup logs on 2026-11-12 show Prisma migrations starting and then reporting migrations up to date.
+- The existing founder-admin grant migration is already present on main and is included in the applied migration history. A direct query of the users row was not performed in this session.
+- The new system_status migration and endpoints are in PR #30 and are not yet deployed.
