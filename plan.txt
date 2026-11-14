@@ -7,3 +7,40 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - No MAX Auth application code changed during this audit.
 - Next: retain authenticated MAX Auth YouTube endpoints for private/account-scoped features; add or expose a public read-only creator-upload lookup that does not require Google OAuth, using a server-held YouTube Data API key or a public channel feed where appropriate. Do not expose API keys to the browser.
 - Coordinate any new endpoint with max-backend and max-chat, then test public channel lookup, account-scoped YouTube features, auth boundaries, and error handling before deployment.
+
+
+## Current task: Persistent MAX system status and protected administration (2026-11-14)
+
+### Request
+Provide a persistent source of truth for the MAX status page and a secure administration API for changing service state and explanatory notes. The status editor is intended for the founder account zionopaaje.
+
+### Existing authorization
+- User.isAdmin already exists in the MAX Auth Prisma schema.
+- The existing migration 20261012120000_grant_admin_to_zionopaaje updates the existing zionopaaje user to isAdmin = TRUE; this grant was already present on main, so no duplicate grant migration was added.
+- requireAdmin already checks isAdmin against the database for session-token admin routes.
+
+### Implementation
+- Added the SystemStatus Prisma model and a system_status singleton row seeded with all 24 existing services and initial green states.
+- Added public read-only GET /api/v1/status.
+- Added protected GET and PUT /api/v1/admin/status.
+- Added an OAuth/session admin authenticator for the MAX website client and standard MAX Auth session tokens. It validates token activity, active account state, and database isAdmin; it does not trust browser-supplied usernames.
+- Status updates normalize the known service inventory, restrict states to green/yellow/red, cap explanation text at 1,000 characters, attribute the report to The Tron Forge Limited, and write an admin audit log.
+- The existing MAX Auth refresh cookie remains host-only; first-party sites use credentialed calls to the auth domain rather than broadening cookie domain scope.
+
+### Verification
+- Migration SQL, Prisma schema, route registration, middleware, and controller source reviewed.
+- Build, migration execution, admin identity verification against the live database, endpoint integration tests, and persistence-after-restart tests: pending.
+- Deployment: pending.
+
+### Commits
+- Prisma model: c5c4e179f070b51b7b7828e37f0af31b7d3db6f0
+- Route registration: 3c58010ea53b58e5292476d62528bd3eaae09e74
+- Migration: bdd200a35cbfc62213fdb3715105b2a4a82c1f3a
+- Controller: 7e80e118449ab731913593645e7dc2f8aaf32bd9; subsequent serialization fix: 5e8be059c9a058199eb4936bd18f348857aa32a5
+- OAuth admin middleware: f6b698e4054224274e2fb267d8b161f2db55ac47; extended to accept session tokens: 6197c6a111e517d8f7af1df649bdd5ebef56afc0
+- Public and protected routes: 21f05310bfccf7e74eaebcd1c23bb0ae645e28d6, 93419c65214012abd98ab2404dc4cf8bcab05cd1
+
+### Next steps
+- Run TypeScript build and tests.
+- Deploy MAX Auth and confirm the new migration applies.
+- Verify the admin grant and status CRUD through live authenticated requests.
