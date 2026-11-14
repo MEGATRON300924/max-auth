@@ -132,7 +132,7 @@ function serialize(record: { status: Prisma.JsonValue; updatedAt: Date; updatedB
     status: record.status,
     updatedAt: record.updatedAt.toISOString(),
     updatedBy: record.updatedBy,
-    serviceCount: Object.keys(record.status as Record<string, unknown>).length,
+    serviceCount: Object.keys(record.status && typeof record.status === "object" && !Array.isArray(record.status) ? record.status : {}).length,
   };
 }
 
