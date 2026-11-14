@@ -11,6 +11,7 @@ import { mailService } from "../services/mail.service";
 import { env } from "../config/env";
 import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
 import { verifyAccessToken } from "../security/jwt";
+import { sessionRepository } from "../repositories/session.repository";
 
 const router = Router();
 
@@ -75,7 +76,11 @@ router.post("/users/:userId/mfa/step-up/consume", async (req, res, next) => {
     if (access.sub !== req.params.userId) {
       return res.status(401).json({ success: false, error: { code: "STEP_UP_IDENTITY_MISMATCH", message: "The step-up proof does not belong to this MAX Auth account." } });
     }
+    const session = await sessionRepository.findById(access.sessionId);
     const now = new Date();
+    if (!session || session.isRevoked || session.expiresAt <= now || session.userId !== access.sub || session.user.status !== "ACTIVE") {
+      return res.status(401).json({ success: false, error: { code: "STEP_UP_SESSION_INVALID", message: "The MAX Auth session is no longer valid." } });
+    }
     const consumed = await prisma.sensitiveActionProof.updateMany({
       where: {
         tokenHash: crypto.createHash("sha256").update(parsed.data.proof).digest("hex"),
