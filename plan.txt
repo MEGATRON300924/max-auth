@@ -15,3 +15,9 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Added a trusted MAX Home service-only consume endpoint. It checks the original current MAX Auth access token and consumes the proof atomically.
 - Added Prisma model and SQL migration for one-time proofs; no production migration has been applied.
 - This Auth change only establishes identity verification/proof issuance and consumption. MAX Home must still enforce household role and per-resource permission before any security command is queued.
+
+
+2026-11-14 validation update:
+- GitHub Actions run 43638260732 passed Prisma client generation, TypeScript build, security tests and the critical-dependency check.
+- The final production dependency audit gate failed on existing dependency advisories: body-parser (high) and zod (high), plus moderate fast-uri/glob/minimatch/qs advisories. This is a dependency-security backlog, not a TypeScript or step-up implementation failure. No forced major-version dependency upgrades were applied.
+- Pull request #29 remains open; migration for sensitive_action_proofs has not been applied to production.
