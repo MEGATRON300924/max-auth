@@ -7,3 +7,11 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - No MAX Auth application code changed during this audit.
 - Next: retain authenticated MAX Auth YouTube endpoints for private/account-scoped features; add or expose a public read-only creator-upload lookup that does not require Google OAuth, using a server-held YouTube Data API key or a public channel feed where appropriate. Do not expose API keys to the browser.
 - Coordinate any new endpoint with max-backend and max-chat, then test public channel lookup, account-scoped YouTube features, auth boundaries, and error handling before deployment.
+
+
+2026-11-14: Sensitive home action step-up implementation started on feat/sensitive-action-step-up.
+- Added an MFA-protected step-up endpoint requiring the user's current password and an enabled MAX Auth TOTP/recovery factor.
+- Proofs are opaque, hashed at rest, short-lived (90 seconds), bound to the current MAX Auth session plus exact home/resource/action, and single-use.
+- Added a trusted MAX Home service-only consume endpoint. It checks the original current MAX Auth access token and consumes the proof atomically.
+- Added Prisma model and SQL migration for one-time proofs; no production migration has been applied.
+- This Auth change only establishes identity verification/proof issuance and consumption. MAX Home must still enforce household role and per-resource permission before any security command is queued.
