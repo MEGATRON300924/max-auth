@@ -624,3 +624,14 @@ model SpotlightEntityReviewer {
   @@index([grantedById])
   @@map("spotlight_entity_reviewers")
 }
+
+
+model SystemStatus {
+  id        String   @id @default("global") @db.VarChar(32)
+  status    Json
+  updatedBy String   @default("The Tron Forge Limited") @map("updated_by") @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_status")
+}
