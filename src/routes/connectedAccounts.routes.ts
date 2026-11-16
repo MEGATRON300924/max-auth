@@ -3,6 +3,7 @@ import { connectedAccountsController } from "../controllers/connectedAccounts.co
 import { discordController } from "../controllers/discord.controller";
 import { microsoftController } from "../controllers/microsoft.controller";
 import { githubController } from "../controllers/github.controller";
+import { githubAppController } from "../controllers/githubApp.controller";
 import { xController } from "../controllers/x.controller";
 import { instagramController } from "../controllers/instagram.controller";
 import { tiktokController } from "../controllers/tiktok.controller";
@@ -16,6 +17,7 @@ router.get("/google/calendar/callback", connectedAccountsController.googleCalend
 router.get("/discord/callback", discordController.callback);
 router.get("/microsoft/callback", microsoftController.callback);
 router.get("/github/callback", githubController.callback);
+router.get("/github/app/callback", githubAppController.callback);
 router.get("/x/callback", xController.callback);
 router.get("/instagram/callback", instagramController.callback);
 router.get("/tiktok/callback", tiktokController.callback);
@@ -73,6 +75,9 @@ router.post("/spotify/refresh", oauthRateLimiter, connectedAccountsController.sp
 router.get("/discord/connect", oauthRateLimiter, discordController.connect);
 router.get("/microsoft/connect", oauthRateLimiter, microsoftController.connect);
 router.get("/github/connect", oauthRateLimiter, githubController.connect);
+router.get("/github/app/install", oauthRateLimiter, githubAppController.install);
+router.get("/github/app/installations", githubAppController.list);
+router.get("/github/app/installations/:installationId/edit-access", githubAppController.editAccess);
 router.get("/x/connect", oauthRateLimiter, xController.connect);
 router.get("/instagram/connect", oauthRateLimiter, instagramController.connect);
 router.get("/tiktok/connect", oauthRateLimiter, tiktokController.connect);
