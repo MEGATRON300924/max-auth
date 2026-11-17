@@ -35,6 +35,7 @@ function isPrivateIpv6(ip: string) {
 
 async function fetchPublicManifest(url: URL): Promise<{ status: number; contentType: string; contentLength: number; text: string }> {
   if (url.protocol !== "https:") throw AppError.badRequest("Manifest must use HTTPS", "INVALID_MANIFEST_URL");
+  if (url.username || url.password) throw AppError.badRequest("Manifest URL must not contain credentials", "INVALID_MANIFEST_URL");
   const hostname = url.hostname.replace(/^\\[|\\]$/g, "");
   const addresses = net.isIP(hostname)
     ? [{ address: hostname, family: net.isIP(hostname) }]
