@@ -23,9 +23,22 @@ async function clientDatabaseId(ownerId: string, clientId: string) {
   return rows[0].id;
 }
 
-function normalizeOrigins(values: string[] = []) { return [...new Set(values.map((value) => value.trim()).filter(Boolean).map((value) => { const url = new URL(value); if (!["http:", "https:"].includes(url.protocol)) throw AppError.badRequest("Authorized sites must use HTTP or HTTPS", "INVALID_AUTHORIZED_SITE"); return `${url.protocol}//${url.host}`; }))]; }
+function normalizeOrigins(values: string[] = []) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean).map((value) => {
+    let url: URL;
+    try { url = new URL(value); } catch { throw AppError.badRequest("Authorized site must be a valid origin", "INVALID_AUTHORIZED_SITE"); }
+    if (url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+      throw AppError.badRequest("Authorized sites must be origins without credentials, paths, queries or fragments", "INVALID_AUTHORIZED_SITE");
+    }
+    if (url.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
+      throw AppError.badRequest("Production authorized sites must use HTTPS", "INVALID_AUTHORIZED_SITE");
+    }
+    if (!["http:", "https:"].includes(url.protocol)) throw AppError.badRequest("Authorized sites must use HTTP or HTTPS", "INVALID_AUTHORIZED_SITE");
+    return url.origin;
+  }))];
+}
 function normalizeFingerprints(values: string[] = []) { return [...new Set(values.map((value) => value.trim().replace(/\s+/g, "").toUpperCase()).filter(Boolean))]; }
-function normalizeHttpsUrl(value?: string, field = "URL") { if (!value?.trim()) return null; let url: URL; try { url = new URL(value.trim()); } catch { throw AppError.badRequest(`${field} must be a valid URL`, "INVALID_URL"); } if (url.protocol !== "https:") throw AppError.badRequest(`${field} must use HTTPS`, "INVALID_URL"); return url.toString(); }
+function normalizeHttpsUrl(value?: string, field = "URL") { if (!value?.trim()) return null; let url: URL; try { url = new URL(value.trim()); } catch { throw AppError.badRequest(`${field} must be a valid URL`, "INVALID_URL"); } if (url.protocol !== "https:" || url.username || url.password || url.hash) throw AppError.badRequest(`${field} must use HTTPS and must not contain credentials or fragments`, "INVALID_URL"); return url.toString(); }
 
 export const oauthClientConfigService = {
   async get(ownerId: string, clientId: string) {
