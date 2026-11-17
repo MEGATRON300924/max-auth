@@ -748,6 +748,7 @@ export const connectedAccountsService = {
   async spotifyApiRequest(userId: string, path: string, init: RequestInit = {}) {
     const requestWithToken = (accessToken: string) => fetch("https://api.spotify.com/v1" + path, {
       ...init,
+      signal: init.signal ?? AbortSignal.timeout(10_000),
       headers: { Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}), Authorization: "Bearer " + accessToken },
     });
 
