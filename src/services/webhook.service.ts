@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import dns from "node:dns/promises";
 import net from "node:net";
 import https from "node:https";
+import { env } from "../config/env";
 import { prisma } from "../database/prisma";
 
 export const WEBHOOK_EVENTS = [
@@ -74,7 +75,7 @@ async function validateUrl(rawUrl: string): Promise<{ url: string; address: stri
 }
 
 function encryptionKey() {
-  return crypto.createHash("sha256").update(process.env.WEBHOOK_ENCRYPTION_KEY || process.env.JWT_REFRESH_SECRET || "").digest();
+  return crypto.createHash("sha256").update(env.WEBHOOK_ENCRYPTION_KEY).digest();
 }
 
 function encryptSecret(secret: string) {
@@ -92,20 +93,21 @@ function decryptSecret(value: string) {
   return Buffer.concat([decipher.update(Buffer.from(encryptedRaw, "base64url")), decipher.final()]).toString("utf8");
 }
 
-function signatureFor(secret: string, timestamp: string, body: string) {
+export function signatureFor(secret: string, timestamp: string, body: string) {
   return crypto.createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
 }
 
 async function postWebhook(target: { url: string; address: string; family: 4 | 6 }, body: string, headers: Record<string, string>) {
   const url = new URL(target.url);
+  const hostname = url.hostname.replace(/^\\[|\\]$/g, "");
   return new Promise<{ status: number; body: string }>((resolve, reject) => {
     const request = https.request({
-      hostname: url.hostname,
+      hostname,
       port: url.port ? Number(url.port) : 443,
       path: `${url.pathname}${url.search}`,
       method: "POST",
       headers: { ...headers, host: url.host, "content-length": String(Buffer.byteLength(body)) },
-      servername: net.isIP(url.hostname) ? undefined : url.hostname,
+      servername: net.isIP(hostname) ? undefined : hostname,
       // Pin the connection to the exact address that passed the SSRF checks.
       // This prevents a second DNS resolution from being rebound to a private IP.
       lookup: (_hostname, _options, callback) => callback(null, target.address, target.family),
@@ -139,9 +141,9 @@ async function getOwnedEndpoint(userId: string, endpointId: string) {
 
 async function sendDelivery(endpoint: { id: string; url: string; secretHash: string; secretEncrypted?: string | null }, delivery: { id: string; eventType: string; eventId: string; body: string; attemptCount: number }) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const signingSecret = endpoint.secretEncrypted ? decryptSecret(endpoint.secretEncrypted) : endpoint.secretHash;
-  const signature = signatureFor(signingSecret, timestamp, delivery.body);
   try {
+    const signingSecret = endpoint.secretEncrypted ? decryptSecret(endpoint.secretEncrypted) : endpoint.secretHash;
+    const signature = signatureFor(signingSecret, timestamp, delivery.body);
     // Revalidate the destination immediately before every delivery so a DNS change
     // after endpoint creation/update cannot silently bypass the URL policy.
     const target = await validateUrl(endpoint.url);
