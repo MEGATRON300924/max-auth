@@ -12,3 +12,6 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Root cause: src/server.ts still invokes prisma migrate deploy through execFileAsync in production. PR #35 removed the package start-script migration invocation but did not remove this second runtime migration path.
 - Fix in progress on fix/remove-runtime-prisma-migration: remove the production migration subprocess and its child_process/util imports; MAX Auth starts app after ensuring system OAuth clients. Database migrations remain a separately controlled release operation after migration-ledger reconciliation.
 - Production database and Render environment settings have not been changed. Build, tests, CI, PR and deployment pending.
+
+- CI audit investigation, 2026-11-17: inspected failed job 134105903776. TypeScript build and all 7 tests pass; production audit fails on body-parser 1.20.8 (GHSA-27r3-jxmh-p828) and Zod 3.25.76 (GHSA-mrhx-c7xc-m3w5). Moderate findings include fast-uri, glob/minimatch, and qs.
+- Security remediation in progress on fix/remove-runtime-prisma-migration: upgrade Zod to 4.6.7 and migrate validation middleware/types and record schema to Zod 4-compatible APIs. Refresh package-lock using npm audit fix without --force so compatible transitive patches are applied. Validate with npm ci, Prisma generation, TypeScript build, tests, and production npm audit.
