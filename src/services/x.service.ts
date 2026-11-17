@@ -37,7 +37,7 @@ function random(bytes = 32) { return crypto.randomBytes(bytes).toString("base64u
 function pkceChallenge(verifier: string) { return crypto.createHash("sha256").update(verifier).digest("base64url"); }
 
 async function request(url: string, init: RequestInit = {}) {
-  const response = await fetch(url, { ...init, headers: { Accept: "application/json", ...(init.headers || {}) } });
+  const response = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(10_000), headers: { Accept: "application/json", ...(init.headers || {}) } });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) throw AppError.badRequest(body?.detail || body?.error_description || body?.title || "X request failed", "X_REQUEST_FAILED", { status: response.status });
   return body;
