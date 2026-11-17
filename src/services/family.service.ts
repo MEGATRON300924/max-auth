@@ -87,10 +87,13 @@ export const familyService = {
       if (!current || current.status !== "PENDING" || current.expiresAt <= new Date()) {
         throw AppError.badRequest("This approval request has already been handled or expired.", "PARENTAL_APPROVAL_LINK_INVALID");
       }
-      await tx.familyConsentRequest.update({
-        where: { id: current.id },
+      const claimed = await tx.familyConsentRequest.updateMany({
+        where: { id: current.id, status: "PENDING", expiresAt: { gt: new Date() } },
         data: { status: "APPROVED", approvedAt: new Date(), parentUserId: options.parentUserId ?? null }
       });
+      if (claimed.count !== 1) {
+        throw AppError.conflict("This approval request has already been handled.", "PARENTAL_APPROVAL_ALREADY_HANDLED");
+      }
       await tx.user.update({ where: { id: current.childUserId }, data: { status: "ACTIVE" } });
     });
     return { approved: true, childUserId: record.childUserId };
@@ -103,7 +106,13 @@ export const familyService = {
       throw AppError.badRequest("This approval link is invalid, expired, or already used.", "PARENTAL_APPROVAL_LINK_INVALID");
     }
     await prisma.$transaction(async (tx) => {
-      await tx.familyConsentRequest.update({ where: { id: record.id }, data: { status: "REJECTED", rejectedAt: new Date() } });
+      const claimed = await tx.familyConsentRequest.updateMany({
+        where: { id: record.id, status: "PENDING", expiresAt: { gt: new Date() } },
+        data: { status: "REJECTED", rejectedAt: new Date() }
+      });
+      if (claimed.count !== 1) {
+        throw AppError.conflict("This approval request has already been handled.", "PARENTAL_APPROVAL_ALREADY_HANDLED");
+      }
       await tx.user.update({ where: { id: record.childUserId }, data: { status: "DEACTIVATED" } });
     });
     return { declined: true };
