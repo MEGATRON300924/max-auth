@@ -7,6 +7,7 @@ import { auditService } from "../services/audit.service";
 import { getRequestContext } from "../utils/requestContext";
 import { mailService } from "../services/mail.service";
 import { BusinessVerificationStatus } from "@prisma/client";
+import { oauthService } from "../services/oauth.service";
 
 export const adminController = {
   async listUsers(req: Request, res: Response, next: NextFunction) {
@@ -163,14 +164,28 @@ export const adminController = {
 
   async updateOAuthClient(req: Request, res: Response, next: NextFunction) {
     try {
-      const client = await prisma.oAuthClient.findUnique({ where: { id: req.params.clientId }, select: { id: true, clientId: true, name: true, ownerId: true, redirectUris: true, scopes: true, isConfidential: true, isActive: true } });
+      const client = await prisma.oAuthClient.findUnique({
+        where: { id: req.params.clientId },
+        select: { id: true, clientId: true, ownerId: true },
+      });
       if (!client) throw AppError.notFound("OAuth client not found");
-      const { name, redirectUris, scopes, isConfidential } = req.body as { name?: string; redirectUris?: string[]; scopes?: string[]; isConfidential?: boolean };
-      const updated = await prisma.oAuthClient.update({ where: { id: client.id }, data: { name, redirectUris, scopes, isConfidential },
-        select: { id: true, clientId: true, name: true, ownerId: true, redirectUris: true, scopes: true, isConfidential: true, isActive: true, updatedAt: true } });
+      const { name, redirectUris, scopes, isConfidential } = req.body as {
+        name?: string; redirectUris?: string[]; scopes?: string[]; isConfidential?: boolean;
+      };
+      const updated = await oauthService.updateClientAsAdmin(client.id, { name, redirectUris, scopes, isConfidential });
       const ctx = getRequestContext(req);
-      await auditService.record("ADMIN_ACTION", { userId: req.user!.sub, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent,
-        metadata: { action: "OAUTH_CLIENT_ADMIN_UPDATED", clientDatabaseId: client.id, clientId: client.clientId, ownerId: client.ownerId, changedFields: Object.keys(req.body) } });
+      await auditService.record("ADMIN_ACTION", {
+        userId: req.user!.sub,
+        ipAddress: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+        metadata: {
+          action: "OAUTH_CLIENT_ADMIN_UPDATED",
+          clientDatabaseId: client.id,
+          clientId: client.clientId,
+          ownerId: client.ownerId,
+          changedFields: Object.keys(req.body),
+        },
+      });
       return ok(res, { client: updated });
     } catch (err) { next(err); }
   },
