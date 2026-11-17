@@ -5,6 +5,7 @@ import { userService } from "../services/user.service";
 import { notificationService } from "../services/notification.service";
 import { ok, sanitizeUser } from "../utils/response";
 import { getRequestContext } from "../utils/requestContext";
+import { clearRefreshCookie } from "../utils/authCookies";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 
@@ -24,10 +25,6 @@ function setRefreshCookie(res: Response, refreshToken: string, rememberMe = true
     ...refreshCookieOptions,
     ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 * 1000 } : {}),
   });
-}
-
-function clearRefreshCookie(res: Response) {
-  res.clearCookie(env.REFRESH_COOKIE_NAME, refreshCookieOptions);
 }
 
 function noStore(res: Response) {
