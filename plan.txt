@@ -129,3 +129,10 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 ### Next steps
 - Run CI/build and validate the OAuth consent flow.
 - After deployment, MAX Chat must reauthorize to receive an access token containing `account:read`; existing tokens do not gain new scopes automatically.
+
+
+### PR / CI checkpoint — 2026-11-17
+- PR #32 opened: https://github.com/MEGATRON300924/max-auth/pull/32 (open; not merged).
+- PR head: `8f743d16a69398a03a61975a4df5ecab8a25dab2`.
+- GitHub Actions run: `44046544247`; current status: Dependencies installing; Prisma generation, TypeScript build, security tests and dependency audits pending.
+- No production deployment performed.
