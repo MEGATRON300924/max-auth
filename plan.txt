@@ -154,3 +154,7 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 - Updated the Google callback to safely upsert the Google connected-account record using the verified Google `sub`; it rejects an account already linked to a different MAX user and stores encrypted access/refresh tokens plus the granted scopes. The existing YouTube Music callback path is unchanged.
 - Branch: `feat/google-first-link-oauth-session`. Build, tests, callback integration tests, PR and production deployment pending.
 - No credentials or OAuth client settings changed. No account merge by email; the authenticated MAX session and OAuth state determine the target MAX user.
+
+### CI verification update — 2026-11-17
+- GitHub Actions CI run `44068162078`: Prisma generation, TypeScript build, security tests and critical dependency audit passed. The production high-risk dependency audit failed because the repository currently reports 2 high and 10 moderate dependency vulnerabilities; this PR does not change package manifests or lockfiles.
+- No Google OAuth callback integration test or live authorization round-trip has been run. PR #34 remains open/unmerged; no deployment performed.
