@@ -58,15 +58,18 @@ export const deviceService = {
     return deviceRepository.trust(deviceId);
   },
 
-  async revokeDevice(userId: string, deviceId: string) {
+  async revokeDevice(userId: string, deviceId: string, currentSessionId?: string) {
     const device = await deviceRepository.findById(deviceId);
     if (!device || device.userId !== userId) {
       throw AppError.notFound("Device not found");
     }
+    const currentSession = currentSessionId ? await sessionRepository.findById(currentSessionId) : null;
+    const currentSessionRevoked = currentSession?.deviceId === deviceId;
     // Revoking a device also revokes all sessions tied to it (cascades via DB relation is SetNull,
     // so explicitly revoke sessions first).
     await sessionRepository.revokeAllForDevice(deviceId);
     await deviceRepository.remove(deviceId);
+    return { currentSessionRevoked };
   },
 
   listSessions(userId: string) {
