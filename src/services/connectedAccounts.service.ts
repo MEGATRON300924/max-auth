@@ -294,6 +294,8 @@ export const connectedAccountsService = {
 
   async googleAccessToken(userId: string, requiredScopes: string[]) {
     ensureGoogleConfigured();
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+    if (!user || user.status !== "ACTIVE") throw AppError.forbidden("This MAX Account is not active", "ACCOUNT_NOT_ACTIVE");
     const wantsYouTube = requiredScopes.includes("https://www.googleapis.com/auth/youtube.readonly");
     const account = wantsYouTube
       ? await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.YOUTUBE_MUSIC } }) || await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } })
@@ -726,6 +728,8 @@ export const connectedAccountsService = {
 
   async spotifyAccessToken(userId: string) {
     ensureConfigured();
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+    if (!user || user.status !== "ACTIVE") throw AppError.forbidden("This MAX Account is not active", "ACCOUNT_NOT_ACTIVE");
     let account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Spotify is not connected");
     if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() - Date.now() < 60_000) {
