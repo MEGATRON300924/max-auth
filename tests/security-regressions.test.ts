@@ -3,6 +3,7 @@ import { ConnectedProvider } from "@prisma/client";
 import { prisma } from "../src/database/prisma";
 import { linkConnectedAccount } from "../src/services/connectedAccountLink.service";
 import { signatureFor } from "../src/services/webhook.service";
+import { normalizeRedirectUris } from "../src/security/oauthRedirectUri";
 
 jest.mock("../src/database/prisma", () => ({
   prisma: {
@@ -79,5 +80,24 @@ describe("webhook signatures", () => {
     const expected = createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
 
     expect(signatureFor(secret, timestamp, body)).toBe(expected);
+  });
+});
+
+describe("OAuth redirect URI validation", () => {
+  it("allows HTTPS production callbacks and exact localhost development callbacks", () => {
+    expect(normalizeRedirectUris(["https://client.example/callback"])).toEqual(["https://client.example/callback"]);
+    expect(normalizeRedirectUris(["http://localhost:3000/callback"])).toEqual(["http://localhost:3000/callback"]);
+    expect(normalizeRedirectUris(["myapp://oauth/callback"])).toEqual(["myapp://oauth/callback"]);
+  });
+
+  it("rejects hostname-prefix localhost bypasses", () => {
+    expect(() => normalizeRedirectUris(["http://localhost.attacker.example/callback"])).toThrow("must use HTTPS");
+    expect(() => normalizeRedirectUris(["http://127.0.0.1.attacker.example/callback"])).toThrow("must use HTTPS");
+  });
+
+  it("rejects credentials, fragments, and dangerous redirect schemes", () => {
+    expect(() => normalizeRedirectUris(["https://user:pass@client.example/callback"])).toThrow("credentials or fragments");
+    expect(() => normalizeRedirectUris(["https://client.example/callback#token"])).toThrow("credentials or fragments");
+    expect(() => normalizeRedirectUris(["javascript:alert(1)"])).toThrow("scheme is not allowed");
   });
 });
