@@ -103,3 +103,29 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 ### Follow-up refinement
 - Tightened the concurrency grace window from 15 seconds to 5 seconds to limit the period in which a delayed replay is classified as a concurrent request.
 - Latest token-service commit: `429febc36e42c4bac54b47f49886cbebdd681337`.
+
+
+## MAX Chat Gemini account-read OAuth scope — 2026-11-17
+
+### User request
+- Allow Gemini-backed MAX Chat to access the signed-in user's MAX Auth account-device information through the backend, with explicit user-granted permission.
+
+### Changes on `feat/max-chat-account-read-scope`
+- Added `account:read` to the official MAX Chat client's special allowed-scope list in all authorization-request validation paths:
+  - initial OAuth authorization request,
+  - authorization-request inspection,
+  - authorization-code issuance.
+- The scope is already a supported MAX OAuth scope and already has the consent-screen label “Read basic account information”.
+- MAX Chat separately requests `account:read`; this server-side allowlist change ensures the official client can request it even if the stored client scope list predates the new request.
+
+### Commit
+- `08921e702ff6e9ab4a1340579203d3755ff5044d`.
+
+### Verification
+- Source review confirms all four MAX Chat special-scope allowlist checks include `account:read`.
+- TypeScript build, OAuth authorization/consent flow, token issuance and introspection with the new scope: pending.
+- No production merge or deployment performed.
+
+### Next steps
+- Run CI/build and validate the OAuth consent flow.
+- After deployment, MAX Chat must reauthorize to receive an access token containing `account:read`; existing tokens do not gain new scopes automatically.
