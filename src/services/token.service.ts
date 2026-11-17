@@ -33,14 +33,41 @@ export const tokenService = {
     const session = await sessionRepository.findByRefreshTokenHash(tokenHash);
     if (!session || session.expiresAt < new Date()) throw AppError.unauthorized("Session is no longer valid");
     if (session.isRevoked) {
-      // A previously rotated refresh token has been replayed. Treat this as
-      // token theft and invalidate every active session for the account.
+      // Separate a legitimate concurrent refresh from a delayed replay. MAX
+      // products share the host-only refresh cookie across origins, so requests
+      // from different tabs/apps cannot share an in-memory refresh promise.
+      // A just-rotated token is rejected without destroying the account's
+      // other sessions; the caller can retry with the cookie set by the winner.
+      const rotatedRecently = session.revokedAt
+        ? Date.now() - session.revokedAt.getTime() <= 5_000
+        : false;
+      if (rotatedRecently) {
+        throw AppError.conflict(
+          "This refresh token was just rotated by another request. Retry with the updated session cookie.",
+          "REFRESH_TOKEN_ROTATED",
+        );
+      }
+
+      // Reuse outside the short concurrency window remains a security event.
       await sessionRepository.revokeAllForUser(payload.sub);
       throw AppError.unauthorized("Refresh token reuse detected", "REFRESH_TOKEN_REUSE");
     }
     if (session.userId !== payload.sub || session.id !== payload.sessionId) throw AppError.unauthorized("Token/session mismatch");
     const revoked = await sessionRepository.revokeIfActive(session.id);
     if (revoked.count !== 1) {
+      // Another request may have won the conditional revoke after our initial
+      // read. Re-read the row and apply the same short concurrent-rotation rule.
+      const latestSession = await sessionRepository.findById(session.id);
+      const rotatedRecently = latestSession?.revokedAt
+        ? Date.now() - latestSession.revokedAt.getTime() <= 5_000
+        : false;
+      if (rotatedRecently) {
+        throw AppError.conflict(
+          "This refresh token was just rotated by another request. Retry with the updated session cookie.",
+          "REFRESH_TOKEN_ROTATED",
+        );
+      }
+
       await sessionRepository.revokeAllForUser(payload.sub);
       throw AppError.unauthorized("Refresh token reuse detected", "REFRESH_TOKEN_REUSE");
     }
