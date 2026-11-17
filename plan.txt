@@ -63,3 +63,32 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 - GitHub CI run #505: Prisma client generation, TypeScript build, security tests, and critical dependency vulnerability check passed; production dependency high-risk advisory check failed. This change does not modify package manifests or lockfiles.
 - Render auto-deploy was observed starting for the merge commit: deploy dep-dbsdf7k9v7es73bqtibg. Build/deploy and migration application are still pending at this checkpoint.
 - Live status API, admin CRUD, persistence-after-restart, and direct verification of the zionopaaje isAdmin row remain pending.
+
+
+## Current task: Prevent concurrent refresh-token requests from revoking MAX sessions (2026-11-17)
+
+### Root cause
+- `rotateRefreshToken` treated every already-revoked refresh session as token theft and immediately revoked all sessions for that user.
+- The MAX refresh cookie is host-only on `auth.max-ai.name.ng` and shared by first-party MAX products. Separate tabs and product origins have independent JavaScript refresh promises and can submit the same cookie concurrently.
+- A winning request rotates the token; concurrent requests then see the old session as revoked and trigger account-wide session revocation. Repeated 401/recovery attempts can then exhaust the global API rate limit.
+
+### Implementation on `fix/refresh-token-concurrency`
+- Added a 15-second concurrency grace window based on the old session's `revokedAt`.
+- A recently rotated token now returns HTTP 409 with `REFRESH_TOKEN_ROTATED`, allowing the client to retry after the winning response updates the shared cookie.
+- The conditional-update race path re-reads the session and applies the same grace rule.
+- Refresh-token reuse outside the short grace window still triggers account-wide session revocation as a security response.
+- No rate limits were increased and refresh-token reuse detection was not disabled.
+
+### Verification
+- Source review completed for both refresh race paths.
+- Build, tests, GitHub Actions and live concurrent-refresh integration test: pending.
+- No deployment or merge performed.
+
+### Commits
+- Token rotation concurrency handling: `82f021b7d3c4fe4274a59e8d5f7f91e94bb27829`.
+- Plan update: pending.
+
+### Next steps
+- Pair with the frontend refresh coordination/retry change.
+- Run CI and test concurrent refresh requests from multiple clients, normal refresh, expired tokens and delayed token replay.
+- Merge/deploy backend and frontend only after review and explicit approval.
