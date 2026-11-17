@@ -70,7 +70,7 @@ export const familyService = {
     return { childName, ageGroup: record.ageGroup, expiresAt: record.expiresAt, parentEmail: maskEmail(record.parentEmail) };
   },
 
-  async approve(rawToken: string, options: { parentUserId?: string; parentEmail?: string; guardianAttestation: boolean }) {
+  async approve(rawToken: string, options: { parentUserId?: string; guardianAttestation: boolean }) {
     if (!options.guardianAttestation) throw AppError.badRequest("Confirm that you are the child's parent or legal guardian.", "GUARDIAN_ATTESTATION_REQUIRED");
     const tokenHash = digest(rawToken);
     const record = await prisma.familyConsentRequest.findUnique({ where: { tokenHash } });
@@ -78,8 +78,16 @@ export const familyService = {
       throw AppError.badRequest("This approval link is invalid, expired, or already used.", "PARENTAL_APPROVAL_LINK_INVALID");
     }
     if (options.parentUserId) {
-      if (!options.parentEmail || options.parentEmail.trim().toLowerCase() !== record.parentEmail.toLowerCase()) {
-        throw AppError.forbidden("Sign in with the MAX Auth account that matches the guardian email address.", "GUARDIAN_EMAIL_MISMATCH");
+      const parent = await prisma.user.findUnique({
+        where: { id: options.parentUserId },
+        select: { email: true, status: true, verificationStatus: true },
+      });
+      if (!parent || parent.status !== "ACTIVE" || parent.verificationStatus !== "VERIFIED" ||
+          parent.email.toLowerCase() !== record.parentEmail.toLowerCase()) {
+        throw AppError.forbidden(
+          "Guardian approval requires an active MAX Account with a verified email matching the guardian address.",
+          "GUARDIAN_EMAIL_NOT_VERIFIED",
+        );
       }
     }
     await prisma.$transaction(async (tx) => {
