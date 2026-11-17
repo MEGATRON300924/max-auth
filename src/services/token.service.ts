@@ -39,7 +39,7 @@ export const tokenService = {
       // A just-rotated token is rejected without destroying the account's
       // other sessions; the caller can retry with the cookie set by the winner.
       const rotatedRecently = session.revokedAt
-        ? Date.now() - session.revokedAt.getTime() <= 15_000
+        ? Date.now() - session.revokedAt.getTime() <= 5_000
         : false;
       if (rotatedRecently) {
         throw AppError.conflict(
@@ -59,7 +59,7 @@ export const tokenService = {
       // read. Re-read the row and apply the same short concurrent-rotation rule.
       const latestSession = await sessionRepository.findById(session.id);
       const rotatedRecently = latestSession?.revokedAt
-        ? Date.now() - latestSession.revokedAt.getTime() <= 15_000
+        ? Date.now() - latestSession.revokedAt.getTime() <= 5_000
         : false;
       if (rotatedRecently) {
         throw AppError.conflict(
