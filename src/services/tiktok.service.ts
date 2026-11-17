@@ -38,7 +38,7 @@ function hash(value: string) { return crypto.createHash("sha256").update(value).
 function random(bytes = 32) { return crypto.randomBytes(bytes).toString("base64url"); }
 
 async function request(url: string, init: RequestInit = {}) {
-  const response = await fetch(url, { ...init, headers: { Accept: "application/json", ...(init.headers || {}) } });
+  const response = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(10_000), headers: { Accept: "application/json", ...(init.headers || {}) } });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok || (body?.error?.code && body.error.code !== "ok")) {
     throw AppError.badRequest(body?.error_description || body?.error?.message || body?.message || "TikTok request failed", "TIKTOK_REQUEST_FAILED", { status: response.status });
