@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authenticate } from "../middleware/authenticate";
-import { prisma } from "../database/prisma";
 import { familyService } from "../services/family.service";
 import { ok } from "../utils/response";
 import { AppError } from "../utils/AppError";
