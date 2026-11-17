@@ -5,8 +5,8 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 function required(name: string, fallback?: string): string { const value = process.env[name] ?? fallback; if (value === undefined || value.trim() === "") throw new Error(`Missing required environment variable: ${name}`); return value; }
 function requiredSecret(name: string, minBytes = 32): string { const value = required(name); if (Buffer.byteLength(value, "utf8") < minBytes) throw new Error(`${name} must contain at least ${minBytes} bytes. Generate a unique cryptographically secure secret for this environment.`); return value; }
 function optional(name: string, fallback: string): string { return process.env[name] ?? fallback; }
-const appUrl = process.env.APP_URL ?? (isProduction ? "https://auth.max-ai.name.ng" : "http://localhost:4000");
 const isProduction = (process.env.NODE_ENV ?? "development") === "production";
+const appUrl = process.env.APP_URL ?? (isProduction ? "https://auth.max-ai.name.ng" : "http://localhost:4000");
 const isHttpsApp = appUrl.startsWith("https://");
 const isLocalApp = /https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/i.test(appUrl);
 const defaultCookieDomain = isLocalApp ? "localhost" : "max-ai.name.ng";
