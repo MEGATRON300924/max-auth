@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { AnyZodObject, ZodError } from "zod";
+import { ZodError, ZodType } from "zod";
 import { AppError } from "../utils/AppError";
 
 /**
@@ -7,7 +7,7 @@ import { AppError } from "../utils/AppError";
  * Usage: router.post("/route", validate(schema), controller)
  */
 export const validate =
-  (schema: AnyZodObject) =>
+  (schema: ZodType) =>
   (req: Request, _res: Response, next: NextFunction) => {
     try {
       const parsed = schema.parse({
@@ -19,7 +19,7 @@ export const validate =
       next();
     } catch (err) {
       if (err instanceof ZodError) {
-        const details = err.errors.map((e) => ({
+        const details = err.issues.map((e) => ({
           path: e.path.join("."),
           message: e.message,
         }));
