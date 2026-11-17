@@ -44,7 +44,19 @@ export const adminController = {
   async suspendUser(req: Request, res: Response, next: NextFunction) {
     try {
       const ctx = getRequestContext(req);
-      const user = await userRepository.update(req.params.userId, { status: "SUSPENDED" });
+      const user = await prisma.$transaction(async (tx) => {
+        const target = await tx.user.findUnique({ where: { id: req.params.userId }, select: { id: true } });
+        if (!target) throw AppError.notFound("User not found");
+        const revokedAt = new Date();
+        const updated = await tx.user.update({ where: { id: target.id }, data: { status: "SUSPENDED" } });
+        await tx.session.updateMany({ where: { userId: target.id, isRevoked: false }, data: { isRevoked: true, revokedAt } });
+        await tx.oAuthAccessToken.updateMany({ where: { userId: target.id, revokedAt: null }, data: { revokedAt } });
+        await tx.oAuthRefreshToken.updateMany({ where: { userId: target.id, revokedAt: null }, data: { revokedAt } });
+        await tx.oAuthAuthorizationCode.deleteMany({ where: { userId: target.id } });
+        await tx.oAuthConsent.updateMany({ where: { userId: target.id, revokedAt: null }, data: { revokedAt } });
+        await tx.verificationToken.updateMany({ where: { userId: target.id, purpose: "PASSWORD_RESET", usedAt: null }, data: { usedAt: revokedAt } });
+        return updated;
+      });
       await auditService.record("ACCOUNT_SUSPENDED", {
         userId: req.params.userId,
         ipAddress: ctx.ipAddress,
@@ -60,7 +72,17 @@ export const adminController = {
   async reactivateUser(req: Request, res: Response, next: NextFunction) {
     try {
       const ctx = getRequestContext(req);
-      const user = await userRepository.update(req.params.userId, { status: "ACTIVE" });
+      const existing = await prisma.user.findUnique({ where: { id: req.params.userId }, select: { id: true, status: true } });
+      if (!existing) throw AppError.notFound("User not found");
+      if (existing.status === "DELETED") throw AppError.forbidden("Deleted MAX Accounts cannot be reactivated.", "ACCOUNT_DELETED");
+      const parentalConsent = await prisma.familyConsentRequest.findUnique({
+        where: { childUserId: existing.id },
+        select: { status: true },
+      });
+      if (parentalConsent && parentalConsent.status !== "APPROVED") {
+        throw AppError.forbidden("This account cannot be reactivated until parental approval is completed.", "PARENTAL_APPROVAL_REQUIRED");
+      }
+      const user = await prisma.user.update({ where: { id: existing.id }, data: { status: "ACTIVE" } });
       await auditService.record("ACCOUNT_REACTIVATED", {
         userId: req.params.userId,
         ipAddress: ctx.ipAddress,
