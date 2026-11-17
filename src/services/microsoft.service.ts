@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Request } from "express";
 import { prisma } from "../database/prisma";
+import { linkConnectedAccount } from "./connectedAccountLink.service";
 import { ConnectedProvider } from "@prisma/client";
 import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
@@ -61,7 +62,7 @@ function stateHash(state: string) {
 }
 
 async function requestJson(url: string, options: RequestInit): Promise<any> {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(10_000) });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = body?.error_description || body?.error?.message || body?.error || "Microsoft Graph request failed";
@@ -141,9 +142,11 @@ export const microsoftService = {
     });
     if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This Microsoft account is already connected to another MAX Account");
 
-    await prisma.connectedAccount.upsert({
-      where: { provider_providerAccountId: { provider: ConnectedProvider.MICROSOFT, providerAccountId: profile.id } },
-      create: {
+    await linkConnectedAccount({
+      userId: oauthState.userId,
+      provider: ConnectedProvider.MICROSOFT,
+      providerAccountId: profile.id,
+      createData: {
         userId: oauthState.userId,
         provider: ConnectedProvider.MICROSOFT,
         providerAccountId: profile.id,
@@ -152,8 +155,7 @@ export const microsoftService = {
         scope: token.scope || SCOPES.join(" "),
         tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000),
       },
-      update: {
-        userId: oauthState.userId,
+      updateData: {
         accessTokenEnc: encrypt(token.access_token),
         ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}),
         scope: token.scope || SCOPES.join(" "),

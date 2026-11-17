@@ -70,28 +70,48 @@ export const familyService = {
     return { childName, ageGroup: record.ageGroup, expiresAt: record.expiresAt, parentEmail: maskEmail(record.parentEmail) };
   },
 
-  async approve(rawToken: string, options: { parentUserId?: string; parentEmail?: string; guardianAttestation: boolean }) {
+  async approve(rawToken: string, options: { parentUserId?: string; guardianAttestation: boolean }) {
     if (!options.guardianAttestation) throw AppError.badRequest("Confirm that you are the child's parent or legal guardian.", "GUARDIAN_ATTESTATION_REQUIRED");
     const tokenHash = digest(rawToken);
     const record = await prisma.familyConsentRequest.findUnique({ where: { tokenHash } });
     if (!record || record.status !== "PENDING" || record.expiresAt <= new Date()) {
       throw AppError.badRequest("This approval link is invalid, expired, or already used.", "PARENTAL_APPROVAL_LINK_INVALID");
     }
-    if (options.parentUserId) {
-      if (!options.parentEmail || options.parentEmail.trim().toLowerCase() !== record.parentEmail.toLowerCase()) {
-        throw AppError.forbidden("Sign in with the MAX Auth account that matches the guardian email address.", "GUARDIAN_EMAIL_MISMATCH");
-      }
-    }
     await prisma.$transaction(async (tx) => {
       const current = await tx.familyConsentRequest.findUnique({ where: { id: record.id } });
       if (!current || current.status !== "PENDING" || current.expiresAt <= new Date()) {
         throw AppError.badRequest("This approval request has already been handled or expired.", "PARENTAL_APPROVAL_LINK_INVALID");
       }
-      await tx.familyConsentRequest.update({
-        where: { id: current.id },
+      if (options.parentUserId) {
+        const parent = await tx.user.findUnique({
+          where: { id: options.parentUserId },
+          select: { email: true, status: true, verificationStatus: true },
+        });
+        const parentConsentRecord = await tx.familyConsentRequest.findUnique({
+          where: { childUserId: options.parentUserId },
+          select: { ageGroup: true },
+        });
+        if (!parent || options.parentUserId === current.childUserId ||
+            parent.status !== "ACTIVE" || parent.verificationStatus !== "VERIFIED" ||
+            parent.email.toLowerCase() !== current.parentEmail.toLowerCase() || parentConsentRecord) {
+          throw AppError.forbidden(
+            "Guardian approval requires an active, email-verified adult MAX Account matching the guardian address.",
+            "GUARDIAN_ACCOUNT_NOT_ELIGIBLE",
+          );
+        }
+      }
+      const claimed = await tx.familyConsentRequest.updateMany({
+        where: { id: current.id, status: "PENDING", expiresAt: { gt: new Date() } },
         data: { status: "APPROVED", approvedAt: new Date(), parentUserId: options.parentUserId ?? null }
       });
-      await tx.user.update({ where: { id: current.childUserId }, data: { status: "ACTIVE" } });
+      if (claimed.count !== 1) {
+        throw AppError.conflict("This approval request has already been handled.", "PARENTAL_APPROVAL_ALREADY_HANDLED");
+      }
+      const activated = await tx.user.updateMany({
+        where: { id: current.childUserId, status: "PENDING_PARENTAL_APPROVAL" },
+        data: { status: "ACTIVE" },
+      });
+      if (activated.count !== 1) throw AppError.conflict("The child account is no longer awaiting parental approval.", "CHILD_ACCOUNT_STATUS_CHANGED");
     });
     return { approved: true, childUserId: record.childUserId };
   },
@@ -103,7 +123,13 @@ export const familyService = {
       throw AppError.badRequest("This approval link is invalid, expired, or already used.", "PARENTAL_APPROVAL_LINK_INVALID");
     }
     await prisma.$transaction(async (tx) => {
-      await tx.familyConsentRequest.update({ where: { id: record.id }, data: { status: "REJECTED", rejectedAt: new Date() } });
+      const claimed = await tx.familyConsentRequest.updateMany({
+        where: { id: record.id, status: "PENDING", expiresAt: { gt: new Date() } },
+        data: { status: "REJECTED", rejectedAt: new Date() }
+      });
+      if (claimed.count !== 1) {
+        throw AppError.conflict("This approval request has already been handled.", "PARENTAL_APPROVAL_ALREADY_HANDLED");
+      }
       await tx.user.update({ where: { id: record.childUserId }, data: { status: "DEACTIVATED" } });
     });
     return { declined: true };

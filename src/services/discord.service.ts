@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { ConnectedProvider } from "@prisma/client";
 import { prisma } from "../database/prisma";
+import { linkConnectedAccount } from "./connectedAccountLink.service";
 import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
 import { env } from "../config/env";
@@ -37,7 +38,7 @@ function stateHash(value: string) { return crypto.createHash("sha256").update(va
 function randomState() { return crypto.randomBytes(32).toString("base64url"); }
 
 async function discordRequest(url: string, init: RequestInit = {}) {
-  const response = await fetch(url, init);
+  const response = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(10_000) });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) throw AppError.badRequest(body?.message || body?.error_description || "Discord request failed", "DISCORD_REQUEST_FAILED", { status: response.status });
   return body;
@@ -83,15 +84,17 @@ export const discordService = {
     const existing = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: ConnectedProvider.DISCORD, providerAccountId: String(profile.id) } } });
     if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This Discord account is already connected to another MAX Account");
 
-    await prisma.connectedAccount.upsert({
-      where: { provider_providerAccountId: { provider: ConnectedProvider.DISCORD, providerAccountId: String(profile.id) } },
-      create: {
+    await linkConnectedAccount({
+      userId: oauthState.userId,
+      provider: ConnectedProvider.DISCORD,
+      providerAccountId: String(profile.id),
+      createData: {
         userId: oauthState.userId, provider: ConnectedProvider.DISCORD, providerAccountId: String(profile.id),
         accessTokenEnc: encrypt(token.access_token), refreshTokenEnc: token.refresh_token ? encrypt(token.refresh_token) : null,
         scope: token.scope || DISCORD_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 604800) * 1000),
       },
-      update: {
-        userId: oauthState.userId, accessTokenEnc: encrypt(token.access_token),
+      updateData: {
+        accessTokenEnc: encrypt(token.access_token),
         ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}),
         scope: token.scope || DISCORD_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 604800) * 1000),
       },

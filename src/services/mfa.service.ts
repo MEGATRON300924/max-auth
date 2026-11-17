@@ -153,8 +153,11 @@ export const mfaService = {
       const matches = await prisma.recoveryCode.findMany({ where: { userId, usedAt: null } });
       const match = matches.find((item) => crypto.timingSafeEqual(Buffer.from(item.codeHash), Buffer.from(hashToken(normalized))));
       if (match) {
-        await prisma.recoveryCode.update({ where: { id: match.id }, data: { usedAt: new Date() } });
-        return;
+        const consumed = await prisma.recoveryCode.updateMany({
+          where: { id: match.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        if (consumed.count === 1) return;
       }
     }
     throw AppError.unauthorized("Invalid multi-factor authentication code", "INVALID_MFA_CODE");
@@ -182,8 +185,11 @@ export const mfaService = {
       const matches = await prisma.recoveryCode.findMany({ where: { userId, usedAt: null } });
       const match = matches.find((item) => crypto.timingSafeEqual(Buffer.from(item.codeHash), Buffer.from(hashToken(normalized))));
       if (match) {
-        await prisma.recoveryCode.update({ where: { id: match.id }, data: { usedAt: new Date() } });
-        valid = true;
+        const consumed = await prisma.recoveryCode.updateMany({
+          where: { id: match.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        valid = consumed.count === 1;
       }
     }
     if (!valid) throw AppError.unauthorized("Invalid multi-factor authentication code", "INVALID_MFA_CODE");

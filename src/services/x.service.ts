@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { ConnectedProvider } from "@prisma/client";
 import { prisma } from "../database/prisma";
+import { linkConnectedAccount } from "./connectedAccountLink.service";
 import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
 import { env } from "../config/env";
@@ -36,7 +37,7 @@ function random(bytes = 32) { return crypto.randomBytes(bytes).toString("base64u
 function pkceChallenge(verifier: string) { return crypto.createHash("sha256").update(verifier).digest("base64url"); }
 
 async function request(url: string, init: RequestInit = {}) {
-  const response = await fetch(url, { ...init, headers: { Accept: "application/json", ...(init.headers || {}) } });
+  const response = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(10_000), headers: { Accept: "application/json", ...(init.headers || {}) } });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) throw AppError.badRequest(body?.detail || body?.error_description || body?.title || "X request failed", "X_REQUEST_FAILED", { status: response.status });
   return body;
@@ -70,10 +71,12 @@ export const xService = {
     if (!user?.id) throw AppError.badRequest("X did not return a stable account identifier", "X_PROFILE_INVALID");
     const existing = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: ConnectedProvider.X, providerAccountId: String(user.id) } } });
     if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This X account is already connected to another MAX Account");
-    await prisma.connectedAccount.upsert({
-      where: { provider_providerAccountId: { provider: ConnectedProvider.X, providerAccountId: String(user.id) } },
-      create: { userId: oauthState.userId, provider: ConnectedProvider.X, providerAccountId: String(user.id), accessTokenEnc: encrypt(tokenResponse.access_token), refreshTokenEnc: tokenResponse.refresh_token ? encrypt(tokenResponse.refresh_token) : null, scope: tokenResponse.scope || SCOPES.join(" "), tokenExpiresAt: tokenResponse.expires_in ? new Date(Date.now() + Number(tokenResponse.expires_in) * 1000) : null },
-      update: { userId: oauthState.userId, accessTokenEnc: encrypt(tokenResponse.access_token), refreshTokenEnc: tokenResponse.refresh_token ? encrypt(tokenResponse.refresh_token) : null, scope: tokenResponse.scope || SCOPES.join(" "), tokenExpiresAt: tokenResponse.expires_in ? new Date(Date.now() + Number(tokenResponse.expires_in) * 1000) : null },
+    await linkConnectedAccount({
+      userId: oauthState.userId,
+      provider: ConnectedProvider.X,
+      providerAccountId: String(user.id),
+      createData: { userId: oauthState.userId, provider: ConnectedProvider.X, providerAccountId: String(user.id), accessTokenEnc: encrypt(tokenResponse.access_token), refreshTokenEnc: tokenResponse.refresh_token ? encrypt(tokenResponse.refresh_token) : null, scope: tokenResponse.scope || SCOPES.join(" "), tokenExpiresAt: tokenResponse.expires_in ? new Date(Date.now() + Number(tokenResponse.expires_in) * 1000) : null },
+      updateData: { accessTokenEnc: encrypt(tokenResponse.access_token), refreshTokenEnc: tokenResponse.refresh_token ? encrypt(tokenResponse.refresh_token) : null, scope: tokenResponse.scope || SCOPES.join(" "), tokenExpiresAt: tokenResponse.expires_in ? new Date(Date.now() + Number(tokenResponse.expires_in) * 1000) : null },
     });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, metadata: { provider: "X", xAccountId: String(user.id), username: user.username } });
     return { status: "connected" as const };

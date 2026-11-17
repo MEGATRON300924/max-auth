@@ -7,167 +7,85 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - No MAX Auth application code changed during this audit.
 - Next: retain authenticated MAX Auth YouTube endpoints for private/account-scoped features; add or expose a public read-only creator-upload lookup that does not require Google OAuth, using a server-held YouTube Data API key or a public channel feed where appropriate. Do not expose API keys to the browser.
 - Coordinate any new endpoint with max-backend and max-chat, then test public channel lookup, account-scoped YouTube features, auth boundaries, and error handling before deployment.
+- Current task: MAX Auth migration startup failure recovery, 2026-11-17.
+- Confirmed Render build succeeds on merge commit 001bf8fd, but runtime exits after logging "Applying pending Prisma migrations before MAX Auth startup...".
+- Root cause: src/server.ts still invokes prisma migrate deploy through execFileAsync in production. PR #35 removed the package start-script migration invocation but did not remove this second runtime migration path.
+- Fix in progress on fix/remove-runtime-prisma-migration: remove the production migration subprocess and its child_process/util imports; MAX Auth starts app after ensuring system OAuth clients. Database migrations remain a separately controlled release operation after migration-ledger reconciliation.
+- Production database and Render environment settings have not been changed. Build, tests, CI, PR and deployment pending.
+
+- CI audit investigation, 2026-11-17: inspected failed job 134105903776. TypeScript build and all 7 tests pass; production audit fails on body-parser 1.20.8 (GHSA-27r3-jxmh-p828) and Zod 3.25.76 (GHSA-mrhx-c7xc-m3w5). Moderate findings include fast-uri, glob/minimatch, and qs.
+- Security remediation in progress on fix/remove-runtime-prisma-migration: upgrade Zod to 4.6.7 and migrate validation middleware/types and record schema to Zod 4-compatible APIs. Refresh package-lock using npm audit fix without --force so compatible transitive patches are applied. Validate with npm ci, Prisma generation, TypeScript build, tests, and production npm audit.
+
+- Follow-up CI check, 2026-11-17: latest PR CI failed before build because package.json Zod 4.6.7 and package-lock.json remained out of sync. Safe audit refresh updated compatible resolutions but `npm audit fix` exited nonzero with 8 remaining moderate advisories; the prior two high-severity advisories were no longer listed in that audit output. Updating temporary lockfile workflow to explicitly synchronize package-lock, apply non-forced lockfile-only fixes, and validate `npm ci` before committing. No force upgrades or audit-gate bypass.
 
 
-## Current task: Persistent MAX system status and protected administration (2026-11-14)
+- Full MAX Auth repository audit started, 2026-11-17, against PR branch fix/remove-runtime-prisma-migration at 53c71682. Scope includes every application area (auth/session/refresh, OAuth/OIDC, admin/developer, business, connected accounts, family/parental consent, MFA, webhooks, middleware, database schema/migrations, configuration and CI), not just the active compiler failure.
+- Confirmed full CI failure on 53c71682: npm ci and Prisma generation passed; TypeScript build failed in src/middleware/validate.ts because Zod 4 parse output defaults to unknown, and src/routes/adminStatus.routes.ts because z.record now requires an explicit key schema. Fixed both on the audit branch; validator now handles falsy body values correctly by checking property presence.
+- Additional audit findings under investigation: webhook delivery signs with the stored SHA-256 digest of the webhook secret while the API returns the original secret (likely receiver signature mismatch); webhook URL validation resolves DNS before fetch but fetch performs a separate resolution (DNS-rebinding/SSRF hardening); business list endpoint checks openid but appears not to require business:read; MFA recovery-code consumption may race because usedAt update is not conditional; production mail provider defaults to console unless explicitly configured. Verify each against API contract, tests and deployment configuration before treating as final or changing behaviour.
+- CI currently has only JWT/password unit tests (7 assertions noted in prior run); broaden test coverage for OAuth, refresh rotation, Google account linking, MFA recovery codes, service-auth boundaries, business scopes, parental-consent one-time use and webhook signatures/SSRF.
+- No production database, Render environment, or deployment changes made during this audit. PR #36 remains unmerged.
 
-### Request
-Provide a persistent source of truth for the MAX status page and a secure administration API for changing service state and explanatory notes. The status editor is intended for the founder account zionopaaje.
+- Confirmed OAuth scope enforcement defects in oauth.controller.ts: /userinfo returned the subject even without the required openid scope, and /businesses allowed any openid token to enumerate the user's verified businesses without business:read. Added explicit openid and business:read checks.
+- Confirmed MFA recovery-code race: login and MFA-disable flows previously read unused codes and then unconditionally updated usedAt, allowing two concurrent requests to consume the same recovery code. Changed both paths to conditional updateMany (usedAt IS NULL) and require exactly one row to be consumed.
+- Further work: continue end-to-end review of OAuth code/refresh lifecycle, business role checks, Google/connected-account callbacks, parental consent, webhook signing/SSRF, migration consistency, and runtime operations. Validate each change with CI and add regression tests.
 
-### Existing authorization
-- User.isAdmin already exists in the MAX Auth Prisma schema.
-- The existing migration 20261012120000_grant_admin_to_zionopaaje updates the existing zionopaaje user to isAdmin = TRUE; this grant was already present on main, so no duplicate grant migration was added.
-- requireAdmin already checks isAdmin against the database for session-token admin routes.
-
-### Implementation
-- Added the SystemStatus Prisma model and a system_status singleton row seeded with all 24 existing services and initial green states.
-- Added public read-only GET /api/v1/status.
-- Added protected GET and PUT /api/v1/admin/status.
-- Added an OAuth/session admin authenticator for the MAX website client and standard MAX Auth session tokens. It validates token activity, active account state, and database isAdmin; it does not trust browser-supplied usernames.
-- Status updates normalize the known service inventory, restrict states to green/yellow/red, cap explanation text at 1,000 characters, attribute the report to The Tron Forge Limited, and write an admin audit log.
-- The existing MAX Auth refresh cookie remains host-only; first-party sites use credentialed calls to the auth domain rather than broadening cookie domain scope.
-
-### Verification
-- Migration SQL, Prisma schema, route registration, middleware, and controller source reviewed.
-- Build, migration execution, admin identity verification against the live database, endpoint integration tests, and persistence-after-restart tests: pending.
-- Deployment: pending.
-
-### Commits
-- Prisma model: c5c4e179f070b51b7b7828e37f0af31b7d3db6f0
-- Route registration: 3c58010ea53b58e5292476d62528bd3eaae09e74
-- Migration: bdd200a35cbfc62213fdb3715105b2a4a82c1f3a
-- Controller: 7e80e118449ab731913593645e7dc2f8aaf32bd9; subsequent serialization fix: 5e8be059c9a058199eb4936bd18f348857aa32a5
-- OAuth admin middleware: f6b698e4054224274e2fb267d8b161f2db55ac47; extended to accept session tokens: 6197c6a111e517d8f7af1df649bdd5ebef56afc0
-- Public and protected routes: 21f05310bfccf7e74eaebcd1c23bb0ae645e28d6, 93419c65214012abd98ab2404dc4cf8bcab05cd1
-
-### Next steps
-- Run TypeScript build and tests.
-- Deploy MAX Auth and confirm the new migration applies.
-- Verify the admin grant and status CRUD through live authenticated requests.
-
-### CI and deployment update (2026-11-14)
-- PR #30: https://github.com/MEGATRON300924/max-auth/pull/30.
-- GitHub CI run #501: Prisma client generation, TypeScript build, security tests, and critical dependency vulnerability check passed. The production dependency high-risk advisory check failed; this PR does not change package manifests or lockfiles, so no dependency changes were introduced by this work.
-- The current Render max-auth service is still on main commit 0a0a302c2d5b6fd5a304a354f4b44789217a3a11. Render startup logs on 2026-11-12 show Prisma migrations starting and then reporting migrations up to date.
-- The existing founder-admin grant migration is already present on main and is included in the applied migration history. A direct query of the users row was not performed in this session.
-- The new system_status migration and endpoints are in PR #30 and are not yet deployed.
-
-### Migration consistency fix (2026-11-14)
-- Aligned the SQL defaults for the system_status primary key and updated_at column with the Prisma model: id defaults to global, while updated_at is populated by Prisma @updatedAt or explicitly in the seed row.
-- Migration correction commit: 60c439e5026bf93a7be277c5c246400d967728c5.
+- Webhook defects confirmed and remediated in code: newly created and rotated webhook secrets are now AES-256-GCM encrypted at rest and the actual raw secret is used for HMAC signatures; legacy rows retain the previous hash-key behavior until owners rotate their secret. Added a migration for secret_encrypted and WEBHOOK_ENCRYPTION_KEY (falls back to the existing refresh secret for compatibility; configure a stable dedicated key before rotating JWT refresh secrets).
+- Webhook SSRF hardening: resolve and reject private/reserved IPs, then pin HTTPS connections to the exact vetted DNS result to prevent DNS-rebinding between validation and connection. Redirects are not followed. Existing webhook endpoints should rotate their secret after the migration is applied to move to the corrected signing contract.
+- Confirmed and fixed additional one-time-token races: email verification, password reset, business email verification, and parental approval/decline now use conditional database claims so concurrent requests cannot consume the same token twice.
+- Confirmed inactive-account provider access path: internal Google/Spotify service calls previously fetched stored provider tokens without checking the MAX account status. Provider token access now requires an ACTIVE account; internal personalization reads/writes also reject inactive accounts.
+- Confirmed admin OAuth client update path bypassed the regular OAuth validation/revocation logic. Added an admin-safe update service that validates scopes/redirect URIs and revokes codes, tokens and consents when security-sensitive client settings change.
 
 
-### Merge and release update (2026-11-14)
-- PR #30 was squash-merged after the user said to continue: https://github.com/MEGATRON300924/max-auth/pull/30.
-- Merge commit: 11d4d6e55acf2e485d02e501b6cb0d4c7af0d304.
-- GitHub CI run #505: Prisma client generation, TypeScript build, security tests, and critical dependency vulnerability check passed; production dependency high-risk advisory check failed. This change does not modify package manifests or lockfiles.
-- Render auto-deploy was observed starting for the merge commit: deploy dep-dbsdf7k9v7es73bqtibg. Build/deploy and migration application are still pending at this checkpoint.
-- Live status API, admin CRUD, persistence-after-restart, and direct verification of the zionopaaje isAdmin row remain pending.
+## Full MAX Auth codebase audit — 2026-11-17
 
+### Authentication, session and account lifecycle
+- Fixed Zod 4 TypeScript compatibility issues in validation middleware and admin status validators.
+- Authentication middleware now distinguishes invalid JWTs from database/infrastructure failures; database outages are no longer misreported as invalid credentials.
+- JWT session authentication avoids an unnecessary OAuth introspection lookup; internal introspection and OPTIONS traffic are excluded from usage telemetry.
+- CSRF token derivation no longer depends on client IP, avoiding invalidation when users change networks. Refresh requests also validate browser Origin against configured and first-party MAX origins to protect the SameSite cookie across sibling subdomains.
+- Refresh cookies are cleared after password reset/change, logout, current-session revocation, current-device revocation, and revoke-all-sessions.
+- Device and session listing queries now select only safe fields; refresh-token hashes and device fingerprints are not returned to account clients.
+- Admin suspension now atomically revokes first-party sessions, OAuth access/refresh tokens, authorization codes, consents, and pending password-reset tokens. Deleted accounts cannot be reactivated; parental-consent-pending accounts cannot be promoted to active by the normal admin reactivation flow.
+- Parental approval now atomically checks the child is still pending and, for account-based approval, requires an active account with a verified matching guardian email. Accounts that have their own parental-consent record cannot act as guardians. The email-link path still relies on mailbox possession and explicit guardian attestation; it does not independently prove age or legal guardianship.
+- Business invitations now require the invited MAX Account to be active and email-verified before acceptance.
 
-## Current task: Prevent concurrent refresh-token requests from revoking MAX sessions (2026-11-17)
+### OAuth and connected-account security
+- Added connectedAccountLink.service.ts and migrated Google, Spotify, Discord, Microsoft, GitHub, Instagram, TikTok, and X callbacks to race-safe identity linking. A unique-key race can no longer overwrite another MAX Account's provider identity ownership. Regression tests cover existing-owner and concurrent-create cases.
+- OAuth redirect URI validation now rejects hostname-prefix localhost bypasses, non-local HTTP callbacks, credentials, fragments, and dangerous schemes. Existing stored redirect URIs are revalidated during authorization, approval, and code exchange.
+- OAuth authorized origins now require a clean origin and HTTPS except exact localhost/loopback development origins. OAuth manifest URL fetches reject private/reserved IPs, pin DNS results, reject redirects/credentials, enforce JSON content type, a 256 KB response cap and a timeout; redirect URI manifest checks reject duplicates and require an exact set match.
+- Fixed OAuth client logo SQL column names for the camelCase oauth_clients schema and changed non-returning UPDATE statements from $queryRawUnsafe to $executeRawUnsafe. Logo uploads now validate PNG/JPEG/WebP file signatures and public logo responses set X-Content-Type-Options: nosniff.
+- OAuth client tester now includes reserved MAX system-client scopes.
+- System OAuth client bootstrap no longer reactivates a client disabled by an administrator; concurrent startup creation is handled safely and dummy client secrets use cryptographic randomness.
+- Business legal-identity changes (legal/display name, address, country, business type, registration number) reset verification to PENDING, invalidating business OAuth introspection until re-review.
+- External Google, Spotify, Discord, Microsoft, GitHub, Instagram, TikTok, X and Resend requests now have bounded timeouts.
 
-### Root cause
-- `rotateRefreshToken` treated every already-revoked refresh session as token theft and immediately revoked all sessions for that user.
-- The MAX refresh cookie is host-only on `auth.max-ai.name.ng` and shared by first-party MAX products. Separate tabs and product origins have independent JavaScript refresh promises and can submit the same cookie concurrently.
-- A winning request rotates the token; concurrent requests then see the old session as revoked and trigger account-wide session revocation. Repeated 401/recovery attempts can then exhaust the global API rate limit.
+### Webhooks and external requests
+- Webhook secrets are encrypted at rest and the raw secret returned to the owner is used for HMAC signatures; legacy hash-key records remain compatible until rotated.
+- Webhook delivery rejects private/reserved destinations, pins validated DNS answers to the HTTPS connection to prevent DNS rebinding, rejects redirects, and catches decryption failures without terminating the retry worker.
+- Production now requires a stable dedicated WEBHOOK_ENCRYPTION_KEY (at least 32 bytes).
 
-### Implementation on `fix/refresh-token-concurrency`
-- Added a 5-second concurrency grace window based on the old session's `revokedAt`, keeping the collision recovery window short.
-- A recently rotated token now returns HTTP 409 with `REFRESH_TOKEN_ROTATED`, allowing the client to retry after the winning response updates the shared cookie.
-- The conditional-update race path re-reads the session and applies the same grace rule.
-- Refresh-token reuse outside the short grace window still triggers account-wide session revocation as a security response.
-- No rate limits were increased and refresh-token reuse detection was not disabled.
+### Production configuration and diagnostics
+- Production defaults now point to https://auth.max-ai.name.ng and https://api.max-ai.name.ng.
+- Production startup validates HTTPS APP_URL/FRONTEND_URL/OIDC issuer, OIDC signing/public keys, Resend email configuration, secure cookie settings, distinct 32-byte JWT secrets, and a stable webhook encryption key. Missing requirements will stop startup rather than silently disable critical auth/email/OIDC functions.
+- Unmatched-route diagnostics no longer include query strings, reducing accidental logging of authorization codes or tokens.
+- Email API requests now have a 10-second timeout and bounded error-body logging.
+- No production database or Render environment settings were changed.
 
-### Verification
-- Source review completed for both refresh race paths.
-- Build, tests, GitHub Actions and live concurrent-refresh integration test: pending.
-- No deployment or merge performed.
+### Verification at latest checked revision
+- Latest PR branch commit at the time of this entry: 73348b71adc578d77659aa1b5193fca40d97498a.
+- GitHub Actions CI run 44115427342: SUCCESS.
+- TypeScript build: PASS.
+- Regression/security tests: 14 passed across 3 suites.
+- Critical dependency audit: PASS.
+- Production high-risk dependency audit: PASS.
+- Remaining npm findings: 8 moderate overall; 3 moderate production findings are the glob/minimatch dependency chain under swagger-jsdoc; the other findings are in development dependencies. No high or critical findings were reported by the CI gates.
+- PR #36 remains OPEN and has not been merged. No Render deployment of this branch has been verified.
 
-### Commits
-- Token rotation concurrency handling: `82f021b7d3c4fe4274a59e8d5f7f91e94bb27829`.
-- Plan update: `66c387bc68585c328159ca969a2fd9a38f6aeb58` (this section's initial plan commit; final follow-up below).
+### Outstanding release blockers / risks
+- The shared production database migration ledger remains unresolved: MAX Auth and MAX Backend have mixed migration history in public._prisma_migrations, including the failed 20260904134000_pending_action_conversation_context migration that referenced pending_actions in the wrong schema. Do not run prisma migrate deploy until the migration history/schema ownership is reconciled. The webhook secret_encrypted migration also needs application after that reconciliation.
+- Production Render variables have not been inspected or changed. Before deployment, verify OIDC_PRIVATE_KEY, OIDC_PUBLIC_KEY, MAIL_PROVIDER=resend, RESEND_API_KEY, distinct strong JWT secrets, WEBHOOK_ENCRYPTION_KEY, COOKIE_SECURE=true, and a valid COOKIE_SAME_SITE.
+- Provider token encryption and MFA secret encryption still have legacy fallbacks to JWT_REFRESH_SECRET; rotating that secret without a separate key migration can make stored provider tokens/MFA secrets unreadable. Keep it stable until a dedicated-key migration is completed.
+- Moderate glob/minimatch advisories remain under swagger-jsdoc; they do not fail the current high-risk production gate, but should be resolved by a compatible dependency upgrade or by moving spec generation out of the runtime dependency graph.
+- CI currently exercises 14 tests; broader route/service integration coverage is still needed before claiming exhaustive correctness.
 
-### Next steps
-- Pair with the frontend refresh coordination/retry change.
-- Run CI and test concurrent refresh requests from multiple clients, normal refresh, expired tokens and delayed token replay.
-- Merge/deploy backend and frontend only after review and explicit approval.
-
-
-### PR and CI checkpoint
-- PR #31: https://github.com/MEGATRON300924/max-auth/pull/31 (open; not merged).
-- Latest implementation/plan head at PR creation: `66c387bc68585c328159ca969a2fd9a38f6aeb58`.
-- GitHub Actions CI run #44043792657: in progress at checkpoint.
-
-
-### Follow-up refinement
-- Tightened the concurrency grace window from 15 seconds to 5 seconds to limit the period in which a delayed replay is classified as a concurrent request.
-- Latest token-service commit: `429febc36e42c4bac54b47f49886cbebdd681337`.
-
-
-## MAX Chat Gemini account-read OAuth scope — 2026-11-17
-
-### User request
-- Allow Gemini-backed MAX Chat to access the signed-in user's MAX Auth account-device information through the backend, with explicit user-granted permission.
-
-### Changes on `feat/max-chat-account-read-scope`
-- Added `account:read` to the official MAX Chat client's special allowed-scope list in all authorization-request validation paths:
-  - initial OAuth authorization request,
-  - authorization-request inspection,
-  - authorization-code issuance.
-- The scope is already a supported MAX OAuth scope and already has the consent-screen label “Read basic account information”.
-- MAX Chat separately requests `account:read`; this server-side allowlist change ensures the official client can request it even if the stored client scope list predates the new request.
-
-### Commit
-- `08921e702ff6e9ab4a1340579203d3755ff5044d`.
-
-### Verification
-- Source review confirms all four MAX Chat special-scope allowlist checks include `account:read`.
-- TypeScript build, OAuth authorization/consent flow, token issuance and introspection with the new scope: pending.
-- No production merge or deployment performed.
-
-### Next steps
-- Run CI/build and validate the OAuth consent flow.
-- After deployment, MAX Chat must reauthorize to receive an access token containing `account:read`; existing tokens do not gain new scopes automatically.
-
-
-### PR / CI checkpoint — 2026-11-17
-- PR #32 opened: https://github.com/MEGATRON300924/max-auth/pull/32 (open; not merged).
-- PR head: `8f743d16a69398a03a61975a4df5ecab8a25dab2`.
-- GitHub Actions run: `44046544247`; current status: Dependencies installing; Prisma generation, TypeScript build, security tests and dependency audits pending.
-- No production deployment performed.
-
-## MAX Backend session validation failure — service introspection rate limit — 2026-11-17
-- Investigated the live MAX Chat error "MAX Auth could not validate this session" using Render logs from max-backend service `srv-d7eeuc0sfn5c738tml3g`.
-- The failing request was POST `/api/v1/conversations/:id/messages/stream`; `requireAuth` failed before Gemini execution while calling MAX Auth `POST /api/v1/oauth/introspect`. The backend currently maps every non-2xx introspection response to generic `AUTH_SERVICE_ERROR` / HTTP 503, so the exact upstream status is not preserved in the log.
-- Nearby authenticated GET conversation requests returned HTTP 200, then the stream request failed with 503. CORS was correct for `https://chat.max-ai.name.ng`; this is not a CORS failure.
-- MAX Auth Render logs also showed a burst of repeated `No refresh token provided` warnings. The global MAX Auth rate limiter is applied before all `/api/v1` routes and defaults to 100 requests per 15 minutes. The trusted server-to-server introspection endpoint was therefore sharing the public browser/API IP budget despite already requiring the secret `X-MAX-Service-Token`.
-- On branch `fix/service-introspection-rate-limit`, changed `globalRateLimiter` to skip only POST `/api/v1/oauth/introspect`. The endpoint still enforces `MAX_AUTH_SERVICE_TOKEN` in `oauthController.introspect`; no other route or rate limit is bypassed.
-- This addresses a concrete rate-limit design flaw that can reject legitimate backend session checks. The precise upstream status for the user's failed request remains unconfirmed because the backend middleware does not currently log the upstream status/body code.
-- Next: run MAX Auth CI/build, open PR, merge only after checks pass, deploy and retest MAX Chat. If the issue persists, improve backend introspection diagnostics to record sanitized upstream status/error code (never token or service-token values). MAX Backend Gemini-only deployment remains live; Botpress untouched.
-
-
-## Google first-time account linking through MAX Auth OAuth — 2026-11-17
-- User request: allow MAX Chat to start a real Google account connection flow directly in the conversation, including when the Google identity has not previously been linked to the MAX Account.
-- Existing Google Calendar connect flow had a blocker: `createGoogleCalendarAuthorizationUrl` required a pre-existing `ConnectedProvider.GOOGLE` row, while `POST /auth/google/connect` only accepted a Google Identity Services credential from a separate sign-in UI. This prevented the chat-generated OAuth session from linking a first-time Google identity.
-- Updated Google OAuth authorization-session creation to allow an authenticated MAX Auth user to start the standard Google OAuth flow without a pre-existing Google identity. The OAuth state remains bound to the authenticated MAX user, short-lived, one-time-use, and PKCE-protected.
-- Updated the Google callback to safely upsert the Google connected-account record using the verified Google `sub`; it rejects an account already linked to a different MAX user and stores encrypted access/refresh tokens plus the granted scopes. The existing YouTube Music callback path is unchanged.
-- Branch: `feat/google-first-link-oauth-session`. Build, tests, callback integration tests, PR and production deployment pending.
-- No credentials or OAuth client settings changed. No account merge by email; the authenticated MAX session and OAuth state determine the target MAX user.
-
-### CI verification update — 2026-11-17
-- GitHub Actions CI run `44068162078`: Prisma generation, TypeScript build, security tests and critical dependency audit passed. The production high-risk dependency audit failed because the repository currently reports 2 high and 10 moderate dependency vulnerabilities; this PR does not change package manifests or lockfiles.
-- No Google OAuth callback integration test or live authorization round-trip has been run. PR #34 remains open/unmerged; no deployment performed.
-
-### Latest CI run — 2026-11-17
-- CI run `44068436389` repeated the same outcome: Prisma generation, TypeScript build, security tests and critical dependency audit passed; the high-risk production dependency audit failed with the existing 2 high / 10 moderate vulnerability inventory. This PR does not change dependency manifests or lockfiles.
-- No merge/deployment. OAuth callback round-trip remains pending.
-
-
-## MAX Auth startup blocked by shared Prisma migration ledger — 2026-11-17
-- Latest Render deployment attempts (14:09 UTC) still fail during the configured build command at Prisma P3009 for `20260904134000_pending_action_conversation_context`.
-- Confirmed the MAX Auth Render build command explicitly runs `npx prisma migrate deploy`, and the package start script also ran `prisma migrate deploy`. The failed migration belongs to MAX Backend, is not present in the MAX Auth migration directory, and references the `max_backend` schema while the shared Prisma ledger is in `public`.
-- MAX Auth does not need to run schema migrations during application startup. Changed the package start script to launch the compiled server directly; migrations must be applied through a controlled, service-specific release step after the shared-ledger/schema split is reconciled.
-- Branch: `fix/auth-start-without-shared-migrations`. The Render build command still needs to be changed manually from `npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build` to `npm install --include=dev && npx prisma generate && npm run build`; the available Render connection can inspect the service but cannot update its build/start command settings.
-- No database rows, tables, schemas, migration records, or production environment variables were modified. This change does not resolve the shared migration ledger for MAX Backend; it prevents MAX Auth from being coupled to that failed backend migration.
-- Validation, PR review, deployment, and live Auth health/OAuth tests pending.
+- Render verification after the audit: production service max-auth (srv-d9pop1ks728c73c08tog) is still configured to deploy branch main with auto-deploy enabled. Its newest deployment remains commit 001bf8fd7d020bac495f4b76ba88e7c3982cefb0 and status update_failed. PR #36 has not been merged, so none of the audit fixes are deployed to Render. No Render environment variables or production database records were changed during this audit.

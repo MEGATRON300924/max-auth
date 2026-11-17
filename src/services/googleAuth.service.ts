@@ -31,7 +31,7 @@ let googleKeysCache: { keys: GoogleJwk[]; expiresAt: number } | null = null;
 
 async function googleSigningKeys(): Promise<GoogleJwk[]> {
   if (googleKeysCache && googleKeysCache.expiresAt > Date.now()) return googleKeysCache.keys;
-  const response = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/certs", { signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new AppError("Google identity verification is temporarily unavailable", 503, "GOOGLE_VERIFICATION_UNAVAILABLE");
   const body = (await response.json()) as { keys: GoogleJwk[] };
   const cacheControl = response.headers.get("cache-control") || "";

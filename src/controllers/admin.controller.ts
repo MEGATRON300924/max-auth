@@ -7,13 +7,19 @@ import { auditService } from "../services/audit.service";
 import { getRequestContext } from "../utils/requestContext";
 import { mailService } from "../services/mail.service";
 import { BusinessVerificationStatus } from "@prisma/client";
+import { oauthService } from "../services/oauth.service";
+function sanitizeBusiness<T extends { emailVerificationTokenHash?: string | null; emailVerificationExpiresAt?: Date | null }>(business: T) {
+  const { emailVerificationTokenHash, emailVerificationExpiresAt, ...safe } = business;
+  return safe;
+}
+
 
 export const adminController = {
   async listUsers(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = parseInt((req.query.page as string) || "1", 10);
-      const limit = Math.min(parseInt((req.query.limit as string) || "25", 10), 100);
-      const search = req.query.search as string | undefined;
+      const page = Math.max(1, parseInt((req.query.page as string) || "1", 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || "25", 10) || 25));
+      const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : undefined;
 
       const [users, total] = await userRepository.list({
         skip: (page - 1) * limit,
@@ -43,7 +49,19 @@ export const adminController = {
   async suspendUser(req: Request, res: Response, next: NextFunction) {
     try {
       const ctx = getRequestContext(req);
-      const user = await userRepository.update(req.params.userId, { status: "SUSPENDED" });
+      const user = await prisma.$transaction(async (tx) => {
+        const target = await tx.user.findUnique({ where: { id: req.params.userId }, select: { id: true } });
+        if (!target) throw AppError.notFound("User not found");
+        const revokedAt = new Date();
+        const updated = await tx.user.update({ where: { id: target.id }, data: { status: "SUSPENDED" } });
+        await tx.session.updateMany({ where: { userId: target.id, isRevoked: false }, data: { isRevoked: true, revokedAt } });
+        await tx.oAuthAccessToken.updateMany({ where: { userId: target.id, revokedAt: null }, data: { revokedAt } });
+        await tx.oAuthRefreshToken.updateMany({ where: { userId: target.id, revokedAt: null }, data: { revokedAt } });
+        await tx.oAuthAuthorizationCode.deleteMany({ where: { userId: target.id } });
+        await tx.oAuthConsent.updateMany({ where: { userId: target.id, revokedAt: null }, data: { revokedAt } });
+        await tx.verificationToken.updateMany({ where: { userId: target.id, purpose: "PASSWORD_RESET", usedAt: null }, data: { usedAt: revokedAt } });
+        return updated;
+      });
       await auditService.record("ACCOUNT_SUSPENDED", {
         userId: req.params.userId,
         ipAddress: ctx.ipAddress,
@@ -59,7 +77,17 @@ export const adminController = {
   async reactivateUser(req: Request, res: Response, next: NextFunction) {
     try {
       const ctx = getRequestContext(req);
-      const user = await userRepository.update(req.params.userId, { status: "ACTIVE" });
+      const existing = await prisma.user.findUnique({ where: { id: req.params.userId }, select: { id: true, status: true } });
+      if (!existing) throw AppError.notFound("User not found");
+      if (existing.status === "DELETED") throw AppError.forbidden("Deleted MAX Accounts cannot be reactivated.", "ACCOUNT_DELETED");
+      const parentalConsent = await prisma.familyConsentRequest.findUnique({
+        where: { childUserId: existing.id },
+        select: { status: true },
+      });
+      if (parentalConsent && parentalConsent.status !== "APPROVED") {
+        throw AppError.forbidden("This account cannot be reactivated until parental approval is completed.", "PARENTAL_APPROVAL_REQUIRED");
+      }
+      const user = await prisma.user.update({ where: { id: existing.id }, data: { status: "ACTIVE" } });
       await auditService.record("ACCOUNT_REACTIVATED", {
         userId: req.params.userId,
         ipAddress: ctx.ipAddress,
@@ -99,7 +127,7 @@ export const adminController = {
           prisma.business.count({ where: { verificationStatus: "REJECTED" } }),
         ]),
       ]);
-      return ok(res, { organisations, counts: { UNVERIFIED: counts[0], PENDING: counts[1], VERIFIED: counts[2], REJECTED: counts[3] }, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+      return ok(res, { organisations: organisations.map(sanitizeBusiness), counts: { UNVERIFIED: counts[0], PENDING: counts[1], VERIFIED: counts[2], REJECTED: counts[3] }, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
     } catch (err) { next(err); }
   },
 
@@ -136,7 +164,7 @@ export const adminController = {
         });
         emailSent = true;
       } catch { emailSent = false; }
-      return ok(res, { organisation: updated, emailSent });
+      return ok(res, { organisation: sanitizeBusiness(updated), emailSent });
     } catch (err) { next(err); }
   },
 
@@ -163,14 +191,28 @@ export const adminController = {
 
   async updateOAuthClient(req: Request, res: Response, next: NextFunction) {
     try {
-      const client = await prisma.oAuthClient.findUnique({ where: { id: req.params.clientId }, select: { id: true, clientId: true, name: true, ownerId: true, redirectUris: true, scopes: true, isConfidential: true, isActive: true } });
+      const client = await prisma.oAuthClient.findUnique({
+        where: { id: req.params.clientId },
+        select: { id: true, clientId: true, ownerId: true },
+      });
       if (!client) throw AppError.notFound("OAuth client not found");
-      const { name, redirectUris, scopes, isConfidential } = req.body as { name?: string; redirectUris?: string[]; scopes?: string[]; isConfidential?: boolean };
-      const updated = await prisma.oAuthClient.update({ where: { id: client.id }, data: { name, redirectUris, scopes, isConfidential },
-        select: { id: true, clientId: true, name: true, ownerId: true, redirectUris: true, scopes: true, isConfidential: true, isActive: true, updatedAt: true } });
+      const { name, redirectUris, scopes, isConfidential } = req.body as {
+        name?: string; redirectUris?: string[]; scopes?: string[]; isConfidential?: boolean;
+      };
+      const updated = await oauthService.updateClientAsAdmin(client.id, { name, redirectUris, scopes, isConfidential });
       const ctx = getRequestContext(req);
-      await auditService.record("ADMIN_ACTION", { userId: req.user!.sub, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent,
-        metadata: { action: "OAUTH_CLIENT_ADMIN_UPDATED", clientDatabaseId: client.id, clientId: client.clientId, ownerId: client.ownerId, changedFields: Object.keys(req.body) } });
+      await auditService.record("ADMIN_ACTION", {
+        userId: req.user!.sub,
+        ipAddress: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+        metadata: {
+          action: "OAUTH_CLIENT_ADMIN_UPDATED",
+          clientDatabaseId: client.id,
+          clientId: client.clientId,
+          ownerId: client.ownerId,
+          changedFields: Object.keys(req.body),
+        },
+      });
       return ok(res, { client: updated });
     } catch (err) { next(err); }
   },

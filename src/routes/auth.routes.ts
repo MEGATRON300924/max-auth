@@ -6,6 +6,7 @@ import { doubleCsrfProtection } from "../middleware/csrf";
 import { loginRateLimiter, registerRateLimiter, sensitiveActionRateLimiter, oauthRateLimiter } from "../middleware/rateLimiter";
 import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema, verifyEmailSchema, deleteAccountSchema } from "../validators/auth.validators";
 import { z } from "zod";
+import { requireAllowedRefreshOrigin } from "../middleware/requireAllowedRefreshOrigin";
 
 const router = Router();
 const googleSchema = z.object({ body: z.object({ credential: z.string().min(20).max(10000) }) });
@@ -19,7 +20,7 @@ router.post("/logout", doubleCsrfProtection, authController.logout);
 // legitimately present a different req.ip between the bootstrap token request
 // and the refresh request, which would make an otherwise valid session fail on
 // every page reload.
-router.post("/refresh", authController.refresh);
+router.post("/refresh", requireAllowedRefreshOrigin, authController.refresh);
 router.get("/me", authenticate, authController.me);
 router.post("/email/send-verification", authenticate, sensitiveActionRateLimiter, authController.sendVerificationEmail);
 router.post("/email/verify", validate(verifyEmailSchema), authController.verifyEmail);

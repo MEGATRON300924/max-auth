@@ -23,16 +23,25 @@ export async function authenticateDeveloper(req: Request, _res: Response, next: 
 
   const token = header.slice("Bearer ".length).trim();
 
+  let sessionPayload: AccessTokenPayload | undefined;
   try {
-    const payload = verifyAccessToken(token);
-    const session = await sessionRepository.findById(payload.sessionId);
-    if (session && !session.isRevoked && session.expiresAt > new Date() && session.userId === payload.sub && session.user.status === "ACTIVE") {
-      void sessionRepository.touchLastUsed(session.id);
-      req.user = payload;
-      return next();
-    }
+    sessionPayload = verifyAccessToken(token);
   } catch {
     // OAuth access tokens are opaque and intentionally do not decode as JWTs.
+  }
+
+  if (sessionPayload) {
+    try {
+      const session = await sessionRepository.findById(sessionPayload.sessionId);
+      if (session && !session.isRevoked && session.expiresAt > new Date() && session.userId === sessionPayload.sub && session.user.status === "ACTIVE") {
+        void sessionRepository.touchLastUsed(session.id).catch(() => undefined);
+        req.user = sessionPayload;
+        return next();
+      }
+      return next(AppError.unauthorized("Invalid or expired access token", "INVALID_TOKEN"));
+    } catch (error) {
+      return next(error);
+    }
   }
 
   try {

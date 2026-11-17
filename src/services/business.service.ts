@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { BusinessMemberRole, BusinessMemberStatus, BusinessInvitationStatus, BusinessStatus, Prisma } from "@prisma/client";
+import { BusinessMemberRole, BusinessMemberStatus, BusinessInvitationStatus, BusinessStatus, BusinessVerificationStatus, Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { AppError } from "../utils/AppError";
 
@@ -105,6 +105,14 @@ export const businessService = {
     const membership = await membershipFor(businessId, userId);
     requireRole(membership.role, ownerAdmin);
     const data: Prisma.BusinessUpdateInput = {};
+    const requiresReverification =
+      (input.legalName !== undefined && input.legalName.trim() !== membership.business.legalName) ||
+      (input.displayName !== undefined && input.displayName.trim() !== membership.business.displayName) ||
+      (input.address !== undefined && (input.address?.trim() || null) !== membership.business.address) ||
+      (input.country !== undefined && input.country.trim().toUpperCase() !== membership.business.country) ||
+      (input.businessType !== undefined && input.businessType.trim() !== membership.business.businessType) ||
+      (input.registrationNumber !== undefined && (input.registrationNumber?.trim() || null) !== membership.business.registrationNumber);
+    if (requiresReverification) data.verificationStatus = BusinessVerificationStatus.PENDING;
     let verificationToken: string | undefined;
     if (input.legalName !== undefined) data.legalName = input.legalName.trim();
     if (input.displayName !== undefined) data.displayName = input.displayName.trim();
@@ -127,7 +135,7 @@ export const businessService = {
     if (input.description !== undefined) data.description = input.description?.trim() || null;
     if (input.registrationNumber !== undefined) data.registrationNumber = input.registrationNumber?.trim() || null;
     const updated = await prisma.business.update({ where: { id: businessId }, data });
-    await logBusiness(businessId, userId, "BUSINESS_PROFILE_UPDATED", context);
+    await logBusiness(businessId, userId, "BUSINESS_PROFILE_UPDATED", context, { requiresReverification });
     return { business: this.safeBusiness(updated), verificationToken };
   },
 
@@ -150,10 +158,18 @@ export const businessService = {
       business.emailVerificationExpiresAt <= new Date() || business.emailVerificationTokenHash !== tokenHash(token)) {
       throw AppError.badRequest("This business email verification link is invalid or has expired", "BUSINESS_EMAIL_TOKEN_INVALID");
     }
-    const updated = await prisma.business.update({
-      where: { id: businessId },
+    const claimed = await prisma.business.updateMany({
+      where: {
+        id: businessId,
+        emailVerificationTokenHash: tokenHash(token),
+        emailVerificationExpiresAt: { gt: new Date() },
+        emailVerifiedAt: null,
+      },
       data: { emailVerifiedAt: new Date(), emailVerificationTokenHash: null, emailVerificationExpiresAt: null },
     });
+    if (claimed.count !== 1) throw AppError.conflict("This business email verification link has already been used", "BUSINESS_EMAIL_TOKEN_USED");
+    const updated = await prisma.business.findUnique({ where: { id: businessId } });
+    if (!updated) throw AppError.notFound("Business not found", "BUSINESS_NOT_FOUND");
     await logBusiness(businessId, business.ownerId, "BUSINESS_EMAIL_VERIFIED", context);
     return this.safeBusiness(updated);
   },
@@ -192,8 +208,8 @@ export const businessService = {
   },
 
   async acceptInvitation(userId: string, token: string, context: Context) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } });
-    if (!user) throw AppError.unauthorized();
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, status: true, verificationStatus: true } });
+    if (!user || user.status !== "ACTIVE" || user.verificationStatus !== "VERIFIED") throw AppError.forbidden("Accepting a business invitation requires an active, email-verified MAX Account.", "BUSINESS_INVITATION_EMAIL_NOT_VERIFIED");
     const invitation = await prisma.businessInvitation.findUnique({ where: { tokenHash: tokenHash(token) }, include: { business: true } });
     if (!invitation || invitation.status !== BusinessInvitationStatus.PENDING || invitation.expiresAt <= new Date() || invitation.business.status !== BusinessStatus.ACTIVE) {
       throw AppError.badRequest("This business invitation is invalid, revoked, or expired", "BUSINESS_INVITATION_INVALID");

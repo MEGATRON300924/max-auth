@@ -4,7 +4,7 @@ import { logger } from "../utils/logger";
 import { env } from "../config/env";
 
 export function notFoundHandler(req: Request, _res: Response, next: NextFunction) {
-  next(AppError.notFound(`Route not found: ${req.method} ${req.originalUrl}`));
+  next(AppError.notFound(`Route not found: ${req.method} ${req.path}`));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

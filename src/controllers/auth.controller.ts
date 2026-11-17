@@ -5,6 +5,7 @@ import { userService } from "../services/user.service";
 import { notificationService } from "../services/notification.service";
 import { ok, sanitizeUser } from "../utils/response";
 import { getRequestContext } from "../utils/requestContext";
+import { clearRefreshCookie } from "../utils/authCookies";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 
@@ -26,10 +27,6 @@ function setRefreshCookie(res: Response, refreshToken: string, rememberMe = true
   });
 }
 
-function clearRefreshCookie(res: Response) {
-  res.clearCookie(env.REFRESH_COOKIE_NAME, refreshCookieOptions);
-}
-
 function noStore(res: Response) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Pragma", "no-cache");
@@ -45,8 +42,8 @@ export const authController = {
   async sendVerificationEmail(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); await authService.sendEmailVerification(req.user!.sub, ctx); return ok(res, { message: "Verification email sent" }); } catch (err) { next(err); } },
   async verifyEmail(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); await authService.verifyEmail(req.body.token, ctx); return ok(res, { message: "Email verified successfully" }); } catch (err) { next(err); } },
   async forgotPassword(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); await authService.forgotPassword(req.body.email, ctx); return ok(res, { message: "If an account with that email exists, a reset link has been sent" }); } catch (err) { next(err); } },
-  async resetPassword(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); await authService.resetPassword(req.body.token, req.body.newPassword, ctx); return ok(res, { message: "Password reset successfully. Please log in again." }); } catch (err) { next(err); } },
-  async changePassword(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); await authService.changePassword(req.user!.sub, req.body.currentPassword, req.body.newPassword, ctx); const user = await userService.getProfile(req.user!.sub); void notificationService.sendPasswordChangedNotification(user); return ok(res, { message: "Password changed successfully" }); } catch (err) { next(err); } },
+  async resetPassword(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); await authService.resetPassword(req.body.token, req.body.newPassword, ctx); clearRefreshCookie(res); return ok(res, { message: "Password reset successfully. Please log in again." }); } catch (err) { next(err); } },
+  async changePassword(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); await authService.changePassword(req.user!.sub, req.body.currentPassword, req.body.newPassword, ctx); clearRefreshCookie(res); const user = await userService.getProfile(req.user!.sub); void notificationService.sendPasswordChangedNotification(user); return ok(res, { message: "Password changed successfully. Please sign in again." }); } catch (err) { next(err); } },
   async deleteAccount(req: Request, res: Response, next: NextFunction) { try { noStore(res); const ctx = getRequestContext(req); await authService.deleteAccount(req.user!.sub, req.body.password, ctx); clearRefreshCookie(res); return ok(res, { message: "Account deleted" }); } catch (err) { next(err); } },
   async me(req: Request, res: Response, next: NextFunction) { try { noStore(res); const user = await userService.getProfile(req.user!.sub); return ok(res, { user: sanitizeUser(user) }); } catch (err) { next(err); } },
 };

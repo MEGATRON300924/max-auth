@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import dns from "node:dns/promises";
 import net from "node:net";
+import https from "node:https";
+import { env } from "../config/env";
 import { prisma } from "../database/prisma";
 
 export const WEBHOOK_EVENTS = [
@@ -26,24 +28,110 @@ function generateSecret() {
 }
 
 function isPrivateIpv4(ip: string) {
-  const [a, b] = ip.split(".").map(Number);
-  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
+  const [a, b, c] = parts;
+  return a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && c === 0) ||
+    (a === 192 && b === 0 && c === 2) ||
+    (a === 192 && b === 88 && c === 99) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113);
 }
 
 function isPrivateIpv6(ip: string) {
-  const normalized = ip.toLowerCase();
-  return normalized === "::1" || normalized === "::" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:");
+  const normalized = ip.toLowerCase().split("%")[0];
+  if (normalized.startsWith("::ffff:")) {
+    const mappedIpv4 = normalized.slice(7);
+    if (net.isIP(mappedIpv4) === 4) return isPrivateIpv4(mappedIpv4);
+    return true;
+  }
+  const firstHextet = Number.parseInt(normalized.split(":")[0] || "0", 16);
+  // Only globally routable unicast space (2000::/3) is accepted.
+  if (!Number.isFinite(firstHextet) || firstHextet < 0x2000 || firstHextet > 0x3fff) return true;
+  if (normalized.startsWith("2001:db8:")) return true; // documentation range
+  return false;
 }
 
-async function validateUrl(rawUrl: string) {
+async function validateUrl(rawUrl: string): Promise<{ url: string; address: string; family: 4 | 6 }> {
   const url = new URL(rawUrl);
   if (url.protocol !== "https:") throw new Error("Webhook URL must use HTTPS");
   if (url.username || url.password) throw new Error("Webhook URL must not contain credentials");
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
   if (["localhost", "localhost.localdomain"].includes(hostname.toLowerCase())) throw new Error("Webhook URL cannot target localhost");
-  const addresses = net.isIP(hostname) ? [hostname] : (await dns.lookup(hostname, { all: true })).map((entry) => entry.address);
-  if (!addresses.length || addresses.some((ip) => net.isIPv4(ip) ? isPrivateIpv4(ip) : isPrivateIpv6(ip))) throw new Error("Webhook URL resolves to a private or local address");
-  return url.toString();
+  const addresses = net.isIP(hostname)
+    ? [{ address: hostname, family: net.isIP(hostname) }]
+    : await dns.lookup(hostname, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some((entry) => entry.family === 4 ? isPrivateIpv4(entry.address) : isPrivateIpv6(entry.address))) {
+    throw new Error("Webhook URL resolves to a private, reserved, or local address");
+  }
+  const selected = addresses[0];
+  return { url: url.toString(), address: selected.address, family: selected.family as 4 | 6 };
+}
+
+function encryptionKey() {
+  return crypto.createHash("sha256").update(env.WEBHOOK_ENCRYPTION_KEY).digest();
+}
+
+function encryptSecret(secret: string) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", encryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
+  return [iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), encrypted.toString("base64url")].join(".");
+}
+
+function decryptSecret(value: string) {
+  const [ivRaw, tagRaw, encryptedRaw] = value.split(".");
+  if (!ivRaw || !tagRaw || !encryptedRaw) throw new Error("Invalid encrypted webhook secret");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(ivRaw, "base64url"));
+  decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(encryptedRaw, "base64url")), decipher.final()]).toString("utf8");
+}
+
+export function signatureFor(secret: string, timestamp: string, body: string) {
+  return crypto.createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
+}
+
+async function postWebhook(target: { url: string; address: string; family: 4 | 6 }, body: string, headers: Record<string, string>) {
+  const url = new URL(target.url);
+  const hostname = url.hostname.replace(/^\\[|\\]$/g, "");
+  return new Promise<{ status: number; body: string }>((resolve, reject) => {
+    const request = https.request({
+      hostname,
+      port: url.port ? Number(url.port) : 443,
+      path: `${url.pathname}${url.search}`,
+      method: "POST",
+      headers: { ...headers, host: url.host, "content-length": String(Buffer.byteLength(body)) },
+      servername: net.isIP(hostname) ? undefined : hostname,
+      // Pin the connection to the exact address that passed the SSRF checks.
+      // This prevents a second DNS resolution from being rebound to a private IP.
+      lookup: (_hostname, _options, callback) => callback(null, target.address, target.family),
+    }, (response) => {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      response.on("data", (chunk: Buffer | string) => {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        if (size < 1000) {
+          const remaining = 1000 - size;
+          chunks.push(buffer.subarray(0, remaining));
+          size += Math.min(buffer.length, remaining);
+        }
+      });
+      response.on("end", () => resolve({
+        status: response.statusCode ?? 0,
+        body: Buffer.concat(chunks).toString("utf8"),
+      }));
+      response.on("error", reject);
+    });
+    request.setTimeout(10_000, () => request.destroy(new Error("Webhook request timed out")));
+    request.on("error", reject);
+    request.end(body);
+  });
 }
 
 async function getOwnedEndpoint(userId: string, endpointId: string) {
@@ -51,28 +139,23 @@ async function getOwnedEndpoint(userId: string, endpointId: string) {
   return rows[0] ?? null;
 }
 
-async function sendDelivery(endpoint: { id: string; url: string; secretHash: string }, delivery: { id: string; eventType: string; eventId: string; body: string; attemptCount: number }) {
+async function sendDelivery(endpoint: { id: string; url: string; secretHash: string; secretEncrypted?: string | null }, delivery: { id: string; eventType: string; eventId: string; body: string; attemptCount: number }) {
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const signature = crypto.createHmac("sha256", endpoint.secretHash).update(`${timestamp}.${delivery.body}`).digest("hex");
   try {
+    const signingSecret = endpoint.secretEncrypted ? decryptSecret(endpoint.secretEncrypted) : endpoint.secretHash;
+    const signature = signatureFor(signingSecret, timestamp, delivery.body);
     // Revalidate the destination immediately before every delivery so a DNS change
     // after endpoint creation/update cannot silently bypass the URL policy.
-    const safeUrl = await validateUrl(endpoint.url);
-    const response = await fetch(safeUrl, {
-      method: "POST",
-      redirect: "manual",
-      headers: {
-        "content-type": "application/json",
-        "user-agent": "MAX-Webhooks/1.0",
-        "x-max-event": delivery.eventType,
-        "x-max-event-id": delivery.eventId,
-        "x-max-timestamp": timestamp,
-        "x-max-signature": `t=${timestamp},v1=${signature}`,
-      },
-      body: delivery.body,
-      signal: AbortSignal.timeout(10000),
+    const target = await validateUrl(endpoint.url);
+    const response = await postWebhook(target, delivery.body, {
+      "content-type": "application/json",
+      "user-agent": "MAX-Webhooks/1.0",
+      "x-max-event": delivery.eventType,
+      "x-max-event-id": delivery.eventId,
+      "x-max-timestamp": timestamp,
+      "x-max-signature": `t=${timestamp},v1=${signature}`,
     });
-    const responseBody = (await response.text()).slice(0, 1000);
+    const responseBody = response.body;
     if (response.status >= 200 && response.status < 300) {
       await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET status = 'delivered', response_status = $1, response_body = $2, delivered_at = CURRENT_TIMESTAMP, next_attempt_at = NULL WHERE id = $3`, response.status, responseBody, delivery.id);
       return { deliveryId: delivery.id, status: response.status };
@@ -107,11 +190,11 @@ export const webhookService = {
   async create(userId: string, name: string, rawUrl: string, events: string[]) {
     const cleanName = name.trim().slice(0, 100);
     if (!cleanName) throw new Error("Webhook name is required");
-    const url = await validateUrl(rawUrl.trim());
+    const { url } = await validateUrl(rawUrl.trim());
     const selected = [...new Set(events)].filter((event) => WEBHOOK_EVENTS.includes(event as typeof WEBHOOK_EVENTS[number]));
     if (!selected.length) throw new Error("Select at least one supported event");
     const secret = generateSecret();
-    const endpointRows = await prisma.$queryRawUnsafe<any[]>(`INSERT INTO webhook_endpoints (user_id, name, url, secret_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, url, active, created_at, updated_at`, userId, cleanName, url, hashSecret(secret));
+    const endpointRows = await prisma.$queryRawUnsafe<any[]>(`INSERT INTO webhook_endpoints (user_id, name, url, secret_hash, secret_encrypted) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, url, active, created_at, updated_at`, userId, cleanName, url, hashSecret(secret), encryptSecret(secret));
     const endpoint = endpointRows[0];
     for (const event of selected) await prisma.$executeRawUnsafe(`INSERT INTO webhook_subscriptions (endpoint_id, event_type) VALUES ($1, $2)`, endpoint.id, event);
     return { ...endpoint, subscriptions: selected.map((event) => ({ eventType: event, active: true })), secret };
@@ -120,7 +203,7 @@ export const webhookService = {
   async update(userId: string, endpointId: string, input: { name?: string; url?: string; active?: boolean; events?: string[] }) {
     const endpoint = await getOwnedEndpoint(userId, endpointId);
     if (!endpoint) throw new Error("Webhook endpoint not found");
-    const url = input.url === undefined ? endpoint.url : await validateUrl(input.url.trim());
+    const url = input.url === undefined ? endpoint.url : (await validateUrl(input.url.trim())).url;
     const name = input.name === undefined ? endpoint.name : input.name.trim().slice(0, 100);
     if (!name) throw new Error("Webhook name is required");
     const active = input.active === undefined ? endpoint.active : Boolean(input.active);
@@ -138,7 +221,7 @@ export const webhookService = {
     const endpoint = await getOwnedEndpoint(userId, endpointId);
     if (!endpoint) throw new Error("Webhook endpoint not found");
     const secret = generateSecret();
-    await prisma.$executeRawUnsafe(`UPDATE webhook_endpoints SET secret_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND user_id = $3`, hashSecret(secret), endpointId, userId);
+    await prisma.$executeRawUnsafe(`UPDATE webhook_endpoints SET secret_hash = $1, secret_encrypted = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4`, hashSecret(secret), encryptSecret(secret), endpointId, userId);
     return { secret };
   },
 
@@ -153,7 +236,7 @@ export const webhookService = {
   },
 
   async deliver(endpointId: string, eventType: string, payload: unknown) {
-    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT id, url, secret_hash AS "secretHash" FROM webhook_endpoints WHERE id = $1 AND active = true LIMIT 1`, endpointId);
+    const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT id, url, secret_hash AS "secretHash", secret_encrypted AS "secretEncrypted" FROM webhook_endpoints WHERE id = $1 AND active = true LIMIT 1`, endpointId);
     const endpoint = rows[0];
     if (!endpoint) return null;
     const subscriptions = await prisma.$queryRawUnsafe<any[]>(`SELECT 1 FROM webhook_subscriptions WHERE endpoint_id = $1 AND event_type = $2 AND active = true LIMIT 1`, endpointId, eventType);
@@ -161,7 +244,7 @@ export const webhookService = {
     const eventId = `evt_${crypto.randomBytes(18).toString("base64url")}`;
     const body = JSON.stringify({ id: eventId, type: eventType, createdAt: new Date().toISOString(), data: payload });
     const deliveryRows = await prisma.$queryRawUnsafe<any[]>(`INSERT INTO webhook_deliveries (endpoint_id, event_type, event_id, payload, attempt_count, status) VALUES ($1, $2, $3, $4::jsonb, 1, 'retrying') RETURNING id`, endpointId, eventType, eventId, body);
-    return sendDelivery({ id: endpoint.id, url: endpoint.url, secretHash: endpoint.secretHash }, { id: deliveryRows[0].id, eventType, eventId, body, attemptCount: 1 });
+    return sendDelivery({ id: endpoint.id, url: endpoint.url, secretHash: endpoint.secretHash, secretEncrypted: endpoint.secretEncrypted }, { id: deliveryRows[0].id, eventType, eventId, body, attemptCount: 1 });
   },
 
   async retryPending(limit = 25) {
@@ -170,7 +253,7 @@ export const webhookService = {
 
     const deliveries = await prisma.$queryRawUnsafe<any[]>(`
       SELECT d.id, d.endpoint_id AS "endpointId", d.event_type AS "eventType", d.event_id AS "eventId", d.payload::text AS body,
-             d.attempt_count AS "attemptCount", e.url, e.secret_hash AS "secretHash"
+             d.attempt_count AS "attemptCount", e.url, e.secret_hash AS "secretHash", e.secret_encrypted AS "secretEncrypted"
       FROM webhook_deliveries d
       JOIN webhook_endpoints e ON e.id = d.endpoint_id
       WHERE e.active = true
@@ -191,7 +274,7 @@ export const webhookService = {
 
       await prisma.$executeRawUnsafe(`UPDATE webhook_deliveries SET attempt_count = attempt_count + 1 WHERE id = $1 AND status = 'processing'`, delivery.id);
       await sendDelivery(
-        { id: delivery.endpointId, url: delivery.url, secretHash: delivery.secretHash },
+        { id: delivery.endpointId, url: delivery.url, secretHash: delivery.secretHash, secretEncrypted: delivery.secretEncrypted },
         { id: delivery.id, eventType: delivery.eventType, eventId: delivery.eventId, body: delivery.body, attemptCount: delivery.attemptCount + 1 },
       );
     }

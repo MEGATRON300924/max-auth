@@ -11,10 +11,10 @@ export const mailService = {
     }
     if (env.MAIL_PROVIDER === "resend") {
       if (!env.RESEND_API_KEY) throw new Error("RESEND_API_KEY is required when MAIL_PROVIDER=resend");
-      const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: env.MAIL_FROM, to: [payload.to], subject: payload.subject, text: payload.text, html: payload.html }) });
+      const response = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ from: env.MAIL_FROM, to: [payload.to], subject: payload.subject, text: payload.text, html: payload.html }), signal: AbortSignal.timeout(10000) });
       if (!response.ok) {
         const body = await response.text().catch(() => "");
-        logger.error("Resend email delivery failed", { status: response.status, body });
+        logger.error("Resend email delivery failed", { status: response.status, body: body.slice(0, 500) });
         throw new Error("Email delivery failed");
       }
       return;

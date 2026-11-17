@@ -3,6 +3,8 @@ import { cloudinaryService } from "../services/cloudinary.service";
 import { userService } from "../services/user.service";
 import { ok, sanitizeUser } from "../utils/response";
 import { getRequestContext } from "../utils/requestContext";
+import { prisma } from "../database/prisma";
+import { AppError } from "../utils/AppError";
 
 export const avatarController = {
   signUpload(req: Request, res: Response, next: NextFunction) {
@@ -10,8 +12,13 @@ export const avatarController = {
       return ok(res, cloudinaryService.createAvatarUpload(req.user!.sub));
     } catch (error) { next(error); }
   },
-  signSpotlightUpload(req: Request, res: Response, next: NextFunction) {
+  async signSpotlightUpload(req: Request, res: Response, next: NextFunction) {
     try {
+      const reviewer = await prisma.spotlightEntityReviewer.findUnique({
+        where: { userId: req.user!.sub },
+        select: { userId: true },
+      });
+      if (!reviewer) throw AppError.forbidden("Only approved MAX Spotlight reviewers can upload entity media.", "SPOTLIGHT_REVIEW_ACCESS_REQUIRED");
       const entityPublicId = String(req.body?.entityPublicId || "");
       return ok(res, cloudinaryService.createSpotlightUpload(req.user!.sub, entityPublicId));
     } catch (error) { next(error); }

@@ -14,6 +14,7 @@ export const oauthClientLogoController = {
       const logo = await oauthClientLogoService.publicLogo(req.params.clientId);
       if (!logo) return res.status(404).end();
       res.setHeader("Content-Type", logo.contentType);
+      res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "public, max-age=3600");
       return res.send(logo.data);
     } catch (err) { next(err); }

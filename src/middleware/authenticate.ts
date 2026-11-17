@@ -20,17 +20,24 @@ export async function authenticate(
 
   const token = header.slice("Bearer ".length).trim();
 
+  let payload;
   try {
-    const payload = verifyAccessToken(token);
+    payload = verifyAccessToken(token);
+  } catch {
+    return next(AppError.unauthorized("Invalid or expired access token"));
+  }
+
+  try {
     const session = await sessionRepository.findById(payload.sessionId);
     if (!session || session.isRevoked || session.expiresAt <= new Date() || session.userId !== payload.sub || session.user.status !== "ACTIVE") {
       return next(AppError.unauthorized("Session is no longer valid", "SESSION_REVOKED"));
     }
-    void sessionRepository.touchLastUsed(session.id);
+    void sessionRepository.touchLastUsed(session.id).catch(() => undefined);
     req.user = payload;
-    next();
-  } catch {
-    return next(AppError.unauthorized("Invalid or expired access token"));
+    return next();
+  } catch (error) {
+    // Preserve database/infrastructure errors; do not misreport them as bad credentials.
+    return next(error);
   }
 }
 

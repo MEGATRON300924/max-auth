@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Request } from "express";
 import { prisma } from "../database/prisma";
+import { linkConnectedAccount } from "./connectedAccountLink.service";
 import { ConnectedProvider } from "@prisma/client";
 import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
@@ -80,7 +81,7 @@ function googleDecrypt(value: string): string {
   return Buffer.concat([decipher.update(Buffer.from(encryptedRaw, "base64url")), decipher.final()]).toString("utf8");
 }
 async function googleRequest(url: string, options: RequestInit): Promise<any> {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(10_000) });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message =
@@ -102,7 +103,7 @@ function ensureConfigured() {
   }
 }
 async function spotifyRequest(url: string, options: RequestInit): Promise<any> {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(10_000) });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     // Spotify token endpoints commonly return { error: "invalid_grant" } rather
@@ -140,12 +141,12 @@ export const connectedAccountsService = {
   },
 
   async link(userId: string, provider: ConnectedProvider, data: { providerAccountId: string; accessTokenEnc?: string; refreshTokenEnc?: string; scope?: string; tokenExpiresAt?: Date }, ctx: { ipAddress?: string; userAgent?: string }) {
-    const existing = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider, providerAccountId: data.providerAccountId } } });
-    if (existing && existing.userId !== userId) throw AppError.conflict("This provider account is already connected to another MAX Account");
-    const account = await prisma.connectedAccount.upsert({
-      where: { provider_providerAccountId: { provider, providerAccountId: data.providerAccountId } },
-      create: { userId, provider, ...data },
-      update: { userId, ...data },
+    const account = await linkConnectedAccount({
+      userId,
+      provider,
+      providerAccountId: data.providerAccountId,
+      createData: { userId, provider, ...data },
+      updateData: { ...data },
     });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, metadata: { provider } });
     return account;
@@ -203,12 +204,12 @@ export const connectedAccountsService = {
       throw error;
     }
 
-    const existing = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: ConnectedProvider.SPOTIFY, providerAccountId: profile.id } } });
-    if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This Spotify account is already connected to another MAX Account");
-    await prisma.connectedAccount.upsert({
-      where: { provider_providerAccountId: { provider: ConnectedProvider.SPOTIFY, providerAccountId: profile.id } },
-      create: { userId: oauthState.userId, provider: ConnectedProvider.SPOTIFY, providerAccountId: profile.id, accessTokenEnc: encrypt(token.access_token), refreshTokenEnc: token.refresh_token ? encrypt(token.refresh_token) : null, scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
-      update: { userId: oauthState.userId, accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+    await linkConnectedAccount({
+      userId: oauthState.userId,
+      provider: ConnectedProvider.SPOTIFY,
+      providerAccountId: profile.id,
+      createData: { userId: oauthState.userId, provider: ConnectedProvider.SPOTIFY, providerAccountId: profile.id, accessTokenEnc: encrypt(token.access_token), refreshTokenEnc: token.refresh_token ? encrypt(token.refresh_token) : null, scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      updateData: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
     });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req.ip, userAgent: req.headers["user-agent"], metadata: { provider: "SPOTIFY", spotifyAccountId: profile.id } });
     return { status: "connected" as const };
@@ -258,9 +259,11 @@ export const connectedAccountsService = {
       if (existingGoogle && existingGoogle.userId !== oauthState.userId) {
         throw AppError.conflict("This Google account is already connected to another MAX Account", "GOOGLE_ACCOUNT_ALREADY_LINKED");
       }
-      await prisma.connectedAccount.upsert({
-        where: { provider_providerAccountId: { provider: ConnectedProvider.GOOGLE, providerAccountId: profile.sub } },
-        create: {
+      await linkConnectedAccount({
+        userId: oauthState.userId,
+        provider: ConnectedProvider.GOOGLE,
+        providerAccountId: profile.sub,
+        createData: {
           userId: oauthState.userId,
           provider: ConnectedProvider.GOOGLE,
           providerAccountId: profile.sub,
@@ -269,7 +272,7 @@ export const connectedAccountsService = {
           scope: token.scope || GOOGLE_SCOPES.join(" "),
           tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000)
         },
-        update: {
+        updateData: {
           accessTokenEnc: googleEncrypt(token.access_token),
           refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existingGoogle?.refreshTokenEnc ?? null,
           scope: token.scope || GOOGLE_SCOPES.join(" "),
@@ -283,10 +286,12 @@ export const connectedAccountsService = {
     const existing = await prisma.connectedAccount.findUnique({ where: { provider_providerAccountId: { provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub } } });
     if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This Google account is already connected to another MAX Account for YouTube Music");
     const scopes = ["openid", "email", "profile", "https://www.googleapis.com/auth/youtube.readonly"];
-    await prisma.connectedAccount.upsert({
-      where: { provider_providerAccountId: { provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub } },
-      create: { userId: oauthState.userId, provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub, accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
-      update: { userId: oauthState.userId, accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existing?.refreshTokenEnc ?? null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+    await linkConnectedAccount({
+      userId: oauthState.userId,
+      provider: ConnectedProvider.YOUTUBE_MUSIC,
+      providerAccountId: profile.sub,
+      createData: { userId: oauthState.userId, provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub, accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      updateData: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existing?.refreshTokenEnc ?? null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
     });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req?.ip, userAgent: req?.headers["user-agent"], metadata: { provider: "YOUTUBE_MUSIC", service: "youtube_music" } });
     return { status: "connected" as const, service: "youtube_music" as const };
@@ -294,6 +299,8 @@ export const connectedAccountsService = {
 
   async googleAccessToken(userId: string, requiredScopes: string[]) {
     ensureGoogleConfigured();
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+    if (!user || user.status !== "ACTIVE") throw AppError.forbidden("This MAX Account is not active", "ACCOUNT_NOT_ACTIVE");
     const wantsYouTube = requiredScopes.includes("https://www.googleapis.com/auth/youtube.readonly");
     const account = wantsYouTube
       ? await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.YOUTUBE_MUSIC } }) || await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } })
@@ -726,6 +733,8 @@ export const connectedAccountsService = {
 
   async spotifyAccessToken(userId: string) {
     ensureConfigured();
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+    if (!user || user.status !== "ACTIVE") throw AppError.forbidden("This MAX Account is not active", "ACCOUNT_NOT_ACTIVE");
     let account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Spotify is not connected");
     if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() - Date.now() < 60_000) {
@@ -739,6 +748,7 @@ export const connectedAccountsService = {
   async spotifyApiRequest(userId: string, path: string, init: RequestInit = {}) {
     const requestWithToken = (accessToken: string) => fetch("https://api.spotify.com/v1" + path, {
       ...init,
+      signal: init.signal ?? AbortSignal.timeout(10_000),
       headers: { Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...(init.headers || {}), Authorization: "Bearer " + accessToken },
     });
 

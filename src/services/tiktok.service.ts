@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { ConnectedProvider } from "@prisma/client";
 import { prisma } from "../database/prisma";
+import { linkConnectedAccount } from "./connectedAccountLink.service";
 import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
 import { env } from "../config/env";
@@ -37,7 +38,7 @@ function hash(value: string) { return crypto.createHash("sha256").update(value).
 function random(bytes = 32) { return crypto.randomBytes(bytes).toString("base64url"); }
 
 async function request(url: string, init: RequestInit = {}) {
-  const response = await fetch(url, { ...init, headers: { Accept: "application/json", ...(init.headers || {}) } });
+  const response = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(10_000), headers: { Accept: "application/json", ...(init.headers || {}) } });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok || (body?.error?.code && body.error.code !== "ok")) {
     throw AppError.badRequest(body?.error_description || body?.error?.message || body?.message || "TikTok request failed", "TIKTOK_REQUEST_FAILED", { status: response.status });
@@ -106,9 +107,11 @@ export const tiktokService = {
     });
     if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This TikTok account is already connected to another MAX Account");
 
-    await prisma.connectedAccount.upsert({
-      where: { provider_providerAccountId: { provider: ConnectedProvider.TIKTOK, providerAccountId: String(token.open_id) } },
-      create: {
+    await linkConnectedAccount({
+      userId: oauthState.userId,
+      provider: ConnectedProvider.TIKTOK,
+      providerAccountId: String(token.open_id),
+      createData: {
         userId: oauthState.userId,
         provider: ConnectedProvider.TIKTOK,
         providerAccountId: String(token.open_id),
@@ -117,8 +120,7 @@ export const tiktokService = {
         scope: token.scope || SCOPES.join(","),
         tokenExpiresAt: token.expires_in ? new Date(Date.now() + Number(token.expires_in) * 1000) : null,
       },
-      update: {
-        userId: oauthState.userId,
+      updateData: {
         accessTokenEnc: encrypt(token.access_token),
         refreshTokenEnc: token.refresh_token ? encrypt(token.refresh_token) : null,
         scope: token.scope || SCOPES.join(","),

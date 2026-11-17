@@ -3,6 +3,7 @@ import { deviceService } from "../services/device.service";
 import { auditService } from "../services/audit.service";
 import { ok } from "../utils/response";
 import { getRequestContext } from "../utils/requestContext";
+import { clearRefreshCookie } from "../utils/authCookies";
 
 export const deviceController = {
   async listDevices(req: Request, res: Response, next: NextFunction) {
@@ -32,7 +33,8 @@ export const deviceController = {
   async revokeDevice(req: Request, res: Response, next: NextFunction) {
     try {
       const ctx = getRequestContext(req);
-      await deviceService.revokeDevice(req.user!.sub, req.params.deviceId);
+      const result = await deviceService.revokeDevice(req.user!.sub, req.params.deviceId, req.user!.sessionId);
+      if (result.currentSessionRevoked) clearRefreshCookie(res);
       await auditService.record("DEVICE_REVOKED", {
         userId: req.user!.sub,
         ipAddress: ctx.ipAddress,
@@ -57,6 +59,7 @@ export const deviceController = {
     try {
       const ctx = getRequestContext(req);
       await deviceService.revokeSession(req.user!.sub, req.params.sessionId);
+      if (req.params.sessionId === req.user!.sessionId) clearRefreshCookie(res);
       await auditService.record("SESSION_REVOKED", {
         userId: req.user!.sub,
         ipAddress: ctx.ipAddress,
@@ -72,6 +75,7 @@ export const deviceController = {
     try {
       const ctx = getRequestContext(req);
       await deviceService.revokeAllSessions(req.user!.sub);
+      clearRefreshCookie(res);
       await auditService.record("SESSION_REVOKED", {
         userId: req.user!.sub,
         ipAddress: ctx.ipAddress,

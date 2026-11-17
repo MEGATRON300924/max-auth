@@ -30,6 +30,7 @@ export const personalizationService = {
       where: { id: userId },
       select: {
         id: true,
+        status: true,
         username: true,
         displayName: true,
         language: true,
@@ -57,7 +58,7 @@ export const personalizationService = {
       },
     });
 
-    if (!user) throw AppError.notFound("MAX Account not found");
+    if (!user || user.status !== "ACTIVE") throw AppError.notFound("Active MAX Account not found");
 
     return {
       version: PERSONALIZATION_VERSION,
@@ -88,8 +89,8 @@ export const personalizationService = {
     connectedServices?: unknown;
     memoryMetadata?: unknown;
   }) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-    if (!user) throw AppError.notFound("MAX Account not found");
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, status: true } });
+    if (!user || user.status !== "ACTIVE") throw AppError.notFound("Active MAX Account not found");
 
     const current = await prisma.aIProfile.findUnique({ where: { userId } });
     const data: any = {};
