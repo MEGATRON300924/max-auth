@@ -2,6 +2,7 @@ import { prisma } from "../database/prisma";
 import { hashPassword, verifyPassword } from "../security/password";
 import { generateOpaqueToken, hashToken } from "../security/tokens";
 import { AppError } from "../utils/AppError";
+import { normalizeRedirectUris } from "../security/oauthRedirectUri";
 import { auditService } from "./audit.service";
 import { env } from "../config/env";
 import jwt from "jsonwebtoken";
@@ -36,27 +37,6 @@ function verifyAuthorizationRequest(raw: string): AuthorizationRequest { const p
 function signIdToken(user: { id: string; email: string; username: string; displayName: string | null; avatarUrl: string | null; verificationStatus: string }, clientId: string) { if (!env.OIDC_PRIVATE_KEY) throw new AppError("MAX Auth OIDC signing is not configured", 503, "OIDC_NOT_CONFIGURED"); return jwt.sign({ sub: user.id, email: user.email, email_verified: user.verificationStatus === "VERIFIED", preferred_username: user.username, name: user.displayName, picture: user.avatarUrl || `${(env.FRONTEND_URL.endsWith("/") ? env.FRONTEND_URL.slice(0, -1) : env.FRONTEND_URL)}/user.png` }, env.OIDC_PRIVATE_KEY.replace(/\\n/g, "\n"), { algorithm: "RS256", expiresIn: env.OIDC_ID_TOKEN_TTL_SECONDS, issuer: env.OIDC_ISSUER, audience: clientId, keyid: env.OIDC_KEY_ID } as jwt.SignOptions); }
 async function loadClient(clientId: string) { const client = await prisma.oAuthClient.findUnique({ where: { clientId } }); if (!client || !client.isActive) throw AppError.unauthorized("Invalid OAuth client", "INVALID_CLIENT"); return client; }
 
-function normalizeRedirectUris(values: string[]) {
-  const redirectUris = [...new Set(values.map((value) => new URL(value).toString()))];
-  for (const uri of redirectUris) {
-    const parsed = new URL(uri);
-    if (parsed.username || parsed.password || parsed.hash) {
-      throw AppError.badRequest("Redirect URIs must not contain credentials or fragments", "INVALID_REDIRECT_URI");
-    }
-    if (parsed.protocol === "http:") {
-      if (!["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)) {
-        throw AppError.badRequest("Production redirect URIs must use HTTPS", "INVALID_REDIRECT_URI");
-      }
-      continue;
-    }
-    if (parsed.protocol === "https:") continue;
-    const blockedProtocols = new Set(["javascript:", "data:", "file:", "ftp:", "ws:", "wss:", "blob:", "mailto:", "tel:"]);
-    if (blockedProtocols.has(parsed.protocol)) {
-      throw AppError.badRequest("This redirect URI scheme is not allowed", "INVALID_REDIRECT_URI");
-    }
-  }
-  return redirectUris;
-}
 
 
 export const oauthService = {
