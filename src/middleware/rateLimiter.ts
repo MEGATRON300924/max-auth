@@ -3,6 +3,12 @@ import { env } from "../config/env";
 
 /** General-purpose API rate limiter — applied globally. */
 export const globalRateLimiter = rateLimit({
+  // Server-to-server MAX Backend introspection is separately protected by
+  // MAX_AUTH_SERVICE_TOKEN. It runs on every authenticated backend request
+  // and must not consume the public browser/API IP budget.
+  skip: (req) =>
+    req.method === "POST" &&
+    req.originalUrl.split("?")[0] === "/api/v1/oauth/introspect",
   windowMs: env.RATE_LIMIT_WINDOW_MINUTES * 60 * 1000,
   max: env.RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
