@@ -22,7 +22,7 @@ export const env = {
   CLOUDINARY_API_SECRET: optional("CLOUDINARY_API_SECRET", ""),
   MAX_DEVELOPERS_CLIENT_IDS: optional("MAX_DEVELOPERS_CLIENT_IDS", "max_client_llITDlGy6a2tSJBX,max_client_developers_platform_v1"),
   DATABASE_URL: required("DATABASE_URL"),
-  JWT_ACCESS_SECRET: required("JWT_ACCESS_SECRET"), JWT_REFRESH_SECRET: required("JWT_REFRESH_SECRET"), JWT_ACCESS_EXPIRES_IN: optional("JWT_ACCESS_EXPIRES_IN", "15m"), JWT_REFRESH_EXPIRES_IN: optional("JWT_REFRESH_EXPIRES_IN", "30d"), JWT_ISSUER: optional("JWT_ISSUER", "max-auth"), JWT_AUDIENCE: optional("JWT_AUDIENCE", "max-ecosystem"),
+  JWT_ACCESS_SECRET: required("JWT_ACCESS_SECRET"), JWT_REFRESH_SECRET: required("JWT_REFRESH_SECRET"), WEBHOOK_ENCRYPTION_KEY: optional("WEBHOOK_ENCRYPTION_KEY", required("JWT_REFRESH_SECRET")), JWT_ACCESS_EXPIRES_IN: optional("JWT_ACCESS_EXPIRES_IN", "15m"), JWT_REFRESH_EXPIRES_IN: optional("JWT_REFRESH_EXPIRES_IN", "30d"), JWT_ISSUER: optional("JWT_ISSUER", "max-auth"), JWT_AUDIENCE: optional("JWT_AUDIENCE", "max-ecosystem"),
   GOOGLE_CLIENT_ID: optional("GOOGLE_CLIENT_ID", ""), GOOGLE_CLIENT_SECRET: optional("GOOGLE_CLIENT_SECRET", ""),
   GOOGLE_REDIRECT_URI: optional("GOOGLE_REDIRECT_URI", "https://auth.max-ai.name.ng/api/v1/connected-accounts/google/calendar/callback"),
   GOOGLE_TOKEN_ENCRYPTION_KEY: optional("GOOGLE_TOKEN_ENCRYPTION_KEY", ""),
