@@ -38,7 +38,7 @@ function stateHash(value: string) { return crypto.createHash("sha256").update(va
 function randomState() { return crypto.randomBytes(32).toString("base64url"); }
 
 async function discordRequest(url: string, init: RequestInit = {}) {
-  const response = await fetch(url, init);
+  const response = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(10_000) });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) throw AppError.badRequest(body?.message || body?.error_description || "Discord request failed", "DISCORD_REQUEST_FAILED", { status: response.status });
   return body;
