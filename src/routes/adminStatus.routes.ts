@@ -4,7 +4,7 @@ import { validate } from "../middleware/validate";
 import { authenticateOAuthAdmin } from "../middleware/authenticateOAuthAdmin";
 import { statusController } from "../controllers/status.controller";
 
-const serviceStatusSchema = z.record(z.object({
+const serviceStatusSchema = z.record(z.string(), z.object({
   status: z.enum(["green", "yellow", "red"]),
   reason: z.string().max(1000),
 }));
