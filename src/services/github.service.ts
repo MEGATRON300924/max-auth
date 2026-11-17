@@ -39,6 +39,7 @@ function randomState() { return crypto.randomBytes(32).toString("base64url"); }
 async function githubRequest(url: string, init: RequestInit = {}) {
   const response = await fetch(url, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(10_000),
     headers: {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
