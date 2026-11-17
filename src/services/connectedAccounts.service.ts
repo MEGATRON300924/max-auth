@@ -81,7 +81,7 @@ function googleDecrypt(value: string): string {
   return Buffer.concat([decipher.update(Buffer.from(encryptedRaw, "base64url")), decipher.final()]).toString("utf8");
 }
 async function googleRequest(url: string, options: RequestInit): Promise<any> {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(10_000) });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message =
@@ -103,7 +103,7 @@ function ensureConfigured() {
   }
 }
 async function spotifyRequest(url: string, options: RequestInit): Promise<any> {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(10_000) });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     // Spotify token endpoints commonly return { error: "invalid_grant" } rather
