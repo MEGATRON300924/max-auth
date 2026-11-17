@@ -86,9 +86,15 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 
 ### Commits
 - Token rotation concurrency handling: `82f021b7d3c4fe4274a59e8d5f7f91e94bb27829`.
-- Plan update: pending.
+- Plan update: `66c387bc68585c328159ca969a2fd9a38f6aeb58` (this section's initial plan commit; final follow-up below).
 
 ### Next steps
 - Pair with the frontend refresh coordination/retry change.
 - Run CI and test concurrent refresh requests from multiple clients, normal refresh, expired tokens and delayed token replay.
 - Merge/deploy backend and frontend only after review and explicit approval.
+
+
+### PR and CI checkpoint
+- PR #31: https://github.com/MEGATRON300924/max-auth/pull/31 (open; not merged).
+- Latest implementation/plan head at PR creation: `66c387bc68585c328159ca969a2fd9a38f6aeb58`.
+- GitHub Actions CI run #44043792657: in progress at checkpoint.
