@@ -19,8 +19,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Apply non-breaking security updates
-        run: npm audit fix
+      - name: Synchronize package lock and apply safe updates
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          npm audit fix --package-lock-only || echo "Some moderate advisories require separate dependency upgrades; retaining the safe lockfile updates."
+          npm ci --ignore-scripts
       - name: Commit refreshed lockfile and remove temporary workflow
         run: |
           git config user.name "github-actions[bot]"
