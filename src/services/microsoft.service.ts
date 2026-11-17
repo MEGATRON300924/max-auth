@@ -62,7 +62,7 @@ function stateHash(state: string) {
 }
 
 async function requestJson(url: string, options: RequestInit): Promise<any> {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(10_000) });
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = body?.error_description || body?.error?.message || body?.error || "Microsoft Graph request failed";
