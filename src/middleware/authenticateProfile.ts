@@ -10,7 +10,7 @@ import { AppError } from "../utils/AppError";
 export async function authenticateProfile(req: Request, res: Response, next: NextFunction) {
   const header = req.header("authorization");
   const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  if (!token) return authenticate(req, res, next);
+  if (!token || token.split(".").length === 3) return authenticate(req, res, next);
 
   try {
     const oauth = await oauthService.introspect(token);
