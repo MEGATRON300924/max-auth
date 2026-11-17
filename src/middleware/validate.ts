@@ -14,8 +14,10 @@ export const validate =
         body: req.body,
         query: req.query,
         params: req.params,
-      });
-      if (parsed.body) req.body = parsed.body;
+      }) as { body?: unknown };
+      if (Object.prototype.hasOwnProperty.call(parsed, "body")) {
+        req.body = parsed.body;
+      }
       next();
     } catch (err) {
       if (err instanceof ZodError) {
