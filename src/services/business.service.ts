@@ -150,10 +150,18 @@ export const businessService = {
       business.emailVerificationExpiresAt <= new Date() || business.emailVerificationTokenHash !== tokenHash(token)) {
       throw AppError.badRequest("This business email verification link is invalid or has expired", "BUSINESS_EMAIL_TOKEN_INVALID");
     }
-    const updated = await prisma.business.update({
-      where: { id: businessId },
+    const claimed = await prisma.business.updateMany({
+      where: {
+        id: businessId,
+        emailVerificationTokenHash: tokenHash(token),
+        emailVerificationExpiresAt: { gt: new Date() },
+        emailVerifiedAt: null,
+      },
       data: { emailVerifiedAt: new Date(), emailVerificationTokenHash: null, emailVerificationExpiresAt: null },
     });
+    if (claimed.count !== 1) throw AppError.conflict("This business email verification link has already been used", "BUSINESS_EMAIL_TOKEN_USED");
+    const updated = await prisma.business.findUnique({ where: { id: businessId } });
+    if (!updated) throw AppError.notFound("Business not found", "BUSINESS_NOT_FOUND");
     await logBusiness(businessId, business.ownerId, "BUSINESS_EMAIL_VERIFIED", context);
     return this.safeBusiness(updated);
   },
