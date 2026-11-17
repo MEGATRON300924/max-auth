@@ -162,3 +162,12 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 ### Latest CI run — 2026-11-17
 - CI run `44068436389` repeated the same outcome: Prisma generation, TypeScript build, security tests and critical dependency audit passed; the high-risk production dependency audit failed with the existing 2 high / 10 moderate vulnerability inventory. This PR does not change dependency manifests or lockfiles.
 - No merge/deployment. OAuth callback round-trip remains pending.
+
+
+## MAX Auth startup blocked by shared Prisma migration ledger — 2026-11-17
+- Latest Render deployment attempts (14:09 UTC) still fail during the configured build command at Prisma P3009 for `20260904134000_pending_action_conversation_context`.
+- Confirmed the MAX Auth Render build command explicitly runs `npx prisma migrate deploy`, and the package start script also ran `prisma migrate deploy`. The failed migration belongs to MAX Backend, is not present in the MAX Auth migration directory, and references the `max_backend` schema while the shared Prisma ledger is in `public`.
+- MAX Auth does not need to run schema migrations during application startup. Changed the package start script to launch the compiled server directly; migrations must be applied through a controlled, service-specific release step after the shared-ledger/schema split is reconciled.
+- Branch: `fix/auth-start-without-shared-migrations`. The Render build command still needs to be changed manually from `npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run build` to `npm install --include=dev && npx prisma generate && npm run build`; the available Render connection can inspect the service but cannot update its build/start command settings.
+- No database rows, tables, schemas, migration records, or production environment variables were modified. This change does not resolve the shared migration ledger for MAX Backend; it prevents MAX Auth from being coupled to that failed backend migration.
+- Validation, PR review, deployment, and live Auth health/OAuth tests pending.
