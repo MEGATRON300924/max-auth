@@ -49,7 +49,28 @@ export const sessionRepository = {
   listActiveForUser(userId: string) {
     return prisma.session.findMany({
       where: { userId, isRevoked: false, expiresAt: { gt: new Date() } },
-      include: { device: true },
+      select: {
+        id: true,
+        deviceId: true,
+        userAgent: true,
+        ipAddress: true,
+        expiresAt: true,
+        createdAt: true,
+        lastUsedAt: true,
+        device: {
+          select: {
+            id: true,
+            deviceName: true,
+            deviceType: true,
+            os: true,
+            browser: true,
+            isTrusted: true,
+            trustedAt: true,
+            lastIp: true,
+            lastSeenAt: true,
+          },
+        },
+      },
       orderBy: { lastUsedAt: "desc" },
     });
   },
