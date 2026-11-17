@@ -82,11 +82,16 @@ export const familyService = {
         where: { id: options.parentUserId },
         select: { email: true, status: true, verificationStatus: true },
       });
-      if (!parent || parent.status !== "ACTIVE" || parent.verificationStatus !== "VERIFIED" ||
-          parent.email.toLowerCase() !== record.parentEmail.toLowerCase()) {
+      const parentConsentRecord = await prisma.familyConsentRequest.findUnique({
+        where: { childUserId: options.parentUserId },
+        select: { ageGroup: true },
+      });
+      if (!parent || options.parentUserId === record.childUserId ||
+          parent.status !== "ACTIVE" || parent.verificationStatus !== "VERIFIED" ||
+          parent.email.toLowerCase() !== record.parentEmail.toLowerCase() || parentConsentRecord) {
         throw AppError.forbidden(
-          "Guardian approval requires an active MAX Account with a verified email matching the guardian address.",
-          "GUARDIAN_EMAIL_NOT_VERIFIED",
+          "Guardian approval requires an active, email-verified adult MAX Account matching the guardian address.",
+          "GUARDIAN_ACCOUNT_NOT_ELIGIBLE",
         );
       }
     }
