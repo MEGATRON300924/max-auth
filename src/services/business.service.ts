@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { BusinessMemberRole, BusinessMemberStatus, BusinessInvitationStatus, BusinessStatus, Prisma } from "@prisma/client";
+import { BusinessMemberRole, BusinessMemberStatus, BusinessInvitationStatus, BusinessStatus, BusinessVerificationStatus, Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { AppError } from "../utils/AppError";
 
@@ -105,6 +105,14 @@ export const businessService = {
     const membership = await membershipFor(businessId, userId);
     requireRole(membership.role, ownerAdmin);
     const data: Prisma.BusinessUpdateInput = {};
+    const requiresReverification =
+      (input.legalName !== undefined && input.legalName.trim() !== membership.business.legalName) ||
+      (input.displayName !== undefined && input.displayName.trim() !== membership.business.displayName) ||
+      (input.address !== undefined && (input.address?.trim() || null) !== membership.business.address) ||
+      (input.country !== undefined && input.country.trim().toUpperCase() !== membership.business.country) ||
+      (input.businessType !== undefined && input.businessType.trim() !== membership.business.businessType) ||
+      (input.registrationNumber !== undefined && (input.registrationNumber?.trim() || null) !== membership.business.registrationNumber);
+    if (requiresReverification) data.verificationStatus = BusinessVerificationStatus.PENDING;
     let verificationToken: string | undefined;
     if (input.legalName !== undefined) data.legalName = input.legalName.trim();
     if (input.displayName !== undefined) data.displayName = input.displayName.trim();
@@ -127,7 +135,7 @@ export const businessService = {
     if (input.description !== undefined) data.description = input.description?.trim() || null;
     if (input.registrationNumber !== undefined) data.registrationNumber = input.registrationNumber?.trim() || null;
     const updated = await prisma.business.update({ where: { id: businessId }, data });
-    await logBusiness(businessId, userId, "BUSINESS_PROFILE_UPDATED", context);
+    await logBusiness(businessId, userId, "BUSINESS_PROFILE_UPDATED", context, { requiresReverification });
     return { business: this.safeBusiness(updated), verificationToken };
   },
 
