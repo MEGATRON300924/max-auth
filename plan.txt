@@ -145,3 +145,24 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 - On branch `fix/service-introspection-rate-limit`, changed `globalRateLimiter` to skip only POST `/api/v1/oauth/introspect`. The endpoint still enforces `MAX_AUTH_SERVICE_TOKEN` in `oauthController.introspect`; no other route or rate limit is bypassed.
 - This addresses a concrete rate-limit design flaw that can reject legitimate backend session checks. The precise upstream status for the user's failed request remains unconfirmed because the backend middleware does not currently log the upstream status/body code.
 - Next: run MAX Auth CI/build, open PR, merge only after checks pass, deploy and retest MAX Chat. If the issue persists, improve backend introspection diagnostics to record sanitized upstream status/error code (never token or service-token values). MAX Backend Gemini-only deployment remains live; Botpress untouched.
+
+## Google identity linking and sign-in audit — 2026-11-17
+
+### Source review
+- Confirmed `src/services/googleAuth.service.ts` verifies Google ID tokens using Google's signing keys, the configured client ID audience, accepted Google issuers, and a verified email claim.
+- `connect(userId, credential)` stores Google's stable `sub` as `ConnectedAccount.providerAccountId` for the currently authenticated MAX user.
+- The database enforces unique `(provider, providerAccountId)`; linking an identity already owned by another MAX user returns `GOOGLE_ACCOUNT_ALREADY_LINKED`.
+- `signIn(credential)` resolves the linked Google `sub` to the existing `userId`, then issues the normal MAX session/token pair for that same user.
+- Matching email alone does not silently link or merge accounts. An existing MAX account requires the user to authenticate to MAX and explicitly connect Google first; an unlinked Google identity with no MAX account is directed to create a MAX Account.
+- MFA is still enforced after Google identity resolution.
+- Auth routes expose authenticated `POST /api/v1/auth/google/connect` and public `POST /api/v1/auth/google`; frontend uses these for linking and sign-in respectively.
+
+### Verification and limits
+- Backend and frontend source review: completed.
+- Live sign-out/sign-in test comparing the same MAX user ID: pending; requires a real Google credential and authenticated browser session.
+- Database row ownership and production deployment state were not queried in this audit.
+- No application code changed and no production deployment was performed.
+
+### Next steps
+- Test with the same Google account: link while signed into the intended MAX Account, sign out, choose Continue with Google, and compare the returned MAX user ID with the original.
+- Confirm an unlinked Google identity sharing an email with an existing MAX Account is rejected with the explicit-link-required flow.
