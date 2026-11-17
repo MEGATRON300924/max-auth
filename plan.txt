@@ -34,3 +34,56 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Confirmed and fixed additional one-time-token races: email verification, password reset, business email verification, and parental approval/decline now use conditional database claims so concurrent requests cannot consume the same token twice.
 - Confirmed inactive-account provider access path: internal Google/Spotify service calls previously fetched stored provider tokens without checking the MAX account status. Provider token access now requires an ACTIVE account; internal personalization reads/writes also reject inactive accounts.
 - Confirmed admin OAuth client update path bypassed the regular OAuth validation/revocation logic. Added an admin-safe update service that validates scopes/redirect URIs and revokes codes, tokens and consents when security-sensitive client settings change.
+
+
+## Full MAX Auth codebase audit — 2026-11-17
+
+### Authentication, session and account lifecycle
+- Fixed Zod 4 TypeScript compatibility issues in validation middleware and admin status validators.
+- Authentication middleware now distinguishes invalid JWTs from database/infrastructure failures; database outages are no longer misreported as invalid credentials.
+- JWT session authentication avoids an unnecessary OAuth introspection lookup; internal introspection and OPTIONS traffic are excluded from usage telemetry.
+- CSRF token derivation no longer depends on client IP, avoiding invalidation when users change networks. Refresh requests also validate browser Origin against configured and first-party MAX origins to protect the SameSite cookie across sibling subdomains.
+- Refresh cookies are cleared after password reset/change, logout, current-session revocation, current-device revocation, and revoke-all-sessions.
+- Device and session listing queries now select only safe fields; refresh-token hashes and device fingerprints are not returned to account clients.
+- Admin suspension now atomically revokes first-party sessions, OAuth access/refresh tokens, authorization codes, consents, and pending password-reset tokens. Deleted accounts cannot be reactivated; parental-consent-pending accounts cannot be promoted to active by the normal admin reactivation flow.
+- Parental approval now atomically checks the child is still pending and, for account-based approval, requires an active account with a verified matching guardian email. Accounts that have their own parental-consent record cannot act as guardians. The email-link path still relies on mailbox possession and explicit guardian attestation; it does not independently prove age or legal guardianship.
+- Business invitations now require the invited MAX Account to be active and email-verified before acceptance.
+
+### OAuth and connected-account security
+- Added connectedAccountLink.service.ts and migrated Google, Spotify, Discord, Microsoft, GitHub, Instagram, TikTok, and X callbacks to race-safe identity linking. A unique-key race can no longer overwrite another MAX Account's provider identity ownership. Regression tests cover existing-owner and concurrent-create cases.
+- OAuth redirect URI validation now rejects hostname-prefix localhost bypasses, non-local HTTP callbacks, credentials, fragments, and dangerous schemes. Existing stored redirect URIs are revalidated during authorization, approval, and code exchange.
+- OAuth authorized origins now require a clean origin and HTTPS except exact localhost/loopback development origins. OAuth manifest URL fetches reject private/reserved IPs, pin DNS results, reject redirects/credentials, enforce JSON content type, a 256 KB response cap and a timeout; redirect URI manifest checks reject duplicates and require an exact set match.
+- Fixed OAuth client logo SQL column names for the camelCase oauth_clients schema and changed non-returning UPDATE statements from $queryRawUnsafe to $executeRawUnsafe. Logo uploads now validate PNG/JPEG/WebP file signatures and public logo responses set X-Content-Type-Options: nosniff.
+- OAuth client tester now includes reserved MAX system-client scopes.
+- System OAuth client bootstrap no longer reactivates a client disabled by an administrator; concurrent startup creation is handled safely and dummy client secrets use cryptographic randomness.
+- Business legal-identity changes (legal/display name, address, country, business type, registration number) reset verification to PENDING, invalidating business OAuth introspection until re-review.
+- External Google, Spotify, Discord, Microsoft, GitHub, Instagram, TikTok, X and Resend requests now have bounded timeouts.
+
+### Webhooks and external requests
+- Webhook secrets are encrypted at rest and the raw secret returned to the owner is used for HMAC signatures; legacy hash-key records remain compatible until rotated.
+- Webhook delivery rejects private/reserved destinations, pins validated DNS answers to the HTTPS connection to prevent DNS rebinding, rejects redirects, and catches decryption failures without terminating the retry worker.
+- Production now requires a stable dedicated WEBHOOK_ENCRYPTION_KEY (at least 32 bytes).
+
+### Production configuration and diagnostics
+- Production defaults now point to https://auth.max-ai.name.ng and https://api.max-ai.name.ng.
+- Production startup validates HTTPS APP_URL/FRONTEND_URL/OIDC issuer, OIDC signing/public keys, Resend email configuration, secure cookie settings, distinct 32-byte JWT secrets, and a stable webhook encryption key. Missing requirements will stop startup rather than silently disable critical auth/email/OIDC functions.
+- Unmatched-route diagnostics no longer include query strings, reducing accidental logging of authorization codes or tokens.
+- Email API requests now have a 10-second timeout and bounded error-body logging.
+- No production database or Render environment settings were changed.
+
+### Verification at latest checked revision
+- Latest PR branch commit at the time of this entry: 73348b71adc578d77659aa1b5193fca40d97498a.
+- GitHub Actions CI run 44115427342: SUCCESS.
+- TypeScript build: PASS.
+- Regression/security tests: 14 passed across 3 suites.
+- Critical dependency audit: PASS.
+- Production high-risk dependency audit: PASS.
+- Remaining npm findings: 8 moderate overall; 3 moderate production findings are the glob/minimatch dependency chain under swagger-jsdoc; the other findings are in development dependencies. No high or critical findings were reported by the CI gates.
+- PR #36 remains OPEN and has not been merged. No Render deployment of this branch has been verified.
+
+### Outstanding release blockers / risks
+- The shared production database migration ledger remains unresolved: MAX Auth and MAX Backend have mixed migration history in public._prisma_migrations, including the failed 20260904134000_pending_action_conversation_context migration that referenced pending_actions in the wrong schema. Do not run prisma migrate deploy until the migration history/schema ownership is reconciled. The webhook secret_encrypted migration also needs application after that reconciliation.
+- Production Render variables have not been inspected or changed. Before deployment, verify OIDC_PRIVATE_KEY, OIDC_PUBLIC_KEY, MAIL_PROVIDER=resend, RESEND_API_KEY, distinct strong JWT secrets, WEBHOOK_ENCRYPTION_KEY, COOKIE_SECURE=true, and a valid COOKIE_SAME_SITE.
+- Provider token encryption and MFA secret encryption still have legacy fallbacks to JWT_REFRESH_SECRET; rotating that secret without a separate key migration can make stored provider tokens/MFA secrets unreadable. Keep it stable until a dedicated-key migration is completed.
+- Moderate glob/minimatch advisories remain under swagger-jsdoc; they do not fail the current high-risk production gate, but should be resolved by a compatible dependency upgrade or by moving spec generation out of the runtime dependency graph.
+- CI currently exercises 14 tests; broader route/service integration coverage is still needed before claiming exhaustive correctness.
