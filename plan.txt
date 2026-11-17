@@ -89,3 +89,11 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - CI currently exercises 14 tests; broader route/service integration coverage is still needed before claiming exhaustive correctness.
 
 - Render verification after the audit: production service max-auth (srv-d9pop1ks728c73c08tog) is still configured to deploy branch main with auto-deploy enabled. Its newest deployment remains commit 001bf8fd7d020bac495f4b76ba88e7c3982cefb0 and status update_failed. PR #36 has not been merged, so none of the audit fixes are deployed to Render. No Render environment variables or production database records were changed during this audit.
+
+
+- Deployment follow-up after PR #36 merge — 2026-11-17:
+  - PR #36 was merged to main as commit c69b08b221dd0762069ba0902fc7cc50d651293f.
+  - Render deployed that commit but startup initially failed before app initialization because WEBHOOK_ENCRYPTION_KEY was not configured (confirmed in the latest instance log at src/config/env.js:72).
+  - Added a newly generated, stable 48-byte WEBHOOK_ENCRYPTION_KEY to the Render service environment through a merge-safe environment update. Render automatically triggered deployment dep-dbu7uamk1f9s739n6990; status was build_in_progress at the time of this note.
+  - The previous Prisma P3009 migration failure still exists in the shared database ledger. Logs showing "prisma migrate deploy && node dist/server.js" came from an older/stale instance; the new c69b08b instance ran "node dist/server.js" and failed on the missing webhook key before the key was configured.
+  - Next: verify the environment-triggered deployment dep-dbu7uamk1f9s739n6990, inspect fresh startup logs for any additional missing production configuration, and confirm the health endpoint. Do not resolve or mark the failed shared migration as applied without schema/history reconciliation.
