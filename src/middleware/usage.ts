@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { usageService } from "../services/usage.service";
 
 export function usageTelemetry(req: Request, res: Response, next: NextFunction) {
+  if (req.method === "OPTIONS" || req.path === "/oauth/introspect" || req.path === "/oauth/jwks") return next();
   const startedAt = Date.now();
 
   res.on("finish", () => {
@@ -13,7 +14,7 @@ export function usageTelemetry(req: Request, res: Response, next: NextFunction) 
       durationMs: Date.now() - startedAt,
       ipAddress: req.ip,
       userAgent: req.get("user-agent") || undefined,
-    });
+    }).catch(() => undefined);
   });
 
   next();
