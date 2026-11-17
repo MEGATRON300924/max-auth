@@ -77,28 +77,28 @@ export const familyService = {
     if (!record || record.status !== "PENDING" || record.expiresAt <= new Date()) {
       throw AppError.badRequest("This approval link is invalid, expired, or already used.", "PARENTAL_APPROVAL_LINK_INVALID");
     }
-    if (options.parentUserId) {
-      const parent = await prisma.user.findUnique({
-        where: { id: options.parentUserId },
-        select: { email: true, status: true, verificationStatus: true },
-      });
-      const parentConsentRecord = await prisma.familyConsentRequest.findUnique({
-        where: { childUserId: options.parentUserId },
-        select: { ageGroup: true },
-      });
-      if (!parent || options.parentUserId === record.childUserId ||
-          parent.status !== "ACTIVE" || parent.verificationStatus !== "VERIFIED" ||
-          parent.email.toLowerCase() !== record.parentEmail.toLowerCase() || parentConsentRecord) {
-        throw AppError.forbidden(
-          "Guardian approval requires an active, email-verified adult MAX Account matching the guardian address.",
-          "GUARDIAN_ACCOUNT_NOT_ELIGIBLE",
-        );
-      }
-    }
     await prisma.$transaction(async (tx) => {
       const current = await tx.familyConsentRequest.findUnique({ where: { id: record.id } });
       if (!current || current.status !== "PENDING" || current.expiresAt <= new Date()) {
         throw AppError.badRequest("This approval request has already been handled or expired.", "PARENTAL_APPROVAL_LINK_INVALID");
+      }
+      if (options.parentUserId) {
+        const parent = await tx.user.findUnique({
+          where: { id: options.parentUserId },
+          select: { email: true, status: true, verificationStatus: true },
+        });
+        const parentConsentRecord = await tx.familyConsentRequest.findUnique({
+          where: { childUserId: options.parentUserId },
+          select: { ageGroup: true },
+        });
+        if (!parent || options.parentUserId === current.childUserId ||
+            parent.status !== "ACTIVE" || parent.verificationStatus !== "VERIFIED" ||
+            parent.email.toLowerCase() !== current.parentEmail.toLowerCase() || parentConsentRecord) {
+          throw AppError.forbidden(
+            "Guardian approval requires an active, email-verified adult MAX Account matching the guardian address.",
+            "GUARDIAN_ACCOUNT_NOT_ELIGIBLE",
+          );
+        }
       }
       const claimed = await tx.familyConsentRequest.updateMany({
         where: { id: current.id, status: "PENDING", expiresAt: { gt: new Date() } },
@@ -107,7 +107,11 @@ export const familyService = {
       if (claimed.count !== 1) {
         throw AppError.conflict("This approval request has already been handled.", "PARENTAL_APPROVAL_ALREADY_HANDLED");
       }
-      await tx.user.update({ where: { id: current.childUserId }, data: { status: "ACTIVE" } });
+      const activated = await tx.user.updateMany({
+        where: { id: current.childUserId, status: "PENDING_PARENTAL_APPROVAL" },
+        data: { status: "ACTIVE" },
+      });
+      if (activated.count !== 1) throw AppError.conflict("The child account is no longer awaiting parental approval.", "CHILD_ACCOUNT_STATUS_CHANGED");
     });
     return { approved: true, childUserId: record.childUserId };
   },
