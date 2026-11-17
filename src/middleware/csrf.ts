@@ -25,5 +25,5 @@ export const {
     path: "/",
   },
   size: 64,
-  getSessionIdentifier: (req) => req.ip ?? "anonymous",
+  getSessionIdentifier: () => "max-auth",
 });
