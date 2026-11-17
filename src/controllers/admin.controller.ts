@@ -8,13 +8,18 @@ import { getRequestContext } from "../utils/requestContext";
 import { mailService } from "../services/mail.service";
 import { BusinessVerificationStatus } from "@prisma/client";
 import { oauthService } from "../services/oauth.service";
+function sanitizeBusiness<T extends { emailVerificationTokenHash?: string | null; emailVerificationExpiresAt?: Date | null }>(business: T) {
+  const { emailVerificationTokenHash, emailVerificationExpiresAt, ...safe } = business;
+  return safe;
+}
+
 
 export const adminController = {
   async listUsers(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = parseInt((req.query.page as string) || "1", 10);
-      const limit = Math.min(parseInt((req.query.limit as string) || "25", 10), 100);
-      const search = req.query.search as string | undefined;
+      const page = Math.max(1, parseInt((req.query.page as string) || "1", 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || "25", 10) || 25));
+      const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : undefined;
 
       const [users, total] = await userRepository.list({
         skip: (page - 1) * limit,
@@ -122,7 +127,7 @@ export const adminController = {
           prisma.business.count({ where: { verificationStatus: "REJECTED" } }),
         ]),
       ]);
-      return ok(res, { organisations, counts: { UNVERIFIED: counts[0], PENDING: counts[1], VERIFIED: counts[2], REJECTED: counts[3] }, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+      return ok(res, { organisations: organisations.map(sanitizeBusiness), counts: { UNVERIFIED: counts[0], PENDING: counts[1], VERIFIED: counts[2], REJECTED: counts[3] }, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
     } catch (err) { next(err); }
   },
 
@@ -159,7 +164,7 @@ export const adminController = {
         });
         emailSent = true;
       } catch { emailSent = false; }
-      return ok(res, { organisation: updated, emailSent });
+      return ok(res, { organisation: sanitizeBusiness(updated), emailSent });
     } catch (err) { next(err); }
   },
 
