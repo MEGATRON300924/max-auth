@@ -37,6 +37,21 @@ function normalizeOrigins(values: string[] = []) {
     return url.origin;
   }))];
 }
+function effectiveAllowedScopes(clientId: string, configured: string[]) {
+  const scopes = new Set(configured);
+  const developerClients = new Set([
+    "max_client_llITDlGy6a2tSJBX",
+    "max_client_developers_platform_v1",
+    "max_client_Rjxv2tyTV7Luek00",
+    ...(process.env.MAX_DEVELOPERS_CLIENT_IDS || "").split(",").map((value) => value.trim()).filter(Boolean),
+  ]);
+  if (developerClients.has(clientId)) scopes.add("developer:manage");
+  if (clientId === "max_client_OHnbfpb_bEfwe1z9") {
+    for (const scope of ["account:read", "profile:write", "memory:read", "memory:write", "connected-apps:read"]) scopes.add(scope);
+  }
+  return [...scopes];
+}
+
 function normalizeFingerprints(values: string[] = []) { return [...new Set(values.map((value) => value.trim().replace(/\s+/g, "").toUpperCase()).filter(Boolean))]; }
 function normalizeHttpsUrl(value?: string, field = "URL") { if (!value?.trim()) return null; let url: URL; try { url = new URL(value.trim()); } catch { throw AppError.badRequest(`${field} must be a valid URL`, "INVALID_URL"); } if (url.protocol !== "https:" || url.username || url.password || url.hash) throw AppError.badRequest(`${field} must use HTTPS and must not contain credentials or fragments`, "INVALID_URL"); return url.toString(); }
 
@@ -74,9 +89,10 @@ export const oauthClientConfigService = {
     checks.push({ key: "client", label: "Client ID", ok: client.isActive, detail: client.isActive ? "Client is registered and active." : "Client is revoked." });
     checks.push({ key: "client_type", label: "Client authentication", ok: true, detail: client.isConfidential ? "Confidential client: token requests must authenticate with its secret. Never use this mode in browser or mobile code." : "Public client: use Authorization Code with PKCE; do not send a client secret." });
     if (redirectUri) checks.push({ key: "redirect", label: "Redirect URI", ok: client.redirectUris.includes(redirectUri), detail: client.redirectUris.includes(redirectUri) ? "Redirect URI matches exactly." : "Redirect URI is not registered." });
-    const unsupported = requestedScopes.filter((scope) => !client.scopes.includes(scope));
+    const allowedScopes = effectiveAllowedScopes(clientId, client.scopes);
+    const unsupported = requestedScopes.filter((scope) => !allowedScopes.includes(scope));
     checks.push({ key: "scopes", label: "Permissions", ok: unsupported.length === 0, detail: unsupported.length ? `Not allowed: ${unsupported.join(", ")}` : "Requested permissions are allowed." });
     checks.push({ key: "branding", label: "Branding", ok: true, detail: hasBranding ? "Optional client branding is configured." : "Optional branding has not been configured." });
-    return { valid: client.isActive && checks.filter((check) => check.key !== "branding").every((check) => check.ok), client: { clientId: client.clientId, name: config.displayName || client.name, websiteUrl: config.websiteUrl || null, logoUrl: config.logoUrl || null, tokenEndpointAuthMethod: client.isConfidential ? "client_secret" : "none" }, checks, allowedScopes: client.scopes, redirectUris: client.redirectUris };
+    return { valid: client.isActive && checks.filter((check) => check.key !== "branding").every((check) => check.ok), client: { clientId: client.clientId, name: config.displayName || client.name, websiteUrl: config.websiteUrl || null, logoUrl: config.logoUrl || null, tokenEndpointAuthMethod: client.isConfidential ? "client_secret" : "none" }, checks, allowedScopes, redirectUris: client.redirectUris };
   },
 };
