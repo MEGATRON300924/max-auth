@@ -208,8 +208,8 @@ export const businessService = {
   },
 
   async acceptInvitation(userId: string, token: string, context: Context) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } });
-    if (!user) throw AppError.unauthorized();
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, status: true, verificationStatus: true } });
+    if (!user || user.status !== "ACTIVE" || user.verificationStatus !== "VERIFIED") throw AppError.forbidden("Accepting a business invitation requires an active, email-verified MAX Account.", "BUSINESS_INVITATION_EMAIL_NOT_VERIFIED");
     const invitation = await prisma.businessInvitation.findUnique({ where: { tokenHash: tokenHash(token) }, include: { business: true } });
     if (!invitation || invitation.status !== BusinessInvitationStatus.PENDING || invitation.expiresAt <= new Date() || invitation.business.status !== BusinessStatus.ACTIVE) {
       throw AppError.badRequest("This business invitation is invalid, revoked, or expired", "BUSINESS_INVITATION_INVALID");
