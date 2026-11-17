@@ -66,6 +66,12 @@ if (env.isProduction) {
   if (!env.WEBHOOK_ENCRYPTION_KEY || Buffer.byteLength(env.WEBHOOK_ENCRYPTION_KEY, "utf8") < 32) {
     throw new Error("WEBHOOK_ENCRYPTION_KEY must be set to a stable random secret of at least 32 bytes in production.");
   }
+  if (!env.COOKIE_SECURE || !["strict", "lax", "none"].includes(env.COOKIE_SAME_SITE)) {
+    throw new Error("Production cookies must be Secure and COOKIE_SAME_SITE must be strict, lax, or none.");
+  }
+  if (!env.OIDC_ISSUER.startsWith("https://")) {
+    throw new Error("OIDC_ISSUER must use HTTPS in production.");
+  }
   if (!env.APP_URL.startsWith("https://") || !env.FRONTEND_URL.startsWith("https://")) {
     throw new Error("APP_URL and FRONTEND_URL must use HTTPS in production.");
   }
