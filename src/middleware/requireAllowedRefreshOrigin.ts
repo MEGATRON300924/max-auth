@@ -11,7 +11,19 @@ import { AppError } from "../utils/AppError";
 export function requireAllowedRefreshOrigin(req: Request, _res: Response, next: NextFunction) {
   const origin = req.get("origin");
   const fetchSite = req.get("sec-fetch-site");
-  if (origin && !env.CORS_ALLOWED_ORIGINS.includes(origin)) {
+  const firstPartyOrigins = [
+    "https://max-ai.name.ng",
+    "https://www.max-ai.name.ng",
+    "https://api.max-ai.name.ng",
+    "https://auth.max-ai.name.ng",
+    "https://developers.max-ai.name.ng",
+    "https://home.max-ai.name.ng",
+    "https://chat.max-ai.name.ng",
+    "https://max-spotlight-graph.vercel.app",
+    "https://spotlight.max-ai.name.ng",
+  ];
+  const allowedOrigins = new Set([...env.CORS_ALLOWED_ORIGINS, ...firstPartyOrigins]);
+  if (origin && !allowedOrigins.has(origin)) {
     return next(AppError.forbidden("This origin is not allowed to refresh a MAX Auth session.", "REFRESH_ORIGIN_NOT_ALLOWED"));
   }
   if (!origin && fetchSite && fetchSite !== "same-origin") {
