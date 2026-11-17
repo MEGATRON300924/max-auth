@@ -73,7 +73,7 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 - A winning request rotates the token; concurrent requests then see the old session as revoked and trigger account-wide session revocation. Repeated 401/recovery attempts can then exhaust the global API rate limit.
 
 ### Implementation on `fix/refresh-token-concurrency`
-- Added a 15-second concurrency grace window based on the old session's `revokedAt`.
+- Added a 5-second concurrency grace window based on the old session's `revokedAt`, keeping the collision recovery window short.
 - A recently rotated token now returns HTTP 409 with `REFRESH_TOKEN_ROTATED`, allowing the client to retry after the winning response updates the shared cookie.
 - The conditional-update race path re-reads the session and applies the same grace rule.
 - Refresh-token reuse outside the short grace window still triggers account-wide session revocation as a security response.
@@ -98,3 +98,8 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 - PR #31: https://github.com/MEGATRON300924/max-auth/pull/31 (open; not merged).
 - Latest implementation/plan head at PR creation: `66c387bc68585c328159ca969a2fd9a38f6aeb58`.
 - GitHub Actions CI run #44043792657: in progress at checkpoint.
+
+
+### Follow-up refinement
+- Tightened the concurrency grace window from 15 seconds to 5 seconds to limit the period in which a delayed replay is classified as a concurrent request.
+- Latest token-service commit: `429febc36e42c4bac54b47f49886cbebdd681337`.
