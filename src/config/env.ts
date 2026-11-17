@@ -72,22 +72,7 @@ if (env.isProduction) {
   if (!env.OIDC_PRIVATE_KEY || !env.OIDC_PUBLIC_KEY) {
     throw new Error("OIDC_PRIVATE_KEY and OIDC_PUBLIC_KEY are required in production for OAuth/OIDC signing and JWKS.");
   }
-  const providerEncryptionKeys: Array<[string, string, string]> = [
-    ["GOOGLE_CLIENT_ID", env.GOOGLE_CLIENT_ID, env.GOOGLE_TOKEN_ENCRYPTION_KEY],
-    ["SPOTIFY_CLIENT_ID", env.SPOTIFY_CLIENT_ID, env.SPOTIFY_TOKEN_ENCRYPTION_KEY],
-    ["DISCORD_CLIENT_ID", env.DISCORD_CLIENT_ID, env.DISCORD_TOKEN_ENCRYPTION_KEY],
-    ["MICROSOFT_CLIENT_ID", env.MICROSOFT_CLIENT_ID, env.MICROSOFT_TOKEN_ENCRYPTION_KEY],
-    ["GITHUB_CLIENT_ID", env.GITHUB_CLIENT_ID, env.GITHUB_TOKEN_ENCRYPTION_KEY],
-    ["X_CLIENT_ID", env.X_CLIENT_ID, env.X_TOKEN_ENCRYPTION_KEY],
-    ["INSTAGRAM_CLIENT_ID", env.INSTAGRAM_CLIENT_ID, env.INSTAGRAM_TOKEN_ENCRYPTION_KEY],
-    ["TIKTOK_CLIENT_KEY", env.TIKTOK_CLIENT_KEY, env.TIKTOK_TOKEN_ENCRYPTION_KEY],
-  ];
-  for (const [providerName, clientId, encryptionKey] of providerEncryptionKeys) {
-    if (clientId && Buffer.byteLength(encryptionKey, "utf8") < 32) {
-      throw new Error(`${providerName} is configured, so its dedicated token-encryption key must be set to at least 32 bytes.`);
-    }
-  }
-    if (env.MAIL_PROVIDER !== "resend" || !env.RESEND_API_KEY) {
+  if (env.MAIL_PROVIDER !== "resend" || !env.RESEND_API_KEY) {
     throw new Error("Production email delivery requires MAIL_PROVIDER=resend and RESEND_API_KEY.");
   }
   if (Buffer.byteLength(env.JWT_ACCESS_SECRET, "utf8") < 32 || Buffer.byteLength(env.JWT_REFRESH_SECRET, "utf8") < 32 ||
