@@ -87,3 +87,5 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Provider token encryption and MFA secret encryption still have legacy fallbacks to JWT_REFRESH_SECRET; rotating that secret without a separate key migration can make stored provider tokens/MFA secrets unreadable. Keep it stable until a dedicated-key migration is completed.
 - Moderate glob/minimatch advisories remain under swagger-jsdoc; they do not fail the current high-risk production gate, but should be resolved by a compatible dependency upgrade or by moving spec generation out of the runtime dependency graph.
 - CI currently exercises 14 tests; broader route/service integration coverage is still needed before claiming exhaustive correctness.
+
+- Render verification after the audit: production service max-auth (srv-d9pop1ks728c73c08tog) is still configured to deploy branch main with auto-deploy enabled. Its newest deployment remains commit 001bf8fd7d020bac495f4b76ba88e7c3982cefb0 and status update_failed. PR #36 has not been merged, so none of the audit fixes are deployed to Render. No Render environment variables or production database records were changed during this audit.
