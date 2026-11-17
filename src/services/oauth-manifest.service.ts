@@ -118,7 +118,7 @@ export const oauthManifestService = {
     const declaredName = typeof body.name === "string" ? body.name.trim() : "";
     const validClient = declaredClientId === client.clientId;
     const validWebsite = declaredWebsite === config.websiteUrl;
-    const validRedirects = redirectUris.length > 0 && redirectUris.length === client.redirectUris.length && redirectUris.every((uri: string) => client.redirectUris.includes(uri));
+    const validRedirects = redirectUris.length > 0 && redirectUris.length === client.redirectUris.length && new Set(redirectUris).size === redirectUris.length && client.redirectUris.every((uri: string) => redirectUris.includes(uri));
     const validPkce = body.authorization?.pkce === "S256";
     const validName = !declaredName || declaredName === client.name;
     const verified = validClient && validWebsite && validRedirects && validPkce && validName;
