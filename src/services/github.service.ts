@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { ConnectedProvider } from "@prisma/client";
 import { prisma } from "../database/prisma";
+import { linkConnectedAccount } from "./connectedAccountLink.service";
 import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
 import { env } from "../config/env";
@@ -112,9 +113,11 @@ export const githubService = {
     });
     if (existing && existing.userId !== oauthState.userId) throw AppError.conflict("This GitHub account is already connected to another MAX Account");
 
-    await prisma.connectedAccount.upsert({
-      where: { provider_providerAccountId: { provider: ConnectedProvider.GITHUB, providerAccountId: String(profile.id) } },
-      create: {
+    await linkConnectedAccount({
+      userId: oauthState.userId,
+      provider: ConnectedProvider.GITHUB,
+      providerAccountId: String(profile.id),
+      createData: {
         userId: oauthState.userId,
         provider: ConnectedProvider.GITHUB,
         providerAccountId: String(profile.id),
@@ -123,8 +126,7 @@ export const githubService = {
         scope: tokenResponse.scope || null,
         tokenExpiresAt: tokenResponse.expires_in ? new Date(Date.now() + Number(tokenResponse.expires_in) * 1000) : null,
       },
-      update: {
-        userId: oauthState.userId,
+      updateData: {
         accessTokenEnc: encrypt(tokenResponse.access_token),
         refreshTokenEnc: null,
         scope: tokenResponse.scope || null,
