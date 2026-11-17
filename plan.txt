@@ -145,3 +145,20 @@ Provide a persistent source of truth for the MAX status page and a secure admini
 - On branch `fix/service-introspection-rate-limit`, changed `globalRateLimiter` to skip only POST `/api/v1/oauth/introspect`. The endpoint still enforces `MAX_AUTH_SERVICE_TOKEN` in `oauthController.introspect`; no other route or rate limit is bypassed.
 - This addresses a concrete rate-limit design flaw that can reject legitimate backend session checks. The precise upstream status for the user's failed request remains unconfirmed because the backend middleware does not currently log the upstream status/body code.
 - Next: run MAX Auth CI/build, open PR, merge only after checks pass, deploy and retest MAX Chat. If the issue persists, improve backend introspection diagnostics to record sanitized upstream status/error code (never token or service-token values). MAX Backend Gemini-only deployment remains live; Botpress untouched.
+
+
+## Google first-time account linking through MAX Auth OAuth — 2026-11-17
+- User request: allow MAX Chat to start a real Google account connection flow directly in the conversation, including when the Google identity has not previously been linked to the MAX Account.
+- Existing Google Calendar connect flow had a blocker: `createGoogleCalendarAuthorizationUrl` required a pre-existing `ConnectedProvider.GOOGLE` row, while `POST /auth/google/connect` only accepted a Google Identity Services credential from a separate sign-in UI. This prevented the chat-generated OAuth session from linking a first-time Google identity.
+- Updated Google OAuth authorization-session creation to allow an authenticated MAX Auth user to start the standard Google OAuth flow without a pre-existing Google identity. The OAuth state remains bound to the authenticated MAX user, short-lived, one-time-use, and PKCE-protected.
+- Updated the Google callback to safely upsert the Google connected-account record using the verified Google `sub`; it rejects an account already linked to a different MAX user and stores encrypted access/refresh tokens plus the granted scopes. The existing YouTube Music callback path is unchanged.
+- Branch: `feat/google-first-link-oauth-session`. Build, tests, callback integration tests, PR and production deployment pending.
+- No credentials or OAuth client settings changed. No account merge by email; the authenticated MAX session and OAuth state determine the target MAX user.
+
+### CI verification update — 2026-11-17
+- GitHub Actions CI run `44068162078`: Prisma generation, TypeScript build, security tests and critical dependency audit passed. The production high-risk dependency audit failed because the repository currently reports 2 high and 10 moderate dependency vulnerabilities; this PR does not change package manifests or lockfiles.
+- No Google OAuth callback integration test or live authorization round-trip has been run. PR #34 remains open/unmerged; no deployment performed.
+
+### Latest CI run — 2026-11-17
+- CI run `44068436389` repeated the same outcome: Prisma generation, TypeScript build, security tests and critical dependency audit passed; the high-risk production dependency audit failed with the existing 2 high / 10 moderate vulnerability inventory. This PR does not change dependency manifests or lockfiles.
+- No merge/deployment. OAuth callback round-trip remains pending.
