@@ -8,7 +8,7 @@ import { ok } from "../utils/response";
 const PROGRAM_ADMIN_USERNAME = "zionopaaje";
 const PRODUCTS = [
   "MAX AI", "MAX Home", "MAX Music", "MAX Browser", "MAX TV", "MAX Cloud",
-  "MAX Store", "MAX Connect", "MAX Car OS", "MAX Business", "MAX Security",
+  "MAX Store", "MAX Connect", "MAX Car OS", "MAX Business", "MAX Security", "MAX OS",
   "MAX Pay", "MAX Studio", "MAX Voice", "MAX Spotlight Graph", "MAX Auth",
 ] as const;
 
