@@ -234,3 +234,9 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - The successful run validated application commit 73fa216ef40b1de572cb217835c2e34455e0f5ac. A second overlapping run #601 was also queued from the same pull-request reopen sequence and is not needed to establish the passing result.
 - PR #40 remains open. Authenticated API smoke tests, MAX Backend event emitter integration, frontend integration and live service probe verification remain pending.
 - No merge, environment change, migration or production deployment.
+
+
+### MAX Diagnostics merge record — 2026-11-18
+- MAX Diagnostics admin API and trusted telemetry ingestion merged via squash commit 8e71b33596bb650b872f0b03ec343477bb25d627. PR #40.
+- Merge order: MAX Auth API, MAX Backend telemetry, then MAX Auth frontend.
+- CI on the PR heads passed before merge. Changes are merged to main; production deployment and live cross-service smoke tests remain pending.
