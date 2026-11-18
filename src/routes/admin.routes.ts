@@ -5,6 +5,7 @@ import { adminController } from "../controllers/admin.controller";
 import { authenticate } from "../middleware/authenticate";
 import { requireAdmin } from "../middleware/requireAdmin";
 import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
+import { betaController } from "../controllers/beta.controller";
 
 const router = Router();
 
@@ -72,6 +73,21 @@ router.patch("/oauth-clients/:clientId", validate(adminOAuthClientUpdateSchema),
 router.get("/entity-reviewers", spotlightReviewAccessController.list);
 router.post("/entity-reviewers", validate(z.object({ body: z.object({ username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_.]+$/) }) })), spotlightReviewAccessController.grant);
 router.delete("/entity-reviewers/:userId", spotlightReviewAccessController.revoke);
+
+
+const betaReviewSchema = z.object({ body: z.object({
+  status: z.enum(["APPROVED", "REJECTED"]),
+  note: z.string().trim().max(1000).optional(),
+}) });
+const betaAnnouncementSchema = z.object({ body: z.object({
+  title: z.string().trim().min(3).max(180),
+  body: z.string().trim().min(1).max(12000),
+  productReference: z.string().trim().min(1).max(80),
+}) });
+router.get("/beta/applications", betaController.listApplications);
+router.patch("/beta/applications/:applicationId/review", validate(betaReviewSchema), betaController.reviewApplication);
+router.get("/beta/announcements", betaController.listAnnouncements);
+router.post("/beta/announcements", validate(betaAnnouncementSchema), betaController.createAnnouncement);
 
 router.get("/stats", adminController.stats);
 
