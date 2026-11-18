@@ -167,3 +167,21 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Request-level Render access logs were not available in the queried log stream, so the source Origin/path/client could not be attributed from those logs. Do not claim the refresh flood is fully root-caused until request telemetry or browser network evidence identifies the caller.
 - Authenticated live API/browser verification of /admin/beta remains pending. If the page still fails after a hard reload, capture the failing GET response status/body for /api/v1/admin/beta/applications and /api/v1/admin/beta/announcements; do not expose bearer tokens or cookies.
 - Work on branch `fix/refresh-endpoint-request-spike`; run CI and inspect before PR. No production deploy, merge, rate-limit environment change, or Prisma migration-ledger edit has been performed.
+
+
+## MAX Beta issue reporting and WebChat feedback intake — 2026-11-18
+
+### Agreed behaviour
+- Approved global Beta Testers can submit product issue reports from the MAX Auth Beta area. The report is linked to their MAX Account and visible only to the programme owner/admin.
+- MAX WebChat feedback intake is available to authenticated MAX users, not only Beta Testers. The WebChat client submits a user-selected response report to the same central admin review queue.
+- Reports include source, product, category, severity, title, description, reproduction details where applicable, and structured message/error context for WebChat reports.
+- Admin review statuses: OPEN, TRIAGED, IN_PROGRESS, RESOLVED, WONT_FIX. Admin notes are retained for internal triage.
+- Reports are persisted first; notification email failure must not discard a report.
+- Keep WebChat UI implementation in max-web / max-chat as a separate integration. This backend exposes the authenticated ingestion endpoint and admin review API.
+
+### Implementation
+- Added BetaIssueReport Prisma model, status enum, reporter/reviewer relations and indexes.
+- Added approved-tester report submission/list APIs and authenticated WebChat report ingestion API.
+- Added owner-only admin report listing/status update APIs under /admin/beta/issue-reports.
+- Added owner email notification on report creation, best-effort after persistence.
+- Database migration and Prisma generation/build/tests: pending. Production migration/deployment: not performed.
