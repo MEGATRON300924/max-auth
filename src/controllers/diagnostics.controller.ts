@@ -66,7 +66,7 @@ export const diagnosticsController = {
       const since = new Date(Date.now() - WINDOW_MS[window]);
       const base = { createdAt: { gte: since } };
       const [overall, auth, backend, recent] = await Promise.all([
-        metrics({ ...base, NOT: { path: { startsWith: "/__service/" } } }),
+        metrics(base),
         metrics({ ...base, NOT: { path: { startsWith: "/__service/" } } }),
         metrics({ ...base, path: { startsWith: BACKEND_PREFIX } }),
         prisma.usageEvent.findMany({
