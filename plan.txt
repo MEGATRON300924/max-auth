@@ -228,3 +228,9 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Fix commit: 73fa216ef40b1de572cb217835c2e34455e0f5ac.
 - Fresh CI on the corrected head is pending. Security tests and dependency audit have not yet run on the corrected head.
 - No production deployment.
+
+### MAX Diagnostics Admin API validation — 2026-11-18
+- Corrected-head CI run #602 (44393815554) passed: dependency installation, Prisma Client generation, TypeScript build, security regression tests, critical dependency audit and production high-risk dependency audit.
+- The successful run validated application commit 73fa216ef40b1de572cb217835c2e34455e0f5ac. A second overlapping run #601 was also queued from the same pull-request reopen sequence and is not needed to establish the passing result.
+- PR #40 remains open. Authenticated API smoke tests, MAX Backend event emitter integration, frontend integration and live service probe verification remain pending.
+- No merge, environment change, migration or production deployment.
