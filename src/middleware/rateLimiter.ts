@@ -73,3 +73,25 @@ export const oauthRateLimiter = rateLimit({
     error: { code: "OAUTH_RATE_LIMITED", message: "Too many OAuth requests. Please try again later." },
   },
 });
+
+
+/**
+ * Refresh-cookie requests are expected to be infrequent (normally once per
+ * page bootstrap). Bound repeated missing-cookie/refresh attempts separately
+ * from the broader API budget so a broken client or automated caller cannot
+ * flood the auth service. The 60/minute IP budget allows normal multi-tab and
+ * multi-product startup bursts while bounding sustained retries.
+ */
+export const refreshRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: "REFRESH_RATE_LIMITED",
+      message: "Too many session refresh attempts. Please wait a moment and try again.",
+    },
+  },
+});
