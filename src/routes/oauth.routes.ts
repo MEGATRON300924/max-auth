@@ -23,6 +23,8 @@ const approveSchema = z.object({ body: z.object({ clientId: z.string().min(1), r
 const revokeSchema = z.object({ body: z.object({ token: z.string().min(1), token_type_hint: z.string().optional(), client_id: z.string().optional(), client_secret: z.string().optional() }) });
 const businessInviteSchema = z.object({ body: z.object({ email: z.string().trim().email().max(254), role: z.nativeEnum(BusinessMemberRole).refine((role) => role !== BusinessMemberRole.OWNER, "Ownership must be transferred separately") }) });
 const businessMemberRoleSchema = z.object({ body: z.object({ role: z.nativeEnum(BusinessMemberRole) }) });
+const businessInvitationIdSchema = z.object({ params: z.object({ invitationId: z.string().uuid() }) });
+const businessMembershipIdSchema = z.object({ params: z.object({ membershipId: z.string().uuid() }) });
 
 router.get("/clients/:clientId/logo", oauthClientLogoController.publicLogo);
 router.post("/clients", authenticateDeveloper, validate(createClientSchema), oauthController.createClient);
@@ -48,9 +50,9 @@ router.get("/business-context", oauthController.businessContext);
 router.get("/business/members", oauthController.businessMembers);
 router.get("/business/invitations", oauthController.businessInvitations);
 router.post("/business/invitations", oauthRateLimiter, validate(businessInviteSchema), oauthController.createBusinessInvitation);
-router.delete("/business/invitations/:invitationId", oauthRateLimiter, oauthController.revokeBusinessInvitation);
-router.patch("/business/members/:membershipId", validate(businessMemberRoleSchema), oauthController.updateBusinessMember);
-router.delete("/business/members/:membershipId", oauthController.removeBusinessMember);
+router.delete("/business/invitations/:invitationId", oauthRateLimiter, validate(businessInvitationIdSchema), oauthController.revokeBusinessInvitation);
+router.patch("/business/members/:membershipId", oauthRateLimiter, validate(businessMembershipIdSchema), validate(businessMemberRoleSchema), oauthController.updateBusinessMember);
+router.delete("/business/members/:membershipId", oauthRateLimiter, validate(businessMembershipIdSchema), oauthController.removeBusinessMember);
 router.get("/introspect", oauthController.introspect);
 router.post("/introspect", oauthController.introspect);
 router.get("/userinfo", oauthController.userinfo);
