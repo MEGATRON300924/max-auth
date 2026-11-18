@@ -162,7 +162,6 @@ export const diagnosticsController = {
             method: "GET",
             headers: { Accept: "application/json" },
             signal: AbortSignal.timeout(3000),
-            cache: "no-store",
           });
           backendStatus = response.ok ? "healthy" : "down";
         } catch {
