@@ -130,6 +130,16 @@ enum BusinessAppConnectionStatus {
   REVOKED
 }
 
+enum BetaApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BetaRole {
+  BETA_TESTER
+}
+
 model User {
   id                 String             @id @default(uuid()) @db.Uuid
   username           String             @unique @db.VarChar(32)
@@ -174,6 +184,10 @@ model User {
   businessAppConnections BusinessAppConnection[] @relation("BusinessAppConnectionAuthorizer")
   familyConsentAsChild FamilyConsentRequest[] @relation("FamilyConsentChild")
   familyConsentAsParent FamilyConsentRequest[] @relation("FamilyConsentParent")
+  betaRoleAssignments BetaRoleAssignment[]
+  betaApplication BetaApplication?
+  betaNotifications BetaNotification[]
+  betaAnnouncementsCreated BetaAnnouncement[] @relation("BetaAnnouncementAuthor")
   @@index([email])
   @@index([username])
   @@index([status])
@@ -634,4 +648,62 @@ model SystemStatus {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_status")
+}
+
+
+model BetaRoleAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      BetaRole
+  grantedAt DateTime @default(now()) @map("granted_at")
+  grantedBy String?  @map("granted_by") @db.Uuid
+  @@unique([userId, role])
+  @@index([role, grantedAt])
+  @@map("beta_role_assignments")
+}
+
+model BetaApplication {
+  id          String               @id @default(uuid()) @db.Uuid
+  userId      String               @unique @map("user_id") @db.Uuid
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String               @map("full_name") @db.VarChar(128)
+  devices     String[]
+  products    String[]
+  status      BetaApplicationStatus @default(PENDING)
+  reviewNote  String?              @map("review_note") @db.VarChar(1000)
+  reviewedBy  String?              @map("reviewed_by") @db.Uuid
+  reviewedAt  DateTime?            @map("reviewed_at")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  @@index([status, createdAt])
+  @@map("beta_applications")
+}
+
+model BetaAnnouncement {
+  id              String             @id @default(uuid()) @db.Uuid
+  title           String             @db.VarChar(180)
+  body            String             @db.VarChar(12000)
+  productReference String            @map("product_reference") @db.VarChar(80)
+  authorId        String             @map("author_id") @db.Uuid
+  author          User               @relation("BetaAnnouncementAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt       DateTime           @default(now()) @map("created_at")
+  notifications   BetaNotification[]
+  @@index([createdAt])
+  @@map("beta_announcements")
+}
+
+model BetaNotification {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  announcementId String           @map("announcement_id") @db.Uuid
+  announcement   BetaAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  readAt         DateTime?        @map("read_at")
+  emailSentAt    DateTime?        @map("email_sent_at")
+  emailError     String?          @map("email_error") @db.VarChar(1000)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  @@unique([userId, announcementId])
+  @@index([userId, createdAt])
+  @@map("beta_notifications")
 }
