@@ -201,3 +201,36 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - This verifies compilation and configured checks only. Production migration, authenticated API smoke tests and live admin/browser verification remain pending. Do not deploy or apply the migration until explicitly approved and the shared Prisma migration-history issue is reconciled.
 
 - Follow-up optimization: issue-report notification email is dispatched best-effort without holding the API response open; report persistence and the user-facing acknowledgement no longer wait for SMTP delivery. This final adjustment is included in the current PR branch; fresh CI verification pending.
+
+## MAX Diagnostics Admin API — 2026-11-18
+- Started the central Diagnostics API on branch feat/max-diagnostics-admin-api after reading the current root plan.txt and auditing existing health, service-auth, usage telemetry, admin status and Beta issue-report routes.
+- Reuse the existing UsageEvent table and authenticated admin router for the first monitoring slice; do not introduce a duplicate event store or Prisma migration.
+- MAX Auth request telemetry already persists method, path, status code and duration. The admin diagnostics API will aggregate this data and service-reported MAX Backend events, while excluding IP addresses, user agents, tokens, request bodies, conversation content and raw exception text from the admin response.
+- Add a service-token-protected internal ingestion endpoint for bounded MAX Backend event batches, with sanitised paths and service namespace. Exclude the ingestion endpoint itself from automatic usage telemetry.
+- Add admin-only summary, recent-events and live-health endpoints. Health must distinguish MAX Auth database readiness, MAX Backend readiness and unconfigured/unreachable dependencies; do not reuse manually entered green/yellow/red public status as a live probe.
+- Existing /admin/status and Beta issue-report queue remain intact and will be linked from the Diagnostics interface rather than duplicated.
+- No production environment changes, database migration, merge or deployment. Validate with tests and CI before PR.
+
+### MAX Diagnostics Admin API implementation checkpoint — 2026-11-18
+- Added a shared diagnostic path sanitiser that strips query strings/fragments and masks numeric IDs, UUIDs, email-like segments and long opaque tokens.
+- MAX Auth's existing usage middleware now stores sanitised paths and skips the diagnostics ingestion endpoint to prevent telemetry recursion.
+- Added service-token-protected POST /internal/diagnostics/events. It accepts only bounded batches of up to 50 request metadata records from the trusted MAX Backend service and persists them in the existing UsageEvent table under a MAX Backend namespace. It does not accept request bodies, headers, IP addresses, user IDs or assistant/user content.
+- Added admin-only GET /admin/diagnostics/summary, /admin/diagnostics/events and /admin/diagnostics/health routes behind the existing authenticate + requireAdmin middleware.
+- Summary reports request volume, errors, error rate, average latency, top endpoints and recent events for MAX Auth and MAX Backend. Health performs a bounded local DB readiness probe and a bounded MAX Backend /health/ready probe using the existing MAX_AI_BACKEND_URL configuration.
+- The current manually maintained /admin/status service catalogue remains separate and is not used to infer live health.
+- Reused the existing UsageEvent table; no Prisma schema or migration changes.
+- Added unit coverage for query/fragment removal, identifier masking and malformed URI handling.
+- TypeScript build, Jest tests, CI and API smoke tests remain pending. No PR, merge, environment change or deployment yet.
+
+### MAX Diagnostics API CI correction — 2026-11-18
+- Initial PR #40 CI run 44393540592 completed dependency installation and Prisma generation, then failed TypeScript build at diagnostics.controller.ts: the project's Node RequestInit type does not include the browser-style cache option.
+- Removed the unsupported fetch cache property. The endpoint already sets Cache-Control: no-store on its admin response; the outbound health probe does not need the unsupported option.
+- Fix commit: 73fa216ef40b1de572cb217835c2e34455e0f5ac.
+- Fresh CI on the corrected head is pending. Security tests and dependency audit have not yet run on the corrected head.
+- No production deployment.
+
+### MAX Diagnostics Admin API validation — 2026-11-18
+- Corrected-head CI run #602 (44393815554) passed: dependency installation, Prisma Client generation, TypeScript build, security regression tests, critical dependency audit and production high-risk dependency audit.
+- The successful run validated application commit 73fa216ef40b1de572cb217835c2e34455e0f5ac. A second overlapping run #601 was also queued from the same pull-request reopen sequence and is not needed to establish the passing result.
+- PR #40 remains open. Authenticated API smoke tests, MAX Backend event emitter integration, frontend integration and live service probe verification remain pending.
+- No merge, environment change, migration or production deployment.
