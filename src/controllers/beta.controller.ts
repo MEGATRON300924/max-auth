@@ -67,6 +67,15 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 }
 
+
+async function notifyIssueReportOwner(reportId: string, title: string, product: string, severity: string, source: string) {
+  try {
+    const owner = await prisma.user.findUnique({ where: { username: PROGRAM_ADMIN_USERNAME }, select: { email: true } });
+    if (owner?.email) await mailService.send({ to: owner.email, subject: `New MAX issue report: ${title}`, text: `A new issue report was submitted from ${source}. Product: ${product}. Severity: ${severity}. Report ID: ${reportId}. Review it at https://api.max-ai.name.ng/admin/beta.` });
+  } catch { /* The report is persisted even if email delivery fails. */ }
+}
+
+export const betaController = {
   async submitIssueReport(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.sub;
@@ -139,7 +148,7 @@ function escapeHtml(value: string) {
     } catch (error) { next(error); }
   },
 
-export const betaController = {
+
   async submitApplication(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.sub;
