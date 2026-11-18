@@ -36,45 +36,6 @@ async function notifyIssueReportOwner(reportId: string, title: string, product: 
   } catch { /* The report is persisted even if email delivery fails. */ }
 }
 
-import { Request, Response, NextFunction } from "express";
-import { BetaApplicationStatus, BetaIssueStatus, BetaRole } from "@prisma/client";
-import { prisma } from "../database/prisma";
-import { mailService } from "../services/mail.service";
-import { AppError } from "../utils/AppError";
-import { ok } from "../utils/response";
-
-const PROGRAM_ADMIN_USERNAME = "zionopaaje";
-const PRODUCTS = [
-  "MAX AI", "MAX Home", "MAX Music", "MAX Browser", "MAX TV", "MAX Cloud",
-  "MAX Store", "MAX Connect", "MAX Car OS", "MAX Business", "MAX Security", "MAX OS",
-  "MAX Pay", "MAX Studio", "MAX Voice", "MAX Spotlight Graph", "MAX Auth",
-] as const;
-
-async function requireProgramOwner(userId: string) {
-  const actor = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, isAdmin: true } });
-  if (!actor?.isAdmin || actor.username.toLowerCase() !== PROGRAM_ADMIN_USERNAME) {
-    throw AppError.forbidden("Only the MAX Auth Beta programme owner can manage testers and announcements.");
-  }
-  return actor;
-}
-
-async function requireBetaTester(userId: string) {
-  const role = await prisma.betaRoleAssignment.findUnique({ where: { userId_role: { userId, role: BetaRole.BETA_TESTER } }, select: { id: true } });
-  if (!role) throw AppError.forbidden("An approved MAX Beta Tester role is required.");
-}
-
-function escapeHtml(value: string) {
-  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
-}
-
-
-async function notifyIssueReportOwner(reportId: string, title: string, product: string, severity: string, source: string) {
-  try {
-    const owner = await prisma.user.findUnique({ where: { username: PROGRAM_ADMIN_USERNAME }, select: { email: true } });
-    if (owner?.email) await mailService.send({ to: owner.email, subject: `New MAX issue report: ${title}`, text: `A new issue report was submitted from ${source}. Product: ${product}. Severity: ${severity}. Report ID: ${reportId}. Review it at https://api.max-ai.name.ng/admin/beta.` });
-  } catch { /* The report is persisted even if email delivery fails. */ }
-}
-
 export const betaController = {
   async submitIssueReport(req: Request, res: Response, next: NextFunction) {
     try {
