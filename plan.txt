@@ -120,3 +120,14 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Implement beta application, approval/role assignment, announcement persistence, email dispatch and tester notification read API.
 - Add a reviewed migration for the additive webhook column and beta tables after resolving Prisma migration ownership/history; do not run broad production migration deploys.
 - Verify API health and webhook retry worker logs after recovery DDL.
+
+
+### Implementation checkpoint
+- Added BetaRoleAssignment with the global BETA_TESTER role, one application per MAX Account, announcement records, and per-tester notification/email delivery records.
+- Added authenticated application/status/notification APIs. Applications require a verified MAX Account email and are linked to the signed-in user; approved users receive the global role only after owner approval.
+- Restricted beta management endpoints to an authenticated administrator whose username is exactly zionopaaje.
+- Added application submission email notification to the zionopaaje account email.
+- Added admin review endpoints and announcement publishing. Announcement product reference accepts All MAX Products or a named MAX product, but the recipient query intentionally selects every active global Beta Tester regardless of product reference.
+- Added persistent notification feed and read endpoint for future MAX WebChat integration; max-chat itself is not modified.
+- Added Prisma schema and a migration file containing beta tables plus the missing nullable webhook secret column. The migration is not applied to production because shared Prisma migration history remains unresolved; the webhook column was separately added through a safe additive SQL patch for service recovery.
+- Backend build, Prisma validation/generation, API tests and CI: pending. No merge or production deployment.
