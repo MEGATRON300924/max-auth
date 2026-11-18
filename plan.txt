@@ -249,3 +249,6 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Invitation email is dispatched best-effort after invitation persistence; raw invitation tokens are not returned in the API response.
 - No OAuth client scopes, MAX Hotels frontend scopes, production environment, database, or deployment were changed. The MAX Hotels client allowed-scope configuration has not yet been verified; do not add the new scopes to the frontend authorization request until that is confirmed in MAX for Developers.
 - Build, Prisma generation, route/service tests, CI and authenticated API contract tests: pending. PR not yet opened.
+
+- CI verification: GitHub Actions run #607 (`44400238154`) passed on PR #41 head `bb83fcbe7ec4a6f02b280ae4cf719fd57afde43f`: dependencies installed, Prisma Client generated, TypeScript build passed, security tests passed, critical dependency audit passed, and production high-risk dependency audit passed.
+- CI does not exercise authenticated OAuth API calls against a live MAX Auth database or prove the MAX Hotels client has the new scopes enabled. Those checks remain pending; PR #41 remains draft/open and is not merged or deployed.
