@@ -86,7 +86,7 @@ const betaAnnouncementSchema = z.object({ body: z.object({
 }) });
 router.get("/beta/applications", betaController.listApplications);
 router.patch("/beta/applications/:applicationId/review", validate(betaReviewSchema), betaController.reviewApplication);
-router.get("/beta/announcements", betaController.listAnnouncements);
+router.get("/beta/announcements", betaController.listAnnouncements);\nrouter.get("/beta/issue-reports", betaController.listIssueReports);\nrouter.patch("/beta/issue-reports/:reportId", validate(z.object({ body: z.object({ status: z.enum(["OPEN", "TRIAGED", "IN_PROGRESS", "RESOLVED", "WONT_FIX"]), adminNote: z.string().trim().max(4000).optional() }) })), betaController.updateIssueReport);
 router.post("/beta/announcements", validate(betaAnnouncementSchema), betaController.createAnnouncement);
 
 router.get("/stats", adminController.stats);
