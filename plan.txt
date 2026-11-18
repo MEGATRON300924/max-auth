@@ -201,3 +201,12 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - This verifies compilation and configured checks only. Production migration, authenticated API smoke tests and live admin/browser verification remain pending. Do not deploy or apply the migration until explicitly approved and the shared Prisma migration-history issue is reconciled.
 
 - Follow-up optimization: issue-report notification email is dispatched best-effort without holding the API response open; report persistence and the user-facing acknowledgement no longer wait for SMTP delivery. This final adjustment is included in the current PR branch; fresh CI verification pending.
+
+## MAX Diagnostics Admin API — 2026-11-18
+- Started the central Diagnostics API on branch feat/max-diagnostics-admin-api after reading the current root plan.txt and auditing existing health, service-auth, usage telemetry, admin status and Beta issue-report routes.
+- Reuse the existing UsageEvent table and authenticated admin router for the first monitoring slice; do not introduce a duplicate event store or Prisma migration.
+- MAX Auth request telemetry already persists method, path, status code and duration. The admin diagnostics API will aggregate this data and service-reported MAX Backend events, while excluding IP addresses, user agents, tokens, request bodies, conversation content and raw exception text from the admin response.
+- Add a service-token-protected internal ingestion endpoint for bounded MAX Backend event batches, with sanitised paths and service namespace. Exclude the ingestion endpoint itself from automatic usage telemetry.
+- Add admin-only summary, recent-events and live-health endpoints. Health must distinguish MAX Auth database readiness, MAX Backend readiness and unconfigured/unreachable dependencies; do not reuse manually entered green/yellow/red public status as a live probe.
+- Existing /admin/status and Beta issue-report queue remain intact and will be linked from the Diagnostics interface rather than duplicated.
+- No production environment changes, database migration, merge or deployment. Validate with tests and CI before PR.
