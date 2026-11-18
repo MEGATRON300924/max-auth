@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { BusinessMemberRole } from "@prisma/client";
 import { oauthController } from "../controllers/oauth.controller";
 import { oauthConnectedAppsController } from "../controllers/oauth-connected-apps.controller";
 import { oauthClientConfigController } from "../controllers/oauth-client-config.controller";
@@ -20,6 +21,8 @@ const clientConfigSchema = z.object({ body: z.object({ applicationType: z.enum(O
 const logoSchema = z.object({ body: z.object({ contentType: z.string().min(1), data: z.string().min(1).max(700000) }) });
 const approveSchema = z.object({ body: z.object({ clientId: z.string().min(1), redirectUri: z.string().url(), scopes: z.string().min(1), codeChallenge: z.string().min(43).max(128), codeChallengeMethod: z.literal("S256"), state: z.string().min(1).max(2048), requestToken: z.string().min(1) }) });
 const revokeSchema = z.object({ body: z.object({ token: z.string().min(1), token_type_hint: z.string().optional(), client_id: z.string().optional(), client_secret: z.string().optional() }) });
+const businessInviteSchema = z.object({ body: z.object({ email: z.string().trim().email().max(254), role: z.nativeEnum(BusinessMemberRole).refine((role) => role !== BusinessMemberRole.OWNER, "Ownership must be transferred separately") }) });
+const businessMemberRoleSchema = z.object({ body: z.object({ role: z.nativeEnum(BusinessMemberRole) }) });
 
 router.get("/clients/:clientId/logo", oauthClientLogoController.publicLogo);
 router.post("/clients", authenticateDeveloper, validate(createClientSchema), oauthController.createClient);
@@ -42,6 +45,12 @@ router.post("/token", oauthRateLimiter, oauthController.token);
 router.post("/revoke", oauthRateLimiter, validate(revokeSchema), oauthController.revoke);
 router.get("/businesses", oauthController.businesses);
 router.get("/business-context", oauthController.businessContext);
+router.get("/business/members", oauthController.businessMembers);
+router.get("/business/invitations", oauthController.businessInvitations);
+router.post("/business/invitations", oauthRateLimiter, validate(businessInviteSchema), oauthController.createBusinessInvitation);
+router.delete("/business/invitations/:invitationId", oauthRateLimiter, oauthController.revokeBusinessInvitation);
+router.patch("/business/members/:membershipId", validate(businessMemberRoleSchema), oauthController.updateBusinessMember);
+router.delete("/business/members/:membershipId", oauthController.removeBusinessMember);
 router.get("/introspect", oauthController.introspect);
 router.post("/introspect", oauthController.introspect);
 router.get("/userinfo", oauthController.userinfo);
