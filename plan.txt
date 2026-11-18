@@ -147,3 +147,13 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - The backend Beta Tester implementation and migration are now on `main`; the production beta migration has NOT been applied. The shared Prisma migration ledger still requires reconciliation before running Prisma migrations.
 - The separately-added nullable `public.webhook_endpoints.secret_encrypted` recovery column remains verified; this does not resolve the broader migration-history issue.
 - Production API health, beta API smoke tests and production deployment status remain to be verified.
+
+
+### Production admin-page failure diagnosis and database repair — 2026-11-18
+- Investigated the generic “Something went wrong” error on `/admin/beta`.
+- Confirmed the frontend calls `GET /api/v1/admin/beta/applications` and `GET /api/v1/admin/beta/announcements`; backend routes and controller handlers are present in the merged source.
+- Read-only production schema inspection on Supabase project `vowxnbhwpevckcwpkdcj` confirmed all four Beta programme tables were missing. `public.webhook_endpoints.secret_encrypted` was already present.
+- Applied the additive Beta schema recovery through Supabase migration `global_beta_tester_programme_recovery`: created `BetaApplicationStatus` and `BetaRole` enums, four Beta tables, their unique/lookup indexes and foreign keys, and enabled RLS on all four tables.
+- Post-migration verification confirmed all four tables exist, RLS is enabled, and expected table column counts are present.
+- This recovery did not edit or resolve `public._prisma_migrations`; the shared Prisma migration ledger remains unresolved. Do not run `prisma migrate deploy` until that separate issue is reconciled.
+- Remaining verification: confirm the Render production service has deployed backend merge commit `33514a11b72a9b212161657038a8079041d1eac7`, then test the admin endpoints in an authenticated browser session. The database repair alone does not prove the page is fully operational.
