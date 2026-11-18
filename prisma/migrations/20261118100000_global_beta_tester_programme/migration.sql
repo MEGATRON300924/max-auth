@@ -94,3 +94,10 @@ DO $$ BEGIN
     FOREIGN KEY ("announcement_id") REFERENCES "beta_announcements"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- These tables are accessed through the MAX Auth server only. Keep the
+-- Supabase Data API roles from reading or modifying them directly.
+ALTER TABLE "beta_role_assignments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "beta_applications" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "beta_announcements" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "beta_notifications" ENABLE ROW LEVEL SECURITY;
