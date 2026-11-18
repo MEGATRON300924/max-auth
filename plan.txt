@@ -254,3 +254,5 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - CI does not exercise authenticated OAuth API calls against a live MAX Auth database or prove the MAX Hotels client has the new scopes enabled. Those checks remain pending; PR #41 remains draft/open and is not merged or deployed.
 
 - OAuth client scope activation requires a deliberate migration step: `oauthService.updateClient` revokes existing authorization codes, access tokens, refresh tokens and consents whenever configured scopes change. Therefore, adding the two team scopes to the live MAX Hotels client will force existing hotel business sessions to reauthorize. Do not perform this as a silent production change; coordinate a planned reauthorization window and user-facing sign-in handling.
+
+- Hardened team mutation routes: invitation/member IDs must be UUIDs, and invitation revocation, role changes and member removal now use the OAuth rate limiter. Invitation creation was already rate-limited.
