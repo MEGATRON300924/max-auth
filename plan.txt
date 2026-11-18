@@ -192,3 +192,10 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Beta and WebChat reports share one persisted queue, differentiated by source. Beta portal submission requires the global BETA_TESTER role; WebChat submission requires a signed-in MAX Account but does not require Beta membership.
 - Owner notification email is best-effort and happens after persistence so mail failures do not discard submitted reports.
 - Remaining: verify Prisma schema/client generation, TypeScript build, test coverage, migration SQL against the production schema, CI, and authenticated API contract. Do not apply the migration to production or deploy until separately approved and migration history is reconciled.
+
+
+### CI verification update — 2026-11-18
+- Initial backend CI run #592 identified a TypeScript controller-placement error; run #593 exposed duplicate declarations from the attempted repair. Both were corrected by rebuilding the controller from the main-branch source and adding the new handlers once inside the controller object.
+- Latest backend PR-head commit: `79e3b39ae773e38139a5ff16347aaa996acb2c14`.
+- GitHub Actions CI run #594 (`44299714343`) passed: dependency installation, Prisma client generation, TypeScript build, security tests, critical dependency audit and production high-risk dependency audit.
+- This verifies compilation and configured checks only. Production migration, authenticated API smoke tests and live admin/browser verification remain pending. Do not deploy or apply the migration until explicitly approved and the shared Prisma migration-history issue is reconciled.
