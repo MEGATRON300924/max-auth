@@ -10,6 +10,7 @@ import { internalSpotifyController } from "../controllers/internalSpotify.contro
 import { mailService } from "../services/mail.service";
 import { env } from "../config/env";
 import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
+import { sanitizeDiagnosticPath } from "../utils/diagnostics";
 
 const router = Router();
 
@@ -24,6 +25,42 @@ function authenticateMaxServiceToken(req: import("express").Request, res: import
   }
   next();
 }
+
+const diagnosticBatchSchema = z.object({
+  events: z.array(z.object({
+    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]),
+    path: z.string().trim().min(1).max(1000),
+    statusCode: z.number().int().min(100).max(599),
+    durationMs: z.number().int().min(0).max(600000),
+    occurredAt: z.string().datetime().optional(),
+  }).strict()).min(1).max(50),
+}).strict();
+
+// MAX Backend sends only sanitised request metadata; no bodies, headers, IPs or user data.
+router.post("/diagnostics/events", authenticateMaxServiceToken, async (req, res, next) => {
+  const parsed = diagnosticBatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, error: { code: "INVALID_DIAGNOSTIC_BATCH", message: "A valid bounded diagnostics event batch is required." } });
+  }
+  try {
+    const data = parsed.data.events.map((event) => {
+      const path = sanitizeDiagnosticPath(event.path) || "/";
+      return {
+        userId: null,
+        method: event.method,
+        path: `/__service/max-backend${path.startsWith("/") ? path : `/${path}`}`.slice(0, 255),
+        statusCode: event.statusCode,
+        durationMs: event.durationMs,
+        ...(event.occurredAt ? { createdAt: new Date(event.occurredAt) } : {}),
+      };
+    });
+    const result = await prisma.usageEvent.createMany({ data });
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(202).json({ success: true, data: { accepted: result.count } });
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.get("/identity/discord/:providerAccountId", authenticateMaxServiceToken, async (req, res, next) => {
   try {
