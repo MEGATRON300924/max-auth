@@ -3,6 +3,7 @@ import { oauthService, MAX_OAUTH_SCOPES } from "../services/oauth.service";
 import { oauthClientConfigService } from "../services/oauth-client-config.service";
 import { oauthMemoryService } from "../services/oauth-memory.service";
 import { businessService } from "../services/business.service";
+import { mailService } from "../services/mail.service";
 import { ok } from "../utils/response";
 import { AppError } from "../utils/AppError";
 import { env } from "../config/env";
@@ -170,6 +171,71 @@ export const oauthController = {
         scopes: businessScopes,
         expiresAt: result.exp,
       });
+    } catch (err) { next(err); }
+  },
+  async businessMembers(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const result = await authorizedOAuthContext(req);
+      if (!result.scopes.includes("business:members:read")) throw AppError.forbidden("The access token does not include business:members:read permission", "INSUFFICIENT_SCOPE");
+      if (!result.business_record_id || !result.business_role) throw AppError.forbidden("A business-scoped access token is required", "BUSINESS_CONTEXT_REQUIRED");
+      return ok(res, { members: await businessService.listMembers(result.business_record_id, result.user.id) });
+    } catch (err) { next(err); }
+  },
+  async businessInvitations(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const result = await authorizedOAuthContext(req);
+      if (!result.scopes.includes("business:members:read")) throw AppError.forbidden("The access token does not include business:members:read permission", "INSUFFICIENT_SCOPE");
+      if (!result.business_record_id || !result.business_role) throw AppError.forbidden("A business-scoped access token is required", "BUSINESS_CONTEXT_REQUIRED");
+      return ok(res, { invitations: await businessService.listInvitations(result.business_record_id, result.user.id) });
+    } catch (err) { next(err); }
+  },
+  async createBusinessInvitation(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const result = await authorizedOAuthContext(req);
+      if (!result.scopes.includes("business:members:manage")) throw AppError.forbidden("The access token does not include business:members:manage permission", "INSUFFICIENT_SCOPE");
+      if (!result.business_record_id || !result.business_role) throw AppError.forbidden("A business-scoped access token is required", "BUSINESS_CONTEXT_REQUIRED");
+      const { invitation, inviteToken } = await businessService.invite(result.business_record_id, result.user.id, req.body, { ipAddress: req.ip, userAgent: req.get("user-agent") });
+      const acceptUrl = `https://api.max-ai.name.ng/business/invitations/accept?token=${encodeURIComponent(inviteToken)}`;
+      let emailSent = true;
+      try {
+        await mailService.send({
+          to: invitation.email,
+          subject: `Invitation to join ${result.business_name || "a business"} on MAX`,
+          text: `You have been invited to join ${result.business_name || "a business"} on MAX with the role ${invitation.role}. Sign in to the MAX Account using this email address and accept the invitation: ${acceptUrl}\\n\\nThis invitation expires in seven days.`,
+          html: `<p>You have been invited to join <strong>${(result.business_name || "a business").replace(/[&<>"']/g, "")}</strong> on MAX with the role <strong>${invitation.role}</strong>.</p><p><a href="${acceptUrl}">Review invitation</a></p><p>This invitation expires in seven days.</p>`,
+        });
+      } catch { emailSent = false; }
+      return ok(res, { invitation: { id: invitation.id, email: invitation.email, role: invitation.role, status: invitation.status, expiresAt: invitation.expiresAt }, emailSent }, 201);
+    } catch (err) { next(err); }
+  },
+  async revokeBusinessInvitation(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const result = await authorizedOAuthContext(req);
+      if (!result.scopes.includes("business:members:manage")) throw AppError.forbidden("The access token does not include business:members:manage permission", "INSUFFICIENT_SCOPE");
+      if (!result.business_record_id || !result.business_role) throw AppError.forbidden("A business-scoped access token is required", "BUSINESS_CONTEXT_REQUIRED");
+      return ok(res, await businessService.revokeInvitation(result.business_record_id, req.params.invitationId, result.user.id, { ipAddress: req.ip, userAgent: req.get("user-agent") }));
+    } catch (err) { next(err); }
+  },
+  async updateBusinessMember(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const result = await authorizedOAuthContext(req);
+      if (!result.scopes.includes("business:members:manage")) throw AppError.forbidden("The access token does not include business:members:manage permission", "INSUFFICIENT_SCOPE");
+      if (!result.business_record_id || !result.business_role) throw AppError.forbidden("A business-scoped access token is required", "BUSINESS_CONTEXT_REQUIRED");
+      return ok(res, { membership: await businessService.updateMember(result.business_record_id, req.params.membershipId, result.user.id, req.body.role, { ipAddress: req.ip, userAgent: req.get("user-agent") }) });
+    } catch (err) { next(err); }
+  },
+  async removeBusinessMember(req: Request, res: Response, next: NextFunction) {
+    try {
+      noStore(res);
+      const result = await authorizedOAuthContext(req);
+      if (!result.scopes.includes("business:members:manage")) throw AppError.forbidden("The access token does not include business:members:manage permission", "INSUFFICIENT_SCOPE");
+      if (!result.business_record_id || !result.business_role) throw AppError.forbidden("A business-scoped access token is required", "BUSINESS_CONTEXT_REQUIRED");
+      return ok(res, { membership: await businessService.removeMember(result.business_record_id, req.params.membershipId, result.user.id, { ipAddress: req.ip, userAgent: req.get("user-agent") }) });
     } catch (err) { next(err); }
   },
   async userinfo(req: Request, res: Response, next: NextFunction) { try { noStore(res); const result = await authorizedOAuthContext(req); if (!result.scopes.includes("openid")) throw AppError.forbidden("The access token does not include the openid permission", "INSUFFICIENT_SCOPE"); const claims: Record<string, unknown> = { sub: result.user.id }; if (result.scopes.includes("identity:read")) claims.user_id = result.user.id; if (result.scopes.includes("profile") || result.scopes.includes("profile:read")) Object.assign(claims, { name: result.user.displayName, preferred_username: result.user.username, picture: result.user.avatarUrl || `${(env.FRONTEND_URL.endsWith("/") ? env.FRONTEND_URL.slice(0, -1) : env.FRONTEND_URL)}/user.png` }); if (result.scopes.includes("email") || result.scopes.includes("email:read")) Object.assign(claims, { email: result.user.email, email_verified: result.user.verificationStatus === "VERIFIED" }); if (result.scopes.includes("memory:read")) claims.memory = await oauthMemoryService.getAuthorizedMemory(result.user.id); return res.json(claims); } catch (err) { next(err); } },

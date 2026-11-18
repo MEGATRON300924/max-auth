@@ -240,3 +240,21 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - MAX Diagnostics admin API and trusted telemetry ingestion merged via squash commit 8e71b33596bb650b872f0b03ec343477bb25d627. PR #40.
 - Merge order: MAX Auth API, MAX Backend telemetry, then MAX Auth frontend.
 - CI on the PR heads passed before merge. Changes are merged to main; production deployment and live cross-service smoke tests remain pending.
+
+
+## MAX Hotels OAuth business team management bridge — 2026-11-18
+- Created branch `feat/oauth-business-member-management` from `main` after reviewing the root plan and existing OAuth/business service contracts.
+- Added `business_record_id` to active OAuth introspection results, while retaining the external business ID, display name and role for existing consumers.
+- Added business-scoped OAuth endpoints for listing members/invitations, creating/revoking invitations, changing member roles and removing members. Every handler introspects the bearer token, requires the corresponding `business:members:read` or `business:members:manage` scope, and requires an active business context bound to that token; existing `businessService` role checks remain authoritative.
+- Invitation email is dispatched best-effort after invitation persistence; raw invitation tokens are not returned in the API response.
+- No OAuth client scopes, MAX Hotels frontend scopes, production environment, database, or deployment were changed. The MAX Hotels client allowed-scope configuration has not yet been verified; do not add the new scopes to the frontend authorization request until that is confirmed in MAX for Developers.
+- Build, Prisma generation, route/service tests, CI and authenticated API contract tests: pending. PR not yet opened.
+
+- CI verification: GitHub Actions run #607 (`44400238154`) passed on PR #41 head `bb83fcbe7ec4a6f02b280ae4cf719fd57afde43f`: dependencies installed, Prisma Client generated, TypeScript build passed, security tests passed, critical dependency audit passed, and production high-risk dependency audit passed.
+- CI does not exercise authenticated OAuth API calls against a live MAX Auth database or prove the MAX Hotels client has the new scopes enabled. Those checks remain pending; PR #41 remains draft/open and is not merged or deployed.
+
+- OAuth client scope activation requires a deliberate migration step: `oauthService.updateClient` revokes existing authorization codes, access tokens, refresh tokens and consents whenever configured scopes change. Therefore, adding the two team scopes to the live MAX Hotels client will force existing hotel business sessions to reauthorize. Do not perform this as a silent production change; coordinate a planned reauthorization window and user-facing sign-in handling.
+
+- Hardened team mutation routes: invitation/member IDs must be UUIDs, and invitation revocation, role changes and member removal now use the OAuth rate limiter. Invitation creation was already rate-limited.
+
+- Latest hardened routes CI passed on commit `7842fbba8d522d64ba895e43ccb202a72d9a4bdc`, run #44402566452: dependency install, Prisma Client generation, TypeScript build, security tests, critical dependency audit and production high-risk dependency audit all succeeded.
