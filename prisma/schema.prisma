@@ -140,6 +140,14 @@ enum BetaRole {
   BETA_TESTER
 }
 
+enum BetaIssueStatus {
+  OPEN
+  TRIAGED
+  IN_PROGRESS
+  RESOLVED
+  WONT_FIX
+}
+
 model User {
   id                 String             @id @default(uuid()) @db.Uuid
   username           String             @unique @db.VarChar(32)
@@ -188,6 +196,8 @@ model User {
   betaApplication BetaApplication?
   betaNotifications BetaNotification[]
   betaAnnouncementsCreated BetaAnnouncement[] @relation("BetaAnnouncementAuthor")
+  betaIssueReports BetaIssueReport[] @relation("BetaIssueReportReporter")
+  betaIssueReportsReviewed BetaIssueReport[] @relation("BetaIssueReportReviewer")
   @@index([email])
   @@index([username])
   @@index([status])
@@ -706,4 +716,39 @@ model BetaNotification {
   @@unique([userId, announcementId])
   @@index([userId, createdAt])
   @@map("beta_notifications")
+}
+
+
+model BetaIssueReport {
+  id                 String          @id @default(uuid()) @db.Uuid
+  userId             String          @map("user_id") @db.Uuid
+  user               User            @relation("BetaIssueReportReporter", fields: [userId], references: [id], onDelete: Cascade)
+  source             String          @db.VarChar(32)
+  product            String          @db.VarChar(80)
+  category           String          @db.VarChar(40)
+  severity           String          @db.VarChar(20)
+  title              String          @db.VarChar(180)
+  description        String          @db.VarChar(8000)
+  stepsToReproduce   String?         @map("steps_to_reproduce") @db.VarChar(8000)
+  expectedBehaviour String?         @map("expected_behaviour") @db.VarChar(4000)
+  actualBehaviour   String?         @map("actual_behaviour") @db.VarChar(4000)
+  conversationId     String?         @map("conversation_id") @db.VarChar(128)
+  messageId          String?         @map("message_id") @db.VarChar(128)
+  userMessage        String?         @map("user_message") @db.VarChar(8000)
+  assistantResponse  String?         @map("assistant_response") @db.VarChar(12000)
+  errorMessage       String?         @map("error_message") @db.VarChar(4000)
+  pageUrl            String?         @map("page_url") @db.VarChar(1000)
+  model              String?         @db.VarChar(128)
+  clientMetadata     String?         @map("client_metadata") @db.VarChar(4000)
+  status             BetaIssueStatus @default(OPEN)
+  adminNote          String?         @map("admin_note") @db.VarChar(4000)
+  reviewedById       String?         @map("reviewed_by_id") @db.Uuid
+  reviewedBy         User?           @relation("BetaIssueReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt         DateTime?       @map("reviewed_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  @@index([status, createdAt])
+  @@index([source, createdAt])
+  @@index([userId, createdAt])
+  @@map("beta_issue_reports")
 }
