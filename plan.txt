@@ -167,3 +167,37 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Request-level Render access logs were not available in the queried log stream, so the source Origin/path/client could not be attributed from those logs. Do not claim the refresh flood is fully root-caused until request telemetry or browser network evidence identifies the caller.
 - Authenticated live API/browser verification of /admin/beta remains pending. If the page still fails after a hard reload, capture the failing GET response status/body for /api/v1/admin/beta/applications and /api/v1/admin/beta/announcements; do not expose bearer tokens or cookies.
 - Work on branch `fix/refresh-endpoint-request-spike`; run CI and inspect before PR. No production deploy, merge, rate-limit environment change, or Prisma migration-ledger edit has been performed.
+
+
+## MAX Beta issue reporting and WebChat feedback intake — 2026-11-18
+
+### Agreed behaviour
+- Approved global Beta Testers can submit product issue reports from the MAX Auth Beta area. The report is linked to their MAX Account and visible only to the programme owner/admin.
+- MAX WebChat feedback intake is available to authenticated MAX users, not only Beta Testers. The WebChat client submits a user-selected response report to the same central admin review queue.
+- Reports include source, product, category, severity, title, description, reproduction details where applicable, and structured message/error context for WebChat reports.
+- Admin review statuses: OPEN, TRIAGED, IN_PROGRESS, RESOLVED, WONT_FIX. Admin notes are retained for internal triage.
+- Reports are persisted first; notification email failure must not discard a report.
+- Keep WebChat UI implementation in max-web / max-chat as a separate integration. This backend exposes the authenticated ingestion endpoint and admin review API.
+
+### Implementation
+- Added BetaIssueReport Prisma model, status enum, reporter/reviewer relations and indexes.
+- Added approved-tester report submission/list APIs and authenticated WebChat report ingestion API.
+- Added owner-only admin report listing/status update APIs under /admin/beta/issue-reports.
+- Added owner email notification on report creation, best-effort after persistence.
+- Database migration and Prisma generation/build/tests: pending. Production migration/deployment: not performed.
+
+
+### Implementation status update — 2026-11-18
+- Backend source now includes the BetaIssueReport model and additive migration file, authenticated Beta Tester report create/list endpoints, authenticated MAX WebChat report intake, and owner-only report queue/status endpoints.
+- Beta and WebChat reports share one persisted queue, differentiated by source. Beta portal submission requires the global BETA_TESTER role; WebChat submission requires a signed-in MAX Account but does not require Beta membership.
+- Owner notification email is best-effort and happens after persistence so mail failures do not discard submitted reports.
+- Remaining: verify Prisma schema/client generation, TypeScript build, test coverage, migration SQL against the production schema, CI, and authenticated API contract. Do not apply the migration to production or deploy until separately approved and migration history is reconciled.
+
+
+### CI verification update — 2026-11-18
+- Initial backend CI run #592 identified a TypeScript controller-placement error; run #593 exposed duplicate declarations from the attempted repair. Both were corrected by rebuilding the controller from the main-branch source and adding the new handlers once inside the controller object.
+- Latest backend PR-head commit: `79e3b39ae773e38139a5ff16347aaa996acb2c14`.
+- GitHub Actions CI run #594 (`44299714343`) passed: dependency installation, Prisma client generation, TypeScript build, security tests, critical dependency audit and production high-risk dependency audit.
+- This verifies compilation and configured checks only. Production migration, authenticated API smoke tests and live admin/browser verification remain pending. Do not deploy or apply the migration until explicitly approved and the shared Prisma migration-history issue is reconciled.
+
+- Follow-up optimization: issue-report notification email is dispatched best-effort without holding the API response open; report persistence and the user-facing acknowledgement no longer wait for SMTP delivery. This final adjustment is included in the current PR branch; fresh CI verification pending.
