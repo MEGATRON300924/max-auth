@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { BetaApplicationStatus, BetaRole } from "@prisma/client";
+import { BetaApplicationStatus, BetaIssueStatus, BetaRole } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { mailService } from "../services/mail.service";
 import { AppError } from "../utils/AppError";
@@ -28,6 +28,116 @@ async function requireBetaTester(userId: string) {
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 }
+
+async function notifyIssueReportOwner(reportId: string, title: string, product: string, severity: string, source: string) {
+  try {
+    const owner = await prisma.user.findUnique({ where: { username: PROGRAM_ADMIN_USERNAME }, select: { email: true } });
+    if (owner?.email) await mailService.send({ to: owner.email, subject: `New MAX issue report: ${title}`, text: `A new issue report was submitted from ${source}. Product: ${product}. Severity: ${severity}. Report ID: ${reportId}. Review it at https://api.max-ai.name.ng/admin/beta.` });
+  } catch { /* The report is persisted even if email delivery fails. */ }
+}
+
+import { Request, Response, NextFunction } from "express";
+import { BetaApplicationStatus, BetaIssueStatus, BetaRole } from "@prisma/client";
+import { prisma } from "../database/prisma";
+import { mailService } from "../services/mail.service";
+import { AppError } from "../utils/AppError";
+import { ok } from "../utils/response";
+
+const PROGRAM_ADMIN_USERNAME = "zionopaaje";
+const PRODUCTS = [
+  "MAX AI", "MAX Home", "MAX Music", "MAX Browser", "MAX TV", "MAX Cloud",
+  "MAX Store", "MAX Connect", "MAX Car OS", "MAX Business", "MAX Security", "MAX OS",
+  "MAX Pay", "MAX Studio", "MAX Voice", "MAX Spotlight Graph", "MAX Auth",
+] as const;
+
+async function requireProgramOwner(userId: string) {
+  const actor = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, username: true, isAdmin: true } });
+  if (!actor?.isAdmin || actor.username.toLowerCase() !== PROGRAM_ADMIN_USERNAME) {
+    throw AppError.forbidden("Only the MAX Auth Beta programme owner can manage testers and announcements.");
+  }
+  return actor;
+}
+
+async function requireBetaTester(userId: string) {
+  const role = await prisma.betaRoleAssignment.findUnique({ where: { userId_role: { userId, role: BetaRole.BETA_TESTER } }, select: { id: true } });
+  if (!role) throw AppError.forbidden("An approved MAX Beta Tester role is required.");
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+}
+
+  async submitIssueReport(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.sub;
+      await requireBetaTester(userId);
+      const report = await prisma.betaIssueReport.create({ data: {
+        userId, source: "BETA_PORTAL", product: req.body.product, category: req.body.category,
+        severity: req.body.severity, title: req.body.title.trim(), description: req.body.description.trim(),
+        stepsToReproduce: req.body.stepsToReproduce?.trim() || null,
+        expectedBehaviour: req.body.expectedBehaviour?.trim() || null,
+        actualBehaviour: req.body.actualBehaviour?.trim() || null,
+      } });
+      await notifyIssueReportOwner(report.id, report.title, report.product, report.severity, "Beta Tester portal");
+      return ok(res, { report }, 201);
+    } catch (error) { next(error); }
+  },
+
+  async submitChatReport(req: Request, res: Response, next: NextFunction) {
+    try {
+      const report = await prisma.betaIssueReport.create({ data: {
+        userId: req.user!.sub, source: "MAX_WEBCHAT", product: req.body.product || "MAX AI",
+        category: req.body.category, severity: req.body.severity, title: req.body.title.trim(),
+        description: req.body.description.trim(), conversationId: req.body.conversationId || null,
+        messageId: req.body.messageId || null, userMessage: req.body.userMessage || null,
+        assistantResponse: req.body.assistantResponse || null, errorMessage: req.body.errorMessage || null,
+        pageUrl: req.body.pageUrl || null, model: req.body.model || null,
+        clientMetadata: req.body.clientMetadata || null,
+      } });
+      await notifyIssueReportOwner(report.id, report.title, report.product, report.severity, "MAX WebChat");
+      return ok(res, { report: { id: report.id, status: report.status, createdAt: report.createdAt } }, 201);
+    } catch (error) { next(error); }
+  },
+
+  async listMyIssueReports(req: Request, res: Response, next: NextFunction) {
+    try {
+      await requireBetaTester(req.user!.sub);
+      const reports = await prisma.betaIssueReport.findMany({
+        where: { userId: req.user!.sub, source: "BETA_PORTAL" },
+        orderBy: { createdAt: "desc" }, take: 50,
+        select: { id: true, product: true, category: true, severity: true, title: true, description: true, status: true, adminNote: true, createdAt: true, updatedAt: true },
+      });
+      return ok(res, { reports });
+    } catch (error) { next(error); }
+  },
+
+  async listIssueReports(req: Request, res: Response, next: NextFunction) {
+    try {
+      await requireProgramOwner(req.user!.sub);
+      const statuses = ["OPEN", "TRIAGED", "IN_PROGRESS", "RESOLVED", "WONT_FIX"] as const;
+      const sources = ["BETA_PORTAL", "MAX_WEBCHAT"] as const;
+      const status = typeof req.query.status === "string" && statuses.includes(req.query.status as typeof statuses[number]) ? req.query.status as BetaIssueStatus : undefined;
+      const source = typeof req.query.source === "string" && sources.includes(req.query.source as typeof sources[number]) ? req.query.source : undefined;
+      const reports = await prisma.betaIssueReport.findMany({
+        where: { ...(status ? { status } : {}), ...(source ? { source } : {}) },
+        include: { user: { select: { id: true, username: true, email: true } }, reviewedBy: { select: { username: true } } },
+        orderBy: [{ status: "asc" }, { createdAt: "desc" }], take: 200,
+      });
+      const counts = await Promise.all(statuses.map((value) => prisma.betaIssueReport.count({ where: { status: value } })));
+      return ok(res, { reports, counts: { open: counts[0], triaged: counts[1], inProgress: counts[2], resolved: counts[3], wontFix: counts[4] } });
+    } catch (error) { next(error); }
+  },
+
+  async updateIssueReport(req: Request, res: Response, next: NextFunction) {
+    try {
+      const actor = await requireProgramOwner(req.user!.sub);
+      const report = await prisma.betaIssueReport.update({
+        where: { id: req.params.reportId },
+        data: { status: req.body.status, adminNote: req.body.adminNote?.trim() || null, reviewedById: actor.id, reviewedAt: new Date() },
+      });
+      return ok(res, { report });
+    } catch (error) { next(error); }
+  },
 
 export const betaController = {
   async submitApplication(req: Request, res: Response, next: NextFunction) {
