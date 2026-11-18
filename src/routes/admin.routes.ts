@@ -6,6 +6,7 @@ import { authenticate } from "../middleware/authenticate";
 import { requireAdmin } from "../middleware/requireAdmin";
 import { spotlightReviewAccessController } from "../controllers/spotlightReviewAccess.controller";
 import { betaController } from "../controllers/beta.controller";
+import { diagnosticsController } from "../controllers/diagnostics.controller";
 
 const router = Router();
 
@@ -90,6 +91,10 @@ router.get("/beta/announcements", betaController.listAnnouncements);
 router.get("/beta/issue-reports", betaController.listIssueReports);
 router.patch("/beta/issue-reports/:reportId", validate(z.object({ body: z.object({ status: z.enum(["OPEN", "TRIAGED", "IN_PROGRESS", "RESOLVED", "WONT_FIX"]), adminNote: z.string().trim().max(4000).optional() }) })), betaController.updateIssueReport);
 router.post("/beta/announcements", validate(betaAnnouncementSchema), betaController.createAnnouncement);
+
+router.get("/diagnostics/summary", diagnosticsController.summary);
+router.get("/diagnostics/events", diagnosticsController.events);
+router.get("/diagnostics/health", diagnosticsController.health);
 
 router.get("/stats", adminController.stats);
 
