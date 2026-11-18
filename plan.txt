@@ -199,3 +199,5 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Latest backend PR-head commit: `79e3b39ae773e38139a5ff16347aaa996acb2c14`.
 - GitHub Actions CI run #594 (`44299714343`) passed: dependency installation, Prisma client generation, TypeScript build, security tests, critical dependency audit and production high-risk dependency audit.
 - This verifies compilation and configured checks only. Production migration, authenticated API smoke tests and live admin/browser verification remain pending. Do not deploy or apply the migration until explicitly approved and the shared Prisma migration-history issue is reconciled.
+
+- Follow-up optimization: issue-report notification email is dispatched best-effort without holding the API response open; report persistence and the user-facing acknowledgement no longer wait for SMTP delivery. This final adjustment is included in the current PR branch; fresh CI verification pending.
