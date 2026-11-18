@@ -210,3 +210,14 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Add admin-only summary, recent-events and live-health endpoints. Health must distinguish MAX Auth database readiness, MAX Backend readiness and unconfigured/unreachable dependencies; do not reuse manually entered green/yellow/red public status as a live probe.
 - Existing /admin/status and Beta issue-report queue remain intact and will be linked from the Diagnostics interface rather than duplicated.
 - No production environment changes, database migration, merge or deployment. Validate with tests and CI before PR.
+
+### MAX Diagnostics Admin API implementation checkpoint — 2026-11-18
+- Added a shared diagnostic path sanitiser that strips query strings/fragments and masks numeric IDs, UUIDs, email-like segments and long opaque tokens.
+- MAX Auth's existing usage middleware now stores sanitised paths and skips the diagnostics ingestion endpoint to prevent telemetry recursion.
+- Added service-token-protected POST /internal/diagnostics/events. It accepts only bounded batches of up to 50 request metadata records from the trusted MAX Backend service and persists them in the existing UsageEvent table under a MAX Backend namespace. It does not accept request bodies, headers, IP addresses, user IDs or assistant/user content.
+- Added admin-only GET /admin/diagnostics/summary, /admin/diagnostics/events and /admin/diagnostics/health routes behind the existing authenticate + requireAdmin middleware.
+- Summary reports request volume, errors, error rate, average latency, top endpoints and recent events for MAX Auth and MAX Backend. Health performs a bounded local DB readiness probe and a bounded MAX Backend /health/ready probe using the existing MAX_AI_BACKEND_URL configuration.
+- The current manually maintained /admin/status service catalogue remains separate and is not used to infer live health.
+- Reused the existing UsageEvent table; no Prisma schema or migration changes.
+- Added unit coverage for query/fragment removal, identifier masking and malformed URI handling.
+- TypeScript build, Jest tests, CI and API smoke tests remain pending. No PR, merge, environment change or deployment yet.
