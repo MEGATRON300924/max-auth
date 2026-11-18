@@ -48,7 +48,7 @@ export const betaController = {
         expectedBehaviour: req.body.expectedBehaviour?.trim() || null,
         actualBehaviour: req.body.actualBehaviour?.trim() || null,
       } });
-      await notifyIssueReportOwner(report.id, report.title, report.product, report.severity, "Beta Tester portal");
+      void notifyIssueReportOwner(report.id, report.title, report.product, report.severity, "Beta Tester portal");
       return ok(res, { report }, 201);
     } catch (error) { next(error); }
   },
@@ -64,7 +64,7 @@ export const betaController = {
         pageUrl: req.body.pageUrl || null, model: req.body.model || null,
         clientMetadata: req.body.clientMetadata || null,
       } });
-      await notifyIssueReportOwner(report.id, report.title, report.product, report.severity, "MAX WebChat");
+      void notifyIssueReportOwner(report.id, report.title, report.product, report.severity, "MAX WebChat");
       return ok(res, { report: { id: report.id, status: report.status, createdAt: report.createdAt } }, 201);
     } catch (error) { next(error); }
   },
