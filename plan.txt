@@ -221,3 +221,10 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Reused the existing UsageEvent table; no Prisma schema or migration changes.
 - Added unit coverage for query/fragment removal, identifier masking and malformed URI handling.
 - TypeScript build, Jest tests, CI and API smoke tests remain pending. No PR, merge, environment change or deployment yet.
+
+### MAX Diagnostics API CI correction — 2026-11-18
+- Initial PR #40 CI run 44393540592 completed dependency installation and Prisma generation, then failed TypeScript build at diagnostics.controller.ts: the project's Node RequestInit type does not include the browser-style cache option.
+- Removed the unsupported fetch cache property. The endpoint already sets Cache-Control: no-store on its admin response; the outbound health probe does not need the unsupported option.
+- Fix commit: 73fa216ef40b1de572cb217835c2e34455e0f5ac.
+- Fresh CI on the corrected head is pending. Security tests and dependency audit have not yet run on the corrected head.
+- No production deployment.
