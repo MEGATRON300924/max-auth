@@ -15,6 +15,7 @@ import familyRoutes from "./family.routes";
 import avatarRoutes from "./avatar.routes";
 import statusRoutes from "./status.routes";
 import adminStatusRoutes from "./adminStatus.routes";
+import betaRoutes from "./beta.routes";
 
 const router = Router();
 
@@ -34,5 +35,6 @@ router.use("/health", healthRoutes);
 router.use("/internal", internalRoutes);
 router.use("/businesses", businessRoutes);
 router.use("/family", familyRoutes);
+router.use("/beta", betaRoutes);
 
 export default router;
