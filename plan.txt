@@ -97,3 +97,26 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
   - Added a newly generated, stable 48-byte WEBHOOK_ENCRYPTION_KEY to the Render service environment through a merge-safe environment update. Render automatically triggered deployment dep-dbu7uamk1f9s739n6990; status was build_in_progress at the time of this note.
   - The previous Prisma P3009 migration failure still exists in the shared database ledger. Logs showing "prisma migrate deploy && node dist/server.js" came from an older/stale instance; the new c69b08b instance ran "node dist/server.js" and failed on the missing webhook key before the key was configured.
   - Next: verify the environment-triggered deployment dep-dbu7uamk1f9s739n6990, inspect fresh startup logs for any additional missing production configuration, and confirm the health endpoint. Do not resolve or mark the failed shared migration as applied without schema/history reconciliation.
+
+
+## MAX Auth service recovery and global Beta Tester programme — 2026-11-18
+
+### Recovery investigation
+- Confirmed Render service `srv-d9pop1ks728c73c08tog` has a latest deployment in `live` state on commit `3cef39e5431b9fdc7b0ce4ea0b51ea7d5cb4ff03`; MAX Auth no longer fails at startup due to Prisma migrations.
+- Inspected the Max Auth Supabase project `vowxnbhwpevckcwpkdcj` and confirmed the `public.webhook_endpoints` table was missing nullable `secret_encrypted`, while the running retry worker selects it.
+- Applied the additive, non-destructive recovery DDL `ALTER TABLE public.webhook_endpoints ADD COLUMN IF NOT EXISTS secret_encrypted TEXT` directly; verified the column exists and is nullable. This does not resolve the wider mixed Prisma migration history and must be represented in a future reconciled migration before future `prisma migrate deploy` runs.
+- Render logs up to 09:58 UTC showed the repeated missing-column error before the DDL. Post-DDL log window had no new worker errors at the time of this check; further live health/API verification remains pending.
+- No migration ledger entries were manually marked applied and no existing webhook secrets or rows were modified.
+
+### Beta Tester programme — agreed behaviour
+- Global `BETA_TESTER` role; approval is not product-specific.
+- Applicants submit name, devices used, and products of interest, tied to their authenticated MAX Account/email.
+- Only `zionopaaje` manages beta applications and announcements.
+- Product selector in announcement composer includes All MAX Products and individual ecosystem products. Product selection is a descriptive email reference only: every announcement goes to every approved beta tester, regardless of selected product.
+- Persist announcements and tester notifications for later MAX WebChat integration. Do not modify max-chat in this task.
+- Backend implementation, schema migration and tests: pending.
+
+### Next steps
+- Implement beta application, approval/role assignment, announcement persistence, email dispatch and tester notification read API.
+- Add a reviewed migration for the additive webhook column and beta tables after resolving Prisma migration ownership/history; do not run broad production migration deploys.
+- Verify API health and webhook retry worker logs after recovery DDL.
