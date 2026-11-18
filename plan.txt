@@ -185,3 +185,10 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Added owner-only admin report listing/status update APIs under /admin/beta/issue-reports.
 - Added owner email notification on report creation, best-effort after persistence.
 - Database migration and Prisma generation/build/tests: pending. Production migration/deployment: not performed.
+
+
+### Implementation status update — 2026-11-18
+- Backend source now includes the BetaIssueReport model and additive migration file, authenticated Beta Tester report create/list endpoints, authenticated MAX WebChat report intake, and owner-only report queue/status endpoints.
+- Beta and WebChat reports share one persisted queue, differentiated by source. Beta portal submission requires the global BETA_TESTER role; WebChat submission requires a signed-in MAX Account but does not require Beta membership.
+- Owner notification email is best-effort and happens after persistence so mail failures do not discard submitted reports.
+- Remaining: verify Prisma schema/client generation, TypeScript build, test coverage, migration SQL against the production schema, CI, and authenticated API contract. Do not apply the migration to production or deploy until separately approved and migration history is reconciled.
