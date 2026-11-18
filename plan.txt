@@ -138,3 +138,12 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - The final migration adds RLS to all four Beta programme tables; no direct Data API policies are granted because the MAX Auth server accesses them through its database connection.
 - The latest Render deployment remains `live`. The missing `secret_encrypted` column was verified as nullable after the additive patch; the first post-patch log window contained no repeat of the prior missing-column error. External HTTP health probe and live user login test remain unverified.
 - PR #37 is open and ready for review: https://github.com/MEGATRON300924/max-auth/pull/37. No merge or feature deployment.
+
+
+### Beta Tester programme merge checkpoint — 2026-11-18
+- PR #37 was squash-merged into `main`: https://github.com/MEGATRON300924/max-auth/pull/37
+- Squash merge commit: `33514a11b72a9b212161657038a8079041d1eac7`.
+- Latest PR-head GitHub Actions CI run #586 (`44281833163`) completed successfully. Prisma client generation, TypeScript build, security tests, critical dependency audit and high-risk production dependency audit passed.
+- The backend Beta Tester implementation and migration are now on `main`; the production beta migration has NOT been applied. The shared Prisma migration ledger still requires reconciliation before running Prisma migrations.
+- The separately-added nullable `public.webhook_endpoints.secret_encrypted` recovery column remains verified; this does not resolve the broader migration-history issue.
+- Production API health, beta API smoke tests and production deployment status remain to be verified.
