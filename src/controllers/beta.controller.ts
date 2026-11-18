@@ -47,7 +47,20 @@ export const betaController = {
       const application = existing
         ? await prisma.betaApplication.update({ where: { userId }, data: { ...data, reviewNote: null, reviewedAt: null, reviewedBy: null } })
         : await prisma.betaApplication.create({ data: { ...data, userId } });
-      return ok(res, { application: { id: application.id, fullName: application.fullName, devices: application.devices, products: application.products, status: application.status, createdAt: application.createdAt }, email: user.email }, 201);
+      let adminEmailSent = false;
+      try {
+        const owner = await prisma.user.findUnique({ where: { username: PROGRAM_ADMIN_USERNAME }, select: { email: true } });
+        if (owner?.email) {
+          await mailService.send({
+            to: owner.email,
+            subject: "New MAX Beta Tester application",
+            text: `A new Beta Tester application was submitted by ${data.fullName} (${user.email}). Devices: ${data.devices.join(", ")}. Products of interest: ${data.products.join(", ")}. Review it in MAX Auth at https://api.max-ai.name.ng/admin/beta.`,
+            html: `<main style="font-family:Arial,sans-serif;line-height:1.6;color:#171717"><h1>New Beta Tester application</h1><p><strong>Name:</strong> ${escapeHtml(data.fullName)}</p><p><strong>Email:</strong> ${escapeHtml(user.email)}</p><p><strong>Devices:</strong> ${escapeHtml(data.devices.join(", "))}</p><p><strong>Products:</strong> ${escapeHtml(data.products.join(", "))}</p><p><a href="https://api.max-ai.name.ng/admin/beta">Review in MAX Auth</a></p></main>`,
+          });
+          adminEmailSent = true;
+        }
+      } catch { adminEmailSent = false; }
+      return ok(res, { application: { id: application.id, fullName: application.fullName, devices: application.devices, products: application.products, status: application.status, createdAt: application.createdAt }, adminEmailSent }, 201);
     } catch (error) { next(error); }
   },
 
