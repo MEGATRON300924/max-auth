@@ -131,3 +131,10 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Added persistent notification feed and read endpoint for future MAX WebChat integration; max-chat itself is not modified.
 - Added Prisma schema and a migration file containing beta tables plus the missing nullable webhook secret column. The migration is not applied to production because shared Prisma migration history remains unresolved; the webhook column was separately added through a safe additive SQL patch for service recovery.
 - Backend build, Prisma validation/generation, API tests and CI: pending. No merge or production deployment.
+
+
+### CI and database recovery verification
+- GitHub Actions CI run #584 (`44281633831`) completed successfully: dependency install, Prisma client generation, TypeScript build, security tests, critical dependency audit and production high-risk dependency audit all passed on the implementation commit before the final migration-only RLS hardening.
+- The final migration adds RLS to all four Beta programme tables; no direct Data API policies are granted because the MAX Auth server accesses them through its database connection.
+- The latest Render deployment remains `live`. The missing `secret_encrypted` column was verified as nullable after the additive patch; the first post-patch log window contained no repeat of the prior missing-column error. External HTTP health probe and live user login test remain unverified.
+- PR #37 is open and ready for review: https://github.com/MEGATRON300924/max-auth/pull/37. No merge or feature deployment.
