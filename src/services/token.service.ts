@@ -7,7 +7,9 @@ import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 import { User } from "@prisma/client";
 
-function refreshExpiryDate(): Date { return new Date(Date.now() + parseDuration(env.JWT_REFRESH_EXPIRES_IN)); }
+function refreshExpiryDate(absoluteExpiresAt: Date): Date {
+  return new Date(Math.min(Date.now() + env.SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000, absoluteExpiresAt.getTime()));
+}
 function parseDuration(value: string): number {
   const match = /^(\d+)([smhd])$/.exec(value.trim());
   if (!match) return 30 * 24 * 60 * 60 * 1000;
@@ -18,12 +20,14 @@ function parseDuration(value: string): number {
 }
 
 export const tokenService = {
-  async issueTokenPair(user: Pick<User, "id" | "username" | "subscriptionTier" | "displayName" | "language" | "timezone">, ctx: { deviceId?: string; ipAddress?: string; userAgent?: string; rememberMe?: boolean }) {
+  async issueTokenPair(user: Pick<User, "id" | "username" | "subscriptionTier" | "displayName" | "language" | "timezone">, ctx: { deviceId?: string; ipAddress?: string; userAgent?: string; rememberMe?: boolean; familyId?: string; absoluteExpiresAt?: Date }) {
     const sessionId = randomUUID();
+    const familyId = ctx.familyId ?? sessionId;
+    const absoluteExpiresAt = ctx.absoluteExpiresAt ?? new Date(Date.now() + env.SESSION_ABSOLUTE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000);
     const rememberMe = ctx.rememberMe !== false;
     const accessToken = signAccessToken({ sub: user.id, username: user.username, tier: user.subscriptionTier, displayName: user.displayName, language: user.language, timezone: user.timezone, sessionId });
     const refreshToken = signRefreshToken({ sub: user.id, sessionId, rememberMe });
-    await sessionRepository.create({ id: sessionId, user: { connect: { id: user.id } }, device: ctx.deviceId ? { connect: { id: ctx.deviceId } } : undefined, refreshTokenHash: hashToken(refreshToken), userAgent: ctx.userAgent, ipAddress: ctx.ipAddress, expiresAt: refreshExpiryDate() });
+    await sessionRepository.create({ id: sessionId, user: { connect: { id: user.id } }, device: ctx.deviceId ? { connect: { id: ctx.deviceId } } : undefined, refreshTokenHash: hashToken(refreshToken), userAgent: ctx.userAgent, ipAddress: ctx.ipAddress, familyId, absoluteExpiresAt, expiresAt: refreshExpiryDate(absoluteExpiresAt) });
     return { accessToken, refreshToken, sessionId, rememberMe };
   },
   async rotateRefreshToken(rawRefreshToken: string, ctx: { ipAddress?: string; userAgent?: string }) {
@@ -31,7 +35,7 @@ export const tokenService = {
     try { payload = verifyRefreshToken(rawRefreshToken); } catch { throw AppError.unauthorized("Invalid or expired refresh token"); }
     const tokenHash = hashToken(rawRefreshToken);
     const session = await sessionRepository.findByRefreshTokenHash(tokenHash);
-    if (!session || session.expiresAt < new Date()) throw AppError.unauthorized("Session is no longer valid");
+    if (!session || session.expiresAt < new Date() || session.absoluteExpiresAt < new Date()) throw AppError.unauthorized("Session is no longer valid", "SESSION_EXPIRED");
     if (session.isRevoked) {
       // Separate a legitimate concurrent refresh from a delayed replay. MAX
       // products share the host-only refresh cookie across origins, so requests
@@ -49,7 +53,7 @@ export const tokenService = {
       }
 
       // Reuse outside the short concurrency window remains a security event.
-      await sessionRepository.revokeAllForUser(payload.sub);
+      await sessionRepository.revokeAllForFamily(session.familyId);
       throw AppError.unauthorized("Refresh token reuse detected", "REFRESH_TOKEN_REUSE");
     }
     if (session.userId !== payload.sub || session.id !== payload.sessionId) throw AppError.unauthorized("Token/session mismatch");
@@ -68,13 +72,13 @@ export const tokenService = {
         );
       }
 
-      await sessionRepository.revokeAllForUser(payload.sub);
+      await sessionRepository.revokeAllForFamily(latestSession?.familyId ?? session.familyId);
       throw AppError.unauthorized("Refresh token reuse detected", "REFRESH_TOKEN_REUSE");
     }
     const user = await userRepository.findById(session.userId);
     if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active");
-    return this.issueTokenPair(user, { deviceId: session.deviceId ?? undefined, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe: payload.rememberMe });
+    return this.issueTokenPair(user, { deviceId: session.deviceId ?? undefined, ipAddress: ctx.ipAddress, userAgent: ctx.userAgent, rememberMe: payload.rememberMe, familyId: session.familyId, absoluteExpiresAt: session.absoluteExpiresAt });
   },
   async revokeByRawRefreshToken(rawRefreshToken: string) { const tokenHash = hashToken(rawRefreshToken); const session = await sessionRepository.findByRefreshTokenHash(tokenHash); if (session && !session.isRevoked) await sessionRepository.revoke(session.id); },
-  refreshCookieMaxAgeMs(): number { return parseDuration(env.JWT_REFRESH_EXPIRES_IN); },
+  refreshCookieMaxAgeMs(): number { return env.SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000; },
 };
