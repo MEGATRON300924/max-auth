@@ -25,7 +25,7 @@ ALTER TABLE "oauth_access_tokens"
   ADD COLUMN "refresh_family_id" UUID;
 
 ALTER TABLE "oauth_refresh_tokens"
-  ADD COLUMN "familyId" UUID,
+  ADD COLUMN "family_id" UUID,
   ADD COLUMN "idle_expires_at" TIMESTAMP(3),
   ADD COLUMN "absolute_expires_at" TIMESTAMP(3),
   ADD COLUMN "last_used_at" TIMESTAMP(3);
@@ -39,9 +39,9 @@ SET
   "last_used_at" = "createdAt";
 
 ALTER TABLE "oauth_refresh_tokens"
-  ALTER COLUMN "familyId" SET NOT NULL,
+  ALTER COLUMN "family_id" SET NOT NULL,
   ALTER COLUMN "idle_expires_at" SET NOT NULL,
-  ALTER COLUMN "absoluteExpiresAt" SET NOT NULL,
+  ALTER COLUMN "absolute_expires_at" SET NOT NULL,
   ALTER COLUMN "last_used_at" SET NOT NULL;
 
 CREATE INDEX "oauth_refresh_tokens_family_id_idx" ON "oauth_refresh_tokens"("family_id");
