@@ -56,13 +56,13 @@ export const env = {
   CORS_ALLOWED_ORIGINS: optional("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",").map((s) => s.trim()),
   ARGON2_MEMORY_COST: parseInt(optional("ARGON2_MEMORY_COST", "19456"), 10), ARGON2_TIME_COST: parseInt(optional("ARGON2_TIME_COST", "2"), 10), ARGON2_PARALLELISM: parseInt(optional("ARGON2_PARALLELISM", "1"), 10),
   MAIL_FROM: optional("MAIL_FROM", "MAX Auth <no-reply@max-ai.name.ng>"), MAIL_PROVIDER: optional("MAIL_PROVIDER", isProduction ? "resend" : "console"), RESEND_API_KEY: optional("RESEND_API_KEY", ""),
-  OAUTH_AUTH_CODE_TTL_MINUTES: parseInt(optional("OAUTH_AUTH_CODE_TTL_MINUTES", "10"), 10), OAUTH_ACCESS_TOKEN_TTL_MINUTES: parseInt(optional("OAUTH_ACCESS_TOKEN_TTL_MINUTES", "60"), 10), OAUTH_REFRESH_TOKEN_TTL_DAYS: parseInt(optional("OAUTH_REFRESH_TOKEN_TTL_DAYS", "30"), 10), OAUTH_REFRESH_TOKEN_ABSOLUTE_TTL_DAYS: parseInt(optional("OAUTH_REFRESH_TOKEN_ABSOLUTE_TTL_DAYS", "365"), 10),
+  OAUTH_AUTH_CODE_TTL_MINUTES: parseInt(optional("OAUTH_AUTH_CODE_TTL_MINUTES", "10"), 10), OAUTH_ACCESS_TOKEN_TTL_MINUTES: parseInt(optional("OAUTH_ACCESS_TOKEN_TTL_MINUTES", "60"), 10), OAUTH_REFRESH_TOKEN_TTL_DAYS: parseInt(optional("OAUTH_REFRESH_TOKEN_TTL_DAYS", "30"), 10),
   OIDC_ISSUER: optional("OIDC_ISSUER", process.env.APP_URL ?? "http://localhost:4000"), OIDC_KEY_ID: optional("OIDC_KEY_ID", "max-auth-1"), OIDC_PRIVATE_KEY: optional("OIDC_PRIVATE_KEY", ""), OIDC_PUBLIC_KEY: optional("OIDC_PUBLIC_KEY", ""), OIDC_ID_TOKEN_TTL_SECONDS: parseInt(optional("OIDC_ID_TOKEN_TTL_SECONDS", "600"), 10),
   LOG_LEVEL: optional("LOG_LEVEL", "info"), LOG_DIR: optional("LOG_DIR", "logs"),
   get isProduction() { return this.NODE_ENV === "production"; },
 };
 
-if (![env.SESSION_IDLE_TIMEOUT_DAYS, env.SESSION_ABSOLUTE_TIMEOUT_DAYS, env.OAUTH_REFRESH_TOKEN_ABSOLUTE_TTL_DAYS].every((value) => Number.isInteger(value) && value > 0)) {
+if (![env.SESSION_IDLE_TIMEOUT_DAYS, env.SESSION_ABSOLUTE_TIMEOUT_DAYS].every((value) => Number.isInteger(value) && value > 0)) {
   throw new Error("Session idle and absolute lifetime settings must be positive whole numbers of days.");
 }
 
