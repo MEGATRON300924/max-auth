@@ -62,6 +62,14 @@ export const env = {
   get isProduction() { return this.NODE_ENV === "production"; },
 };
 
+if (![env.SESSION_IDLE_TIMEOUT_DAYS, env.SESSION_ABSOLUTE_TIMEOUT_DAYS, env.OAUTH_REFRESH_TOKEN_ABSOLUTE_TTL_DAYS].every((value) => Number.isInteger(value) && value > 0)) {
+  throw new Error("Session idle and absolute lifetime settings must be positive whole numbers of days.");
+}
+
+if (env.SESSION_IDLE_TIMEOUT_DAYS > env.SESSION_ABSOLUTE_TIMEOUT_DAYS) {
+  throw new Error("SESSION_IDLE_TIMEOUT_DAYS cannot exceed SESSION_ABSOLUTE_TIMEOUT_DAYS.");
+}
+
 if (env.isProduction) {
   if (!env.WEBHOOK_ENCRYPTION_KEY || Buffer.byteLength(env.WEBHOOK_ENCRYPTION_KEY, "utf8") < 32) {
     throw new Error("WEBHOOK_ENCRYPTION_KEY must be set to a stable random secret of at least 32 bytes in production.");
