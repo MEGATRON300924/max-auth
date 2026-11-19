@@ -23,7 +23,7 @@ const refreshCookieOptions = {
 function setRefreshCookie(res: Response, refreshToken: string, rememberMe = true) {
   res.cookie(env.REFRESH_COOKIE_NAME, refreshToken, {
     ...refreshCookieOptions,
-    ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 * 1000 } : {}),
+    ...(rememberMe ? { maxAge: env.SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000 } : {}),
   });
 }
 

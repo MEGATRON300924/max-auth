@@ -12,7 +12,7 @@ export function signAccessToken(payload: Omit<AccessTokenPayload, "type">): stri
 }
 
 export function signRefreshToken(payload: Omit<RefreshTokenPayload, "type">): string {
-  return jwt.sign({ ...payload, type: "refresh" }, env.JWT_REFRESH_SECRET, { ...signOptionsBase, expiresIn: env.JWT_REFRESH_EXPIRES_IN } as SignOptions);
+  return jwt.sign({ ...payload, type: "refresh" }, env.JWT_REFRESH_SECRET, { ...signOptionsBase, expiresIn: `${env.SESSION_ABSOLUTE_TIMEOUT_DAYS}d` } as SignOptions);
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {

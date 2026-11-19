@@ -1,5 +1,7 @@
 import { prisma } from "../database/prisma";
 import { Prisma } from "@prisma/client";
+import { env } from "../config/env";
+import { calculateIdleExpiry } from "../security/sessionPolicy";
 
 export const sessionRepository = {
   create(data: Prisma.SessionCreateInput) {
@@ -39,10 +41,26 @@ export const sessionRepository = {
     });
   },
 
+  revokeAllForFamily(familyId: string) {
+    return prisma.session.updateMany({
+      where: { familyId, isRevoked: false },
+      data: { isRevoked: true, revokedAt: new Date() },
+    });
+  },
+
   touchLastUsed(id: string) {
     return prisma.session.update({
       where: { id },
       data: { lastUsedAt: new Date() },
+    });
+  },
+
+  touchActivity(id: string, absoluteExpiresAt: Date) {
+    const now = new Date();
+    const idleExpiresAt = calculateIdleExpiry(now, absoluteExpiresAt, env.SESSION_IDLE_TIMEOUT_DAYS);
+    return prisma.session.update({
+      where: { id },
+      data: { lastUsedAt: now, expiresAt: idleExpiresAt },
     });
   },
 

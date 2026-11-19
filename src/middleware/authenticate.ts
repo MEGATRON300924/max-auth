@@ -29,10 +29,10 @@ export async function authenticate(
 
   try {
     const session = await sessionRepository.findById(payload.sessionId);
-    if (!session || session.isRevoked || session.expiresAt <= new Date() || session.userId !== payload.sub || session.user.status !== "ACTIVE") {
+    if (!session || session.isRevoked || session.expiresAt <= new Date() || session.absoluteExpiresAt <= new Date() || session.userId !== payload.sub || session.user.status !== "ACTIVE") {
       return next(AppError.unauthorized("Session is no longer valid", "SESSION_REVOKED"));
     }
-    void sessionRepository.touchLastUsed(session.id).catch(() => undefined);
+    void sessionRepository.touchActivity(session.id, session.absoluteExpiresAt).catch(() => undefined);
     req.user = payload;
     return next();
   } catch (error) {
