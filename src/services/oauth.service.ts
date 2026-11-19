@@ -6,7 +6,7 @@ import { normalizeRedirectUris } from "../security/oauthRedirectUri";
 import { auditService } from "./audit.service";
 import { env } from "../config/env";
 import jwt from "jsonwebtoken";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual, randomUUID } from "crypto";
 
 export const MAX_OAUTH_SCOPES = ["openid", "profile", "email", "offline_access", "profile:read", "profile:write", "email:read", "account:read", "identity:read", "memory:read", "memory:write", "connected-apps:read", "developer:manage", "business:read", "business:manage", "business:members:read", "business:members:manage", "business:apps:manage"];
 const DEFAULT_SCOPES = ["openid", "profile", "email"];
@@ -99,8 +99,116 @@ export const oauthService = {
         prisma.oAuthRefreshToken.updateMany({ where: { clientId: client.id, userId: record.userId, revokedAt: null }, data: { revokedAt } }),
       ]);
       throw AppError.badRequest("Authorization code has already been used", "INVALID_GRANT");
-    } if (!input.codeVerifier) throw AppError.badRequest("PKCE verifier required", "PKCE_REQUIRED"); const crypto = await import("crypto"); const digest = crypto.createHash("sha256").update(input.codeVerifier).digest("base64url"); if (digest !== record.codeChallenge) throw AppError.badRequest("Invalid PKCE verifier", "INVALID_GRANT"); const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } }); if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE"); const idToken = record.scopes.includes("openid") ? signIdToken(user, client.clientId) : undefined; const now = new Date(); const accessToken = generateOpaqueToken(48); const shouldIssueRefreshToken = record.scopes.includes("offline_access"); const refreshToken = shouldIssueRefreshToken ? generateOpaqueToken(48) : undefined; const result = await prisma.$transaction(async (tx) => { const claimed = await tx.oAuthAuthorizationCode.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } }); if (claimed.count !== 1) throw AppError.badRequest("Authorization code has already been used", "INVALID_GRANT"); if (record.businessId) await tx.businessAppConnection.upsert({ where: { businessId_clientId: { businessId: record.businessId, clientId: client.id } }, create: { businessId: record.businessId, clientId: client.id, authorizedById: record.userId, scopes: record.scopes, status: "ACTIVE" }, update: { authorizedById: record.userId, scopes: record.scopes, status: "ACTIVE", connectedAt: new Date(), revokedAt: null } }); await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(accessToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } }); if (refreshToken) await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, expiresAt: days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) } }); return { accessToken, refreshToken }; }); return { token_type: "Bearer", access_token: result.accessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(result.refreshToken ? { refresh_token: result.refreshToken } : {}), ...(idToken ? { id_token: idToken } : {}) }; },
-  async refreshAccessToken(refreshToken: string, clientId: string, clientSecret?: string) { const client = await loadClient(clientId); if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT"); const tokenHash = hashToken(refreshToken || ""); const record = await prisma.oAuthRefreshToken.findUnique({ where: { tokenHash } }); if (!record || record.clientId !== client.id) throw AppError.badRequest("Invalid refresh token", "INVALID_GRANT"); if (record.revokedAt) { await prisma.$transaction([prisma.oAuthAccessToken.updateMany({ where: { clientId: client.id, userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { clientId: client.id, userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } })]); throw AppError.badRequest("Refresh token reuse detected", "INVALID_GRANT"); } if (record.expiresAt < new Date()) throw AppError.badRequest("Refresh token expired", "INVALID_GRANT"); if (record.businessId) { const [business, membership, connection] = await Promise.all([prisma.business.findUnique({ where: { id: record.businessId }, select: { status: true, verificationStatus: true, emailVerifiedAt: true } }), prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: record.businessId, userId: record.userId } }, select: { role: true, status: true } }), prisma.businessAppConnection.findUnique({ where: { businessId_clientId: { businessId: record.businessId, clientId: client.id } }, select: { status: true } })]); if (!business || business.status !== "ACTIVE" || business.verificationStatus !== "VERIFIED" || (record.scopes.includes("business:apps:manage") && !business.emailVerifiedAt) || !membership || membership.status !== "ACTIVE" || !connection || connection.status !== "ACTIVE") throw AppError.badRequest("Business access was revoked or needs email verification; authorize the business again to continue", "INVALID_GRANT"); const ownerAdmin = membership.role === "OWNER" || membership.role === "ADMINISTRATOR"; if ((record.scopes.includes("business:manage") || record.scopes.includes("business:members:manage")) && !ownerAdmin) throw AppError.badRequest("Your business role no longer permits this access", "INVALID_GRANT"); if (record.scopes.includes("business:apps:manage") && !ownerAdmin && membership.role !== "DEVELOPER") throw AppError.badRequest("Your business role no longer permits this access", "INVALID_GRANT"); } const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { status: true } }); if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE"); const newAccessToken = generateOpaqueToken(48); const newRefreshToken = generateOpaqueToken(48); await prisma.$transaction(async (tx) => { const claimed = await tx.oAuthRefreshToken.updateMany({ where: { id: record.id, revokedAt: null, expiresAt: { gt: new Date() } }, data: { revokedAt: new Date() } }); if (claimed.count !== 1) throw AppError.badRequest("Refresh token has already been used", "INVALID_GRANT"); await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(newAccessToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } }); await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(newRefreshToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, expiresAt: record.businessId || client.clientId === "max_client_7Ibkcda-NR2eeveX" ? days(env.OAUTH_REFRESH_TOKEN_TTL_DAYS) : record.expiresAt } }); }); return { token_type: "Bearer", access_token: newAccessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, refresh_token: newRefreshToken, scope: record.scopes.join(" ") }; },
+    } if (!input.codeVerifier) throw AppError.badRequest("PKCE verifier required", "PKCE_REQUIRED"); const crypto = await import("crypto"); const digest = crypto.createHash("sha256").update(input.codeVerifier).digest("base64url"); if (digest !== record.codeChallenge) throw AppError.badRequest("Invalid PKCE verifier", "INVALID_GRANT"); const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } }); if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE"); const idToken = record.scopes.includes("openid") ? signIdToken(user, client.clientId) : undefined; const now = new Date(); const accessToken = generateOpaqueToken(48); const shouldIssueRefreshToken = record.scopes.includes("offline_access"); const refreshToken = shouldIssueRefreshToken ? generateOpaqueToken(48) : undefined; const refreshFamilyId = shouldIssueRefreshToken ? randomUUID() : undefined; const absoluteExpiresAt = shouldIssueRefreshToken ? days(env.OAUTH_REFRESH_TOKEN_ABSOLUTE_TTL_DAYS) : undefined; const idleExpiresAt = absoluteExpiresAt ? new Date(Math.min(Date.now() + env.SESSION_IDLE_TIMEOUT_DAYS * 86400000, absoluteExpiresAt.getTime())) : undefined; const result = await prisma.$transaction(async (tx) => { const claimed = await tx.oAuthAuthorizationCode.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } }); if (claimed.count !== 1) throw AppError.badRequest("Authorization code has already been used", "INVALID_GRANT"); if (record.businessId) await tx.businessAppConnection.upsert({ where: { businessId_clientId: { businessId: record.businessId, clientId: client.id } }, create: { businessId: record.businessId, clientId: client.id, authorizedById: record.userId, scopes: record.scopes, status: "ACTIVE" }, update: { authorizedById: record.userId, scopes: record.scopes, status: "ACTIVE", connectedAt: new Date(), revokedAt: null } }); await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(accessToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, refreshFamilyId, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } }); if (refreshToken && refreshFamilyId && absoluteExpiresAt && idleExpiresAt) await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, familyId: refreshFamilyId, expiresAt: absoluteExpiresAt, absoluteExpiresAt, idleExpiresAt, lastUsedAt: now } }); return { accessToken, refreshToken }; }); return { token_type: "Bearer", access_token: result.accessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(result.refreshToken ? { refresh_token: result.refreshToken } : {}), ...(idToken ? { id_token: idToken } : {}) }; },
+  async refreshAccessToken(refreshToken: string, clientId: string, clientSecret?: string) {
+    const client = await loadClient(clientId);
+    if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) {
+      throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT");
+    }
+
+    const tokenHash = hashToken(refreshToken || "");
+    const record = await prisma.oAuthRefreshToken.findUnique({ where: { tokenHash } });
+    if (!record || record.clientId !== client.id) {
+      throw AppError.badRequest("Invalid refresh token", "INVALID_GRANT");
+    }
+
+    const now = new Date();
+    if (record.revokedAt) {
+      const rotatedRecently = now.getTime() - record.revokedAt.getTime() <= 5000;
+      if (rotatedRecently) {
+        throw AppError.conflict("This refresh token was just rotated by another request. Retry with the updated token.", "REFRESH_TOKEN_ROTATED");
+      }
+      await prisma.$transaction([
+        prisma.oAuthAccessToken.updateMany({ where: { refreshFamilyId: record.familyId, revokedAt: null }, data: { revokedAt: now } }),
+        prisma.oAuthRefreshToken.updateMany({ where: { familyId: record.familyId, revokedAt: null }, data: { revokedAt: now } }),
+      ]);
+      throw AppError.badRequest("Refresh token reuse detected", "REFRESH_TOKEN_REUSE");
+    }
+
+    if (record.expiresAt <= now || record.absoluteExpiresAt <= now || record.idleExpiresAt <= now) {
+      throw AppError.badRequest("Refresh token expired", "INVALID_GRANT");
+    }
+
+    if (record.businessId) {
+      const [business, membership, connection] = await Promise.all([
+        prisma.business.findUnique({ where: { id: record.businessId }, select: { status: true, verificationStatus: true, emailVerifiedAt: true } }),
+        prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: record.businessId, userId: record.userId } }, select: { role: true, status: true } }),
+        prisma.businessAppConnection.findUnique({ where: { businessId_clientId: { businessId: record.businessId, clientId: client.id } }, select: { status: true } }),
+      ]);
+      if (!business || business.status !== "ACTIVE" || business.verificationStatus !== "VERIFIED" || (record.scopes.includes("business:apps:manage") && !business.emailVerifiedAt) || !membership || membership.status !== "ACTIVE" || !connection || connection.status !== "ACTIVE") {
+        throw AppError.badRequest("Business access was revoked or needs email verification; authorize the business again to continue", "INVALID_GRANT");
+      }
+      const ownerAdmin = membership.role === "OWNER" || membership.role === "ADMINISTRATOR";
+      if ((record.scopes.includes("business:manage") || record.scopes.includes("business:members:manage")) && !ownerAdmin) {
+        throw AppError.badRequest("Your business role no longer permits this access", "INVALID_GRANT");
+      }
+      if (record.scopes.includes("business:apps:manage") && !ownerAdmin && membership.role !== "DEVELOPER") {
+        throw AppError.badRequest("Your business role no longer permits this access", "INVALID_GRANT");
+      }
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { status: true } });
+    if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE");
+
+    const newAccessToken = generateOpaqueToken(48);
+    const newRefreshToken = generateOpaqueToken(48);
+    const nextIdleExpiry = new Date(Math.min(now.getTime() + env.SESSION_IDLE_TIMEOUT_DAYS * 86400000, record.absoluteExpiresAt.getTime()));
+
+    const claim = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.oAuthRefreshToken.updateMany({
+        where: { id: record.id, revokedAt: null, expiresAt: { gt: now }, idleExpiresAt: { gt: now }, absoluteExpiresAt: { gt: now } },
+        data: { revokedAt: now },
+      });
+      if (claimed.count !== 1) return false;
+
+      await tx.oAuthAccessToken.create({
+        data: {
+          tokenHash: hashToken(newAccessToken), clientId: client.id, userId: record.userId,
+          businessId: record.businessId, scopes: record.scopes, refreshFamilyId: record.familyId,
+          expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES),
+        },
+      });
+      await tx.oAuthRefreshToken.create({
+        data: {
+          tokenHash: hashToken(newRefreshToken), clientId: client.id, userId: record.userId,
+          businessId: record.businessId, scopes: record.scopes, familyId: record.familyId,
+          expiresAt: record.absoluteExpiresAt, absoluteExpiresAt: record.absoluteExpiresAt,
+          idleExpiresAt: nextIdleExpiry, lastUsedAt: now,
+        },
+      });
+      return true;
+    });
+
+    if (!claim) {
+      const latest = await prisma.oAuthRefreshToken.findUnique({ where: { id: record.id }, select: { revokedAt: true } });
+      if (latest?.revokedAt && now.getTime() - latest.revokedAt.getTime() <= 5000) {
+        throw AppError.conflict("This refresh token was just rotated by another request. Retry with the updated token.", "REFRESH_TOKEN_ROTATED");
+      }
+      if (latest?.revokedAt) {
+        await prisma.$transaction([
+          prisma.oAuthAccessToken.updateMany({ where: { refreshFamilyId: record.familyId, revokedAt: null }, data: { revokedAt: now } }),
+          prisma.oAuthRefreshToken.updateMany({ where: { familyId: record.familyId, revokedAt: null }, data: { revokedAt: now } }),
+        ]);
+      }
+      throw AppError.badRequest("Refresh token has already been used", "INVALID_GRANT");
+    }
+
+    return {
+      token_type: "Bearer",
+      access_token: newAccessToken,
+      expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60,
+      refresh_token: newRefreshToken,
+      scope: record.scopes.join(" "),
+    };
+  },
   async revokeToken(token: string, clientId: string, clientSecret?: string) { const client = await loadClient(clientId); if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) throw AppError.unauthorized("Invalid client credentials", "INVALID_CLIENT"); const hash = hashToken(token || ""); await prisma.$transaction([prisma.oAuthAccessToken.updateMany({ where: { tokenHash: hash, clientId: client.id, revokedAt: null }, data: { revokedAt: new Date() } }), prisma.oAuthRefreshToken.updateMany({ where: { tokenHash: hash, clientId: client.id, revokedAt: null }, data: { revokedAt: new Date() } })]); },
-  async introspect(token: string): Promise<OAuthIntrospectionResult> { const hash = hashToken(token || ""); const record = await prisma.oAuthAccessToken.findUnique({ where: { tokenHash: hash }, include: { user: { select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } }, client: { select: { clientId: true, isActive: true } }, businessContext: { select: { id: true, businessId: true, displayName: true, status: true, verificationStatus: true, emailVerifiedAt: true } } } }); if (!record || record.revokedAt || record.expiresAt < new Date() || record.user.status !== "ACTIVE" || !record.client.isActive) return { active: false }; let businessRole: string | undefined; if (record.businessId) { const membership = await prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: record.businessId, userId: record.userId } }, select: { role: true, status: true } }); const connection = await prisma.businessAppConnection.findUnique({ where: { businessId_clientId: { businessId: record.businessId, clientId: record.clientId } }, select: { status: true } }); if (!record.businessContext || record.businessContext.status !== "ACTIVE" || record.businessContext.verificationStatus !== "VERIFIED" || (record.scopes.includes("business:apps:manage") && !record.businessContext.emailVerifiedAt) || !membership || membership.status !== "ACTIVE" || !connection || connection.status !== "ACTIVE") return { active: false }; businessRole = membership.role; } return { active: true, client_id: record.client.clientId, user: record.user, scopes: record.scopes, ...(record.businessContext ? { business_id: record.businessContext.businessId, business_name: record.businessContext.displayName, business_role: businessRole } : {}), exp: Math.floor(record.expiresAt.getTime() / 1000) }; },
+  async introspect(token: string): Promise<OAuthIntrospectionResult> { const hash = hashToken(token || ""); const record = await prisma.oAuthAccessToken.findUnique({ where: { tokenHash: hash }, include: { user: { select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } }, client: { select: { clientId: true, isActive: true } }, businessContext: { select: { id: true, businessId: true, displayName: true, status: true, verificationStatus: true, emailVerifiedAt: true } } } }); if (!record || record.revokedAt || record.expiresAt < new Date() || record.user.status !== "ACTIVE" || !record.client.isActive) return { active: false }; let businessRole: string | undefined; if (record.businessId) { const membership = await prisma.businessMembership.findUnique({ where: { businessId_userId: { businessId: record.businessId, userId: record.userId } }, select: { role: true, status: true } }); const connection = await prisma.businessAppConnection.findUnique({ where: { businessId_clientId: { businessId: record.businessId, clientId: record.clientId } }, select: { status: true } }); if (!record.businessContext || record.businessContext.status !== "ACTIVE" || record.businessContext.verificationStatus !== "VERIFIED" || (record.scopes.includes("business:apps:manage") && !record.businessContext.emailVerifiedAt) || !membership || membership.status !== "ACTIVE" || !connection || connection.status !== "ACTIVE") return { active: false }; businessRole = membership.role; } if (record.refreshFamilyId) {
+      const now = new Date();
+      const refreshTokens = await prisma.oAuthRefreshToken.findMany({ where: { familyId: record.refreshFamilyId, revokedAt: null }, select: { id: true, absoluteExpiresAt: true } });
+      if (refreshTokens.length) {
+        const idleExpiresAt = new Date(Math.min(now.getTime() + env.SESSION_IDLE_TIMEOUT_DAYS * 86400000, refreshTokens[0].absoluteExpiresAt.getTime()));
+        await prisma.oAuthRefreshToken.updateMany({ where: { familyId: record.refreshFamilyId, revokedAt: null }, data: { lastUsedAt: now, idleExpiresAt } });
+      }
+    }
+    return { active: true, client_id: record.client.clientId, user: record.user, scopes: record.scopes, ...(record.businessContext ? { business_id: record.businessContext.businessId, business_name: record.businessContext.displayName, business_role: businessRole } : {}), exp: Math.floor(record.expiresAt.getTime() / 1000) }; },
 };
