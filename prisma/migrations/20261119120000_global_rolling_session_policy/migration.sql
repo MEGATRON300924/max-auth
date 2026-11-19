@@ -24,6 +24,8 @@ CREATE INDEX "sessions_familyId_idx" ON "sessions"("familyId");
 ALTER TABLE "oauth_access_tokens"
   ADD COLUMN "refresh_family_id" UUID;
 
+CREATE INDEX "oauth_access_tokens_refresh_family_id_idx" ON "oauth_access_tokens"("refresh_family_id");
+
 ALTER TABLE "oauth_refresh_tokens"
   ADD COLUMN "family_id" UUID,
   ADD COLUMN "idle_expires_at" TIMESTAMP(3),
