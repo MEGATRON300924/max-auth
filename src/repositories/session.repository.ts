@@ -1,6 +1,7 @@
 import { prisma } from "../database/prisma";
 import { Prisma } from "@prisma/client";
 import { env } from "../config/env";
+import { calculateIdleExpiry } from "../security/sessionPolicy";
 
 export const sessionRepository = {
   create(data: Prisma.SessionCreateInput) {
@@ -56,10 +57,7 @@ export const sessionRepository = {
 
   touchActivity(id: string, absoluteExpiresAt: Date) {
     const now = new Date();
-    const idleExpiresAt = new Date(Math.min(
-      now.getTime() + env.SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000,
-      absoluteExpiresAt.getTime(),
-    ));
+    const idleExpiresAt = calculateIdleExpiry(now, absoluteExpiresAt, env.SESSION_IDLE_TIMEOUT_DAYS);
     return prisma.session.update({
       where: { id },
       data: { lastUsedAt: now, expiresAt: idleExpiresAt },
