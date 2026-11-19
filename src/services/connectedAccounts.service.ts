@@ -209,7 +209,7 @@ export const connectedAccountsService = {
       provider: ConnectedProvider.SPOTIFY,
       providerAccountId: profile.id,
       createData: { userId: oauthState.userId, provider: ConnectedProvider.SPOTIFY, providerAccountId: profile.id, accessTokenEnc: encrypt(token.access_token), refreshTokenEnc: token.refresh_token ? encrypt(token.refresh_token) : null, scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
-      updateData: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      updateData: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000), status: "CONNECTED", statusReason: null, statusUpdatedAt: null },
     });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req.ip, userAgent: req.headers["user-agent"], metadata: { provider: "SPOTIFY", spotifyAccountId: profile.id } });
     return { status: "connected" as const };
