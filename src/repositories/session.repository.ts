@@ -53,6 +53,18 @@ export const sessionRepository = {
     });
   },
 
+  touchActivity(id: string, absoluteExpiresAt: Date) {
+    const now = new Date();
+    const idleExpiresAt = new Date(Math.min(
+      now.getTime() + 30 * 24 * 60 * 60 * 1000,
+      absoluteExpiresAt.getTime(),
+    ));
+    return prisma.session.update({
+      where: { id },
+      data: { lastUsedAt: now, expiresAt: idleExpiresAt },
+    });
+  },
+
   listActiveForUser(userId: string) {
     return prisma.session.findMany({
       where: { userId, isRevoked: false, expiresAt: { gt: new Date() } },
