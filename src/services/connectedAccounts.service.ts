@@ -309,6 +309,9 @@ export const connectedAccountsService = {
       ? await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.YOUTUBE_MUSIC } }) || await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } })
       : await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Google is not connected");
+    if (account.status === "REAUTH_REQUIRED") {
+      throw AppError.unauthorized("Google authorization needs attention. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
+    }
     const granted = new Set((account.scope || "").split(/\s+/).filter(Boolean));
     const missing = requiredScopes.filter((scope) => !granted.has(scope));
     if (missing.length) throw AppError.badRequest("Google access has not been granted for: " + missing.join(", "), "GOOGLE_SCOPE_REQUIRED", { missingScopes: missing });
@@ -747,6 +750,9 @@ export const connectedAccountsService = {
     if (!user || user.status !== "ACTIVE") throw AppError.forbidden("This MAX Account is not active", "ACCOUNT_NOT_ACTIVE");
     let account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Spotify is not connected");
+    if (account.status === "REAUTH_REQUIRED") {
+      throw AppError.unauthorized("Your Spotify connection needs to be authorised again.", "SPOTIFY_REAUTH_REQUIRED");
+    }
     if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() - Date.now() < 60_000) {
       await this.refreshSpotify(userId);
       account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
