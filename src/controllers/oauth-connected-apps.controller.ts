@@ -81,7 +81,10 @@ export const oauthConnectedAppsController = {
           scope: true,
           linkedAt: true,
           updatedAt: true,
-          tokenExpiresAt: true
+          tokenExpiresAt: true,
+          status: true,
+          statusReason: true,
+          statusUpdatedAt: true
         },
         orderBy: { provider: "asc" }
       });
@@ -90,7 +93,10 @@ export const oauthConnectedAppsController = {
       return ok(res, {
         accounts: accounts.map((account) => ({
           provider: account.provider,
-          connected: true,
+          connected: account.status === "CONNECTED",
+          status: account.status.toLowerCase(),
+          statusReason: account.statusReason,
+          statusUpdatedAt: account.statusUpdatedAt?.toISOString() || null,
           scopes: (account.scope || "").split(/\\s+/).filter(Boolean),
           linkedAt: account.linkedAt.toISOString(),
           updatedAt: account.updatedAt.toISOString(),
