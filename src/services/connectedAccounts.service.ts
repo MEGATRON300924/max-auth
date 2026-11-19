@@ -136,7 +136,7 @@ export const connectedAccountsService = {
   list(userId: string) {
     return prisma.connectedAccount.findMany({
       where: { userId },
-      select: { id: true, provider: true, scope: true, tokenExpiresAt: true, linkedAt: true, updatedAt: true },
+      select: { id: true, provider: true, scope: true, tokenExpiresAt: true, status: true, statusReason: true, statusUpdatedAt: true, linkedAt: true, updatedAt: true },
     });
   },
 
@@ -312,7 +312,10 @@ export const connectedAccountsService = {
 
     let accessToken = googleDecrypt(account.accessTokenEnc);
     if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() <= Date.now() + 60_000) {
-      if (!account.refreshTokenEnc) throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
+      if (!account.refreshTokenEnc) {
+        await prisma.connectedAccount.update({ where: { id: account.id }, data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_missing", statusUpdatedAt: new Date() } });
+        throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
+      }
       const refreshToken = googleDecrypt(account.refreshTokenEnc);
       try {
         const refreshed = await googleRequest(GOOGLE_TOKEN_URL, {
@@ -332,10 +335,14 @@ export const connectedAccountsService = {
             accessTokenEnc: googleEncrypt(accessToken),
             ...(refreshed.refresh_token ? { refreshTokenEnc: googleEncrypt(refreshed.refresh_token) } : {}),
             tokenExpiresAt: new Date(Date.now() + Number(refreshed.expires_in || 3600) * 1000),
+            status: "CONNECTED",
+            statusReason: null,
+            statusUpdatedAt: null,
           },
         });
       } catch (error) {
         if (error instanceof AppError && /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) {
+          await prisma.connectedAccount.update({ where: { id: account.id }, data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_invalid", statusUpdatedAt: new Date() } });
           throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
         }
         throw error;
@@ -843,7 +850,10 @@ export const connectedAccountsService = {
   async refreshSpotify(userId: string) {
     ensureConfigured();
     const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
-    if (!account?.refreshTokenEnc) throw AppError.notFound("Spotify is not connected");
+    if (!account?.refreshTokenEnc) {
+      if (account) await prisma.connectedAccount.update({ where: { id: account.id }, data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_missing", statusUpdatedAt: new Date() } });
+      throw AppError.unauthorized("Your Spotify connection needs to be authorised again.", "SPOTIFY_REAUTH_REQUIRED");
+    }
     const refreshToken = decrypt(account.refreshTokenEnc);
     const basic = Buffer.from(env.SPOTIFY_CLIENT_ID + ":" + env.SPOTIFY_CLIENT_SECRET).toString("base64");
     let token: any;
@@ -854,15 +864,17 @@ export const connectedAccountsService = {
       });
     } catch (error) {
       if (error instanceof AppError && error.code === "SPOTIFY_REQUEST_FAILED" && /invalid_grant|invalid refresh token|refresh token/i.test(error.message)) {
-        await prisma.connectedAccount.delete({ where: { id: account.id } }).catch(() => undefined);
-        await auditService.record("CONNECTED_ACCOUNT_UNLINKED", { userId, metadata: { provider: "SPOTIFY", reason: "refresh_token_invalid" } });
+        await prisma.connectedAccount.update({
+          where: { id: account.id },
+          data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_invalid", statusUpdatedAt: new Date() },
+        });
         throw AppError.unauthorized("Your Spotify connection expired. Please connect Spotify again.", "SPOTIFY_REAUTH_REQUIRED");
       }
       throw error;
     }
     return prisma.connectedAccount.update({
       where: { id: account.id },
-      data: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || account.scope, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      data: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || account.scope, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000), status: "CONNECTED", statusReason: null, statusUpdatedAt: null },
       select: { id: true, provider: true, scope: true, tokenExpiresAt: true, linkedAt: true, updatedAt: true },
     });
   },
