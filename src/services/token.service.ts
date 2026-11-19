@@ -6,9 +6,10 @@ import { userRepository } from "../repositories/user.repository";
 import { env } from "../config/env";
 import { AppError } from "../utils/AppError";
 import { User } from "@prisma/client";
+import { calculateIdleExpiry, wasRotatedRecently } from "../security/sessionPolicy";
 
 function refreshExpiryDate(absoluteExpiresAt: Date): Date {
-  return new Date(Math.min(Date.now() + env.SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000, absoluteExpiresAt.getTime()));
+  return calculateIdleExpiry(new Date(), absoluteExpiresAt, env.SESSION_IDLE_TIMEOUT_DAYS);
 }
 export const tokenService = {
   async issueTokenPair(user: Pick<User, "id" | "username" | "subscriptionTier" | "displayName" | "language" | "timezone">, ctx: { deviceId?: string; ipAddress?: string; userAgent?: string; rememberMe?: boolean; familyId?: string; absoluteExpiresAt?: Date }) {
@@ -33,9 +34,7 @@ export const tokenService = {
       // from different tabs/apps cannot share an in-memory refresh promise.
       // A just-rotated token is rejected without destroying the account's
       // other sessions; the caller can retry with the cookie set by the winner.
-      const rotatedRecently = session.revokedAt
-        ? Date.now() - session.revokedAt.getTime() <= 5_000
-        : false;
+      const rotatedRecently = wasRotatedRecently(session.revokedAt, new Date());
       if (rotatedRecently) {
         throw AppError.conflict(
           "This refresh token was just rotated by another request. Retry with the updated session cookie.",
@@ -53,9 +52,7 @@ export const tokenService = {
       // Another request may have won the conditional revoke after our initial
       // read. Re-read the row and apply the same short concurrent-rotation rule.
       const latestSession = await sessionRepository.findById(session.id);
-      const rotatedRecently = latestSession?.revokedAt
-        ? Date.now() - latestSession.revokedAt.getTime() <= 5_000
-        : false;
+      const rotatedRecently = wasRotatedRecently(latestSession?.revokedAt, new Date());
       if (rotatedRecently) {
         throw AppError.conflict(
           "This refresh token was just rotated by another request. Retry with the updated session cookie.",
