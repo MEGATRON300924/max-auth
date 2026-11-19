@@ -136,7 +136,7 @@ export const connectedAccountsService = {
   list(userId: string) {
     return prisma.connectedAccount.findMany({
       where: { userId },
-      select: { id: true, provider: true, scope: true, tokenExpiresAt: true, linkedAt: true, updatedAt: true },
+      select: { id: true, provider: true, scope: true, tokenExpiresAt: true, status: true, statusReason: true, statusUpdatedAt: true, linkedAt: true, updatedAt: true },
     });
   },
 
@@ -209,7 +209,7 @@ export const connectedAccountsService = {
       provider: ConnectedProvider.SPOTIFY,
       providerAccountId: profile.id,
       createData: { userId: oauthState.userId, provider: ConnectedProvider.SPOTIFY, providerAccountId: profile.id, accessTokenEnc: encrypt(token.access_token), refreshTokenEnc: token.refresh_token ? encrypt(token.refresh_token) : null, scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
-      updateData: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      updateData: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || SPOTIFY_SCOPES.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000), status: "CONNECTED", statusReason: null, statusUpdatedAt: null },
     });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req.ip, userAgent: req.headers["user-agent"], metadata: { provider: "SPOTIFY", spotifyAccountId: profile.id } });
     return { status: "connected" as const };
@@ -276,7 +276,10 @@ export const connectedAccountsService = {
           accessTokenEnc: googleEncrypt(token.access_token),
           refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existingGoogle?.refreshTokenEnc ?? null,
           scope: token.scope || GOOGLE_SCOPES.join(" "),
-          tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000)
+          tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000),
+          status: "CONNECTED",
+          statusReason: null,
+          statusUpdatedAt: null
         }
       });
       await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req?.ip, userAgent: req?.headers["user-agent"], metadata: { provider: "GOOGLE", service: "google_services" } });
@@ -291,7 +294,7 @@ export const connectedAccountsService = {
       provider: ConnectedProvider.YOUTUBE_MUSIC,
       providerAccountId: profile.sub,
       createData: { userId: oauthState.userId, provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub, accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
-      updateData: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existing?.refreshTokenEnc ?? null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      updateData: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existing?.refreshTokenEnc ?? null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000), status: "CONNECTED", statusReason: null, statusUpdatedAt: null },
     });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req?.ip, userAgent: req?.headers["user-agent"], metadata: { provider: "YOUTUBE_MUSIC", service: "youtube_music" } });
     return { status: "connected" as const, service: "youtube_music" as const };
@@ -306,13 +309,19 @@ export const connectedAccountsService = {
       ? await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.YOUTUBE_MUSIC } }) || await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } })
       : await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.GOOGLE } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Google is not connected");
+    if (account.status === "REAUTH_REQUIRED") {
+      throw AppError.unauthorized("Google authorization needs attention. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
+    }
     const granted = new Set((account.scope || "").split(/\s+/).filter(Boolean));
     const missing = requiredScopes.filter((scope) => !granted.has(scope));
     if (missing.length) throw AppError.badRequest("Google access has not been granted for: " + missing.join(", "), "GOOGLE_SCOPE_REQUIRED", { missingScopes: missing });
 
     let accessToken = googleDecrypt(account.accessTokenEnc);
     if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() <= Date.now() + 60_000) {
-      if (!account.refreshTokenEnc) throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
+      if (!account.refreshTokenEnc) {
+        await prisma.connectedAccount.update({ where: { id: account.id }, data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_missing", statusUpdatedAt: new Date() } });
+        throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
+      }
       const refreshToken = googleDecrypt(account.refreshTokenEnc);
       try {
         const refreshed = await googleRequest(GOOGLE_TOKEN_URL, {
@@ -332,10 +341,14 @@ export const connectedAccountsService = {
             accessTokenEnc: googleEncrypt(accessToken),
             ...(refreshed.refresh_token ? { refreshTokenEnc: googleEncrypt(refreshed.refresh_token) } : {}),
             tokenExpiresAt: new Date(Date.now() + Number(refreshed.expires_in || 3600) * 1000),
+            status: "CONNECTED",
+            statusReason: null,
+            statusUpdatedAt: null,
           },
         });
       } catch (error) {
         if (error instanceof AppError && /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) {
+          await prisma.connectedAccount.update({ where: { id: account.id }, data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_invalid", statusUpdatedAt: new Date() } });
           throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
         }
         throw error;
@@ -737,6 +750,9 @@ export const connectedAccountsService = {
     if (!user || user.status !== "ACTIVE") throw AppError.forbidden("This MAX Account is not active", "ACCOUNT_NOT_ACTIVE");
     let account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
     if (!account?.accessTokenEnc) throw AppError.notFound("Spotify is not connected");
+    if (account.status === "REAUTH_REQUIRED") {
+      throw AppError.unauthorized("Your Spotify connection needs to be authorised again.", "SPOTIFY_REAUTH_REQUIRED");
+    }
     if (!account.tokenExpiresAt || account.tokenExpiresAt.getTime() - Date.now() < 60_000) {
       await this.refreshSpotify(userId);
       account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
@@ -843,7 +859,10 @@ export const connectedAccountsService = {
   async refreshSpotify(userId: string) {
     ensureConfigured();
     const account = await prisma.connectedAccount.findFirst({ where: { userId, provider: ConnectedProvider.SPOTIFY } });
-    if (!account?.refreshTokenEnc) throw AppError.notFound("Spotify is not connected");
+    if (!account?.refreshTokenEnc) {
+      if (account) await prisma.connectedAccount.update({ where: { id: account.id }, data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_missing", statusUpdatedAt: new Date() } });
+      throw AppError.unauthorized("Your Spotify connection needs to be authorised again.", "SPOTIFY_REAUTH_REQUIRED");
+    }
     const refreshToken = decrypt(account.refreshTokenEnc);
     const basic = Buffer.from(env.SPOTIFY_CLIENT_ID + ":" + env.SPOTIFY_CLIENT_SECRET).toString("base64");
     let token: any;
@@ -854,15 +873,17 @@ export const connectedAccountsService = {
       });
     } catch (error) {
       if (error instanceof AppError && error.code === "SPOTIFY_REQUEST_FAILED" && /invalid_grant|invalid refresh token|refresh token/i.test(error.message)) {
-        await prisma.connectedAccount.delete({ where: { id: account.id } }).catch(() => undefined);
-        await auditService.record("CONNECTED_ACCOUNT_UNLINKED", { userId, metadata: { provider: "SPOTIFY", reason: "refresh_token_invalid" } });
+        await prisma.connectedAccount.update({
+          where: { id: account.id },
+          data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_invalid", statusUpdatedAt: new Date() },
+        });
         throw AppError.unauthorized("Your Spotify connection expired. Please connect Spotify again.", "SPOTIFY_REAUTH_REQUIRED");
       }
       throw error;
     }
     return prisma.connectedAccount.update({
       where: { id: account.id },
-      data: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || account.scope, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      data: { accessTokenEnc: encrypt(token.access_token), ...(token.refresh_token ? { refreshTokenEnc: encrypt(token.refresh_token) } : {}), scope: token.scope || account.scope, tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000), status: "CONNECTED", statusReason: null, statusUpdatedAt: null },
       select: { id: true, provider: true, scope: true, tokenExpiresAt: true, linkedAt: true, updatedAt: true },
     });
   },
