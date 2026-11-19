@@ -216,11 +216,14 @@ model Session {
   isRevoked        Boolean   @default(false)
   revokedAt        DateTime?
   expiresAt        DateTime
+  absoluteExpiresAt DateTime
+  familyId         String    @db.Uuid
   createdAt        DateTime  @default(now())
-  lastUsedAt        DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
   @@index([userId])
   @@index([deviceId])
   @@index([expiresAt])
+  @@index([familyId])
   @@map("sessions")
 }
 
@@ -453,6 +456,7 @@ model OAuthAccessToken {
   businessContext Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   scopes     String[]
   grantType  OAuthGrantType @default(AUTHORIZATION_CODE)
+  refreshFamilyId String? @db.Uuid @map("refresh_family_id")
   expiresAt  DateTime
   revokedAt  DateTime?
   createdAt  DateTime @default(now())
@@ -472,12 +476,18 @@ model OAuthRefreshToken {
   businessId String?  @db.Uuid @map("business_id")
   businessContext Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   scopes     String[]
+  familyId   String   @default(uuid()) @db.Uuid @map("family_id")
   expiresAt  DateTime
+  idleExpiresAt DateTime @map("idle_expires_at")
+  absoluteExpiresAt DateTime @map("absolute_expires_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
   revokedAt  DateTime?
   createdAt  DateTime @default(now())
   @@index([clientId])
   @@index([userId])
   @@index([businessId])
+  @@index([familyId])
+  @@index([idleExpiresAt])
   @@map("oauth_refresh_tokens")
 }
 
