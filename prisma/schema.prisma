@@ -84,6 +84,11 @@ enum ConnectedProvider {
   TIKTOK
 }
 
+enum ConnectedAccountStatus {
+  CONNECTED
+  REAUTH_REQUIRED
+}
+
 enum OAuthGrantType {
   AUTHORIZATION_CODE
   REFRESH_TOKEN
@@ -366,6 +371,9 @@ model ConnectedAccount {
   refreshTokenEnc   String?
   scope             String?
   tokenExpiresAt    DateTime?
+  status            ConnectedAccountStatus @default(CONNECTED)
+  statusReason      String?
+  statusUpdatedAt   DateTime?
   linkedAt          DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   @@unique([provider, providerAccountId])
