@@ -276,7 +276,10 @@ export const connectedAccountsService = {
           accessTokenEnc: googleEncrypt(token.access_token),
           refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existingGoogle?.refreshTokenEnc ?? null,
           scope: token.scope || GOOGLE_SCOPES.join(" "),
-          tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000)
+          tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000),
+          status: "CONNECTED",
+          statusReason: null,
+          statusUpdatedAt: null
         }
       });
       await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req?.ip, userAgent: req?.headers["user-agent"], metadata: { provider: "GOOGLE", service: "google_services" } });
@@ -291,7 +294,7 @@ export const connectedAccountsService = {
       provider: ConnectedProvider.YOUTUBE_MUSIC,
       providerAccountId: profile.sub,
       createData: { userId: oauthState.userId, provider: ConnectedProvider.YOUTUBE_MUSIC, providerAccountId: profile.sub, accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
-      updateData: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existing?.refreshTokenEnc ?? null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000) },
+      updateData: { accessTokenEnc: googleEncrypt(token.access_token), refreshTokenEnc: token.refresh_token ? googleEncrypt(token.refresh_token) : existing?.refreshTokenEnc ?? null, scope: token.scope || scopes.join(" "), tokenExpiresAt: new Date(Date.now() + Number(token.expires_in || 3600) * 1000), status: "CONNECTED", statusReason: null, statusUpdatedAt: null },
     });
     await auditService.record("CONNECTED_ACCOUNT_LINKED", { userId: oauthState.userId, ipAddress: req?.ip, userAgent: req?.headers["user-agent"], metadata: { provider: "YOUTUBE_MUSIC", service: "youtube_music" } });
     return { status: "connected" as const, service: "youtube_music" as const };
