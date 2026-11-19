@@ -7,6 +7,7 @@ import { auditService } from "./audit.service";
 import { env } from "../config/env";
 import jwt from "jsonwebtoken";
 import { createHmac, timingSafeEqual, randomUUID } from "crypto";
+import { calculateIdleExpiry, wasRotatedRecently } from "../security/sessionPolicy";
 
 export const MAX_OAUTH_SCOPES = ["openid", "profile", "email", "offline_access", "profile:read", "profile:write", "email:read", "account:read", "identity:read", "memory:read", "memory:write", "connected-apps:read", "developer:manage", "business:read", "business:manage", "business:members:read", "business:members:manage", "business:apps:manage"];
 const DEFAULT_SCOPES = ["openid", "profile", "email"];
@@ -99,7 +100,7 @@ export const oauthService = {
         prisma.oAuthRefreshToken.updateMany({ where: { clientId: client.id, userId: record.userId, revokedAt: null }, data: { revokedAt } }),
       ]);
       throw AppError.badRequest("Authorization code has already been used", "INVALID_GRANT");
-    } if (!input.codeVerifier) throw AppError.badRequest("PKCE verifier required", "PKCE_REQUIRED"); const crypto = await import("crypto"); const digest = crypto.createHash("sha256").update(input.codeVerifier).digest("base64url"); if (digest !== record.codeChallenge) throw AppError.badRequest("Invalid PKCE verifier", "INVALID_GRANT"); const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } }); if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE"); const idToken = record.scopes.includes("openid") ? signIdToken(user, client.clientId) : undefined; const now = new Date(); const accessToken = generateOpaqueToken(48); const shouldIssueRefreshToken = record.scopes.includes("offline_access"); const refreshToken = shouldIssueRefreshToken ? generateOpaqueToken(48) : undefined; const refreshFamilyId = shouldIssueRefreshToken ? randomUUID() : undefined; const absoluteExpiresAt = shouldIssueRefreshToken ? days(env.OAUTH_REFRESH_TOKEN_ABSOLUTE_TTL_DAYS) : undefined; const idleExpiresAt = absoluteExpiresAt ? new Date(Math.min(Date.now() + env.SESSION_IDLE_TIMEOUT_DAYS * 86400000, absoluteExpiresAt.getTime())) : undefined; const result = await prisma.$transaction(async (tx) => { const claimed = await tx.oAuthAuthorizationCode.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } }); if (claimed.count !== 1) throw AppError.badRequest("Authorization code has already been used", "INVALID_GRANT"); if (record.businessId) await tx.businessAppConnection.upsert({ where: { businessId_clientId: { businessId: record.businessId, clientId: client.id } }, create: { businessId: record.businessId, clientId: client.id, authorizedById: record.userId, scopes: record.scopes, status: "ACTIVE" }, update: { authorizedById: record.userId, scopes: record.scopes, status: "ACTIVE", connectedAt: new Date(), revokedAt: null } }); await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(accessToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, refreshFamilyId, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } }); if (refreshToken && refreshFamilyId && absoluteExpiresAt && idleExpiresAt) await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, familyId: refreshFamilyId, expiresAt: absoluteExpiresAt, absoluteExpiresAt, idleExpiresAt, lastUsedAt: now } }); return { accessToken, refreshToken }; }); return { token_type: "Bearer", access_token: result.accessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(result.refreshToken ? { refresh_token: result.refreshToken } : {}), ...(idToken ? { id_token: idToken } : {}) }; },
+    } if (!input.codeVerifier) throw AppError.badRequest("PKCE verifier required", "PKCE_REQUIRED"); const crypto = await import("crypto"); const digest = crypto.createHash("sha256").update(input.codeVerifier).digest("base64url"); if (digest !== record.codeChallenge) throw AppError.badRequest("Invalid PKCE verifier", "INVALID_GRANT"); const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { id: true, email: true, username: true, displayName: true, avatarUrl: true, verificationStatus: true, status: true } }); if (!user || user.status !== "ACTIVE") throw AppError.unauthorized("Account is not active", "ACCOUNT_INACTIVE"); const idToken = record.scopes.includes("openid") ? signIdToken(user, client.clientId) : undefined; const now = new Date(); const accessToken = generateOpaqueToken(48); const shouldIssueRefreshToken = record.scopes.includes("offline_access"); const refreshToken = shouldIssueRefreshToken ? generateOpaqueToken(48) : undefined; const refreshFamilyId = shouldIssueRefreshToken ? randomUUID() : undefined; const absoluteExpiresAt = shouldIssueRefreshToken ? days(env.OAUTH_REFRESH_TOKEN_ABSOLUTE_TTL_DAYS) : undefined; const idleExpiresAt = absoluteExpiresAt ? calculateIdleExpiry(now, absoluteExpiresAt, env.SESSION_IDLE_TIMEOUT_DAYS) : undefined; const result = await prisma.$transaction(async (tx) => { const claimed = await tx.oAuthAuthorizationCode.updateMany({ where: { id: record.id, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } }); if (claimed.count !== 1) throw AppError.badRequest("Authorization code has already been used", "INVALID_GRANT"); if (record.businessId) await tx.businessAppConnection.upsert({ where: { businessId_clientId: { businessId: record.businessId, clientId: client.id } }, create: { businessId: record.businessId, clientId: client.id, authorizedById: record.userId, scopes: record.scopes, status: "ACTIVE" }, update: { authorizedById: record.userId, scopes: record.scopes, status: "ACTIVE", connectedAt: new Date(), revokedAt: null } }); await tx.oAuthAccessToken.create({ data: { tokenHash: hashToken(accessToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, refreshFamilyId, expiresAt: expiry(env.OAUTH_ACCESS_TOKEN_TTL_MINUTES) } }); if (refreshToken && refreshFamilyId && absoluteExpiresAt && idleExpiresAt) await tx.oAuthRefreshToken.create({ data: { tokenHash: hashToken(refreshToken), clientId: client.id, userId: record.userId, businessId: record.businessId, scopes: record.scopes, familyId: refreshFamilyId, expiresAt: absoluteExpiresAt, absoluteExpiresAt, idleExpiresAt, lastUsedAt: now } }); return { accessToken, refreshToken }; }); return { token_type: "Bearer", access_token: result.accessToken, expires_in: env.OAUTH_ACCESS_TOKEN_TTL_MINUTES * 60, scope: record.scopes.join(" "), ...(result.refreshToken ? { refresh_token: result.refreshToken } : {}), ...(idToken ? { id_token: idToken } : {}) }; },
   async refreshAccessToken(refreshToken: string, clientId: string, clientSecret?: string) {
     const client = await loadClient(clientId);
     if (client.isConfidential && (!clientSecret || !(await verifyPassword(client.clientSecretHash, clientSecret)))) {
@@ -114,7 +115,7 @@ export const oauthService = {
 
     const now = new Date();
     if (record.revokedAt) {
-      const rotatedRecently = now.getTime() - record.revokedAt.getTime() <= 5000;
+      const rotatedRecently = wasRotatedRecently(record.revokedAt, now);
       if (rotatedRecently) {
         throw AppError.conflict("This refresh token was just rotated by another request. Retry with the updated token.", "REFRESH_TOKEN_ROTATED");
       }
@@ -152,7 +153,7 @@ export const oauthService = {
 
     const newAccessToken = generateOpaqueToken(48);
     const newRefreshToken = generateOpaqueToken(48);
-    const nextIdleExpiry = new Date(Math.min(now.getTime() + env.SESSION_IDLE_TIMEOUT_DAYS * 86400000, record.absoluteExpiresAt.getTime()));
+    const nextIdleExpiry = calculateIdleExpiry(now, record.absoluteExpiresAt, env.SESSION_IDLE_TIMEOUT_DAYS);
 
     const claim = await prisma.$transaction(async (tx) => {
       const claimed = await tx.oAuthRefreshToken.updateMany({
@@ -181,7 +182,7 @@ export const oauthService = {
 
     if (!claim) {
       const latest = await prisma.oAuthRefreshToken.findUnique({ where: { id: record.id }, select: { revokedAt: true } });
-      if (latest?.revokedAt && now.getTime() - latest.revokedAt.getTime() <= 5000) {
+      if (latest?.revokedAt && wasRotatedRecently(latest.revokedAt, now)) {
         throw AppError.conflict("This refresh token was just rotated by another request. Retry with the updated token.", "REFRESH_TOKEN_ROTATED");
       }
       if (latest?.revokedAt) {
@@ -206,7 +207,7 @@ export const oauthService = {
       const now = new Date();
       const refreshTokens = await prisma.oAuthRefreshToken.findMany({ where: { familyId: record.refreshFamilyId, revokedAt: null }, select: { id: true, absoluteExpiresAt: true } });
       if (refreshTokens.length) {
-        const idleExpiresAt = new Date(Math.min(now.getTime() + env.SESSION_IDLE_TIMEOUT_DAYS * 86400000, refreshTokens[0].absoluteExpiresAt.getTime()));
+        const idleExpiresAt = calculateIdleExpiry(now, refreshTokens[0].absoluteExpiresAt, env.SESSION_IDLE_TIMEOUT_DAYS);
         await prisma.oAuthRefreshToken.updateMany({ where: { familyId: record.refreshFamilyId, revokedAt: null }, data: { lastUsedAt: now, idleExpiresAt } });
       }
     }
