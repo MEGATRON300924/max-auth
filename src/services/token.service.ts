@@ -10,15 +10,6 @@ import { User } from "@prisma/client";
 function refreshExpiryDate(absoluteExpiresAt: Date): Date {
   return new Date(Math.min(Date.now() + env.SESSION_IDLE_TIMEOUT_DAYS * 24 * 60 * 60 * 1000, absoluteExpiresAt.getTime()));
 }
-function parseDuration(value: string): number {
-  const match = /^(\d+)([smhd])$/.exec(value.trim());
-  if (!match) return 30 * 24 * 60 * 60 * 1000;
-  const num = parseInt(match[1], 10);
-  const unit = match[2];
-  const unitMs = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[unit]!;
-  return num * unitMs;
-}
-
 export const tokenService = {
   async issueTokenPair(user: Pick<User, "id" | "username" | "subscriptionTier" | "displayName" | "language" | "timezone">, ctx: { deviceId?: string; ipAddress?: string; userAgent?: string; rememberMe?: boolean; familyId?: string; absoluteExpiresAt?: Date }) {
     const sessionId = randomUUID();
