@@ -240,3 +240,13 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - MAX Diagnostics admin API and trusted telemetry ingestion merged via squash commit 8e71b33596bb650b872f0b03ec343477bb25d627. PR #40.
 - Merge order: MAX Auth API, MAX Backend telemetry, then MAX Auth frontend.
 - CI on the PR heads passed before merge. Changes are merged to main; production deployment and live cross-service smoke tests remain pending.
+
+
+## Connected Apps provider refresh-state correction — 2026-11-20
+- Continued the Connected Apps backend follow-up after frontend PR #33 shipped.
+- Confirmed the backend already persists CONNECTED / REAUTH_REQUIRED and retains linked-account rows when refresh credentials are rejected. The remaining classification defect was that refresh handlers inferred revocation from broad message text such as "unauthorized" or "refresh token", which could misclassify unrelated provider failures.
+- Added a shared OAuth refresh-error classifier that marks a connection REAUTH_REQUIRED only when the provider token endpoint explicitly returns OAuth `invalid_grant`. Spotify and Google refresh handlers now use this classifier.
+- Temporary rate limits, provider outages, invalid client configuration, generic 401/403 messages and network errors no longer trigger the reconnect state through message matching. Existing linked-account metadata remains intact; explicit user unlink remains the only unlink path.
+- Added focused unit tests for Google/Spotify invalid_grant, rate limits, provider outages, invalid_client, vague error messages and unrelated errors.
+- No Prisma schema change or database migration is required. No production environment, database or provider credentials were changed.
+- Pending: run Jest, TypeScript build, lint and GitHub Actions CI; inspect the resulting diff and open a PR. Do not merge or deploy until the PR has been reviewed and merged.
