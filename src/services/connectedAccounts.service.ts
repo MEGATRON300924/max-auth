@@ -6,6 +6,7 @@ import { ConnectedProvider } from "@prisma/client";
 import { AppError } from "../utils/AppError";
 import { auditService } from "./audit.service";
 import { env } from "../config/env";
+import { isInvalidOAuthRefreshGrant } from "../utils/oauthRefreshError";
 
 const SPOTIFY_AUTHORIZE_URL = "https://accounts.spotify.com/authorize";
 const SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token";
@@ -347,7 +348,7 @@ export const connectedAccountsService = {
           },
         });
       } catch (error) {
-        if (error instanceof AppError && /invalid_grant|invalid credentials|unauthorized/i.test(error.message)) {
+        if (isInvalidOAuthRefreshGrant(error)) {
           await prisma.connectedAccount.update({ where: { id: account.id }, data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_invalid", statusUpdatedAt: new Date() } });
           throw AppError.unauthorized("Google authorization expired. Please reconnect Google.", "GOOGLE_REAUTH_REQUIRED");
         }
@@ -872,7 +873,7 @@ export const connectedAccountsService = {
         body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
       });
     } catch (error) {
-      if (error instanceof AppError && error.code === "SPOTIFY_REQUEST_FAILED" && /invalid_grant|invalid refresh token|refresh token/i.test(error.message)) {
+      if (isInvalidOAuthRefreshGrant(error)) {
         await prisma.connectedAccount.update({
           where: { id: account.id },
           data: { status: "REAUTH_REQUIRED", statusReason: "refresh_token_invalid", statusUpdatedAt: new Date() },
