@@ -260,3 +260,24 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Added `prisma/migrations/20261122120000_add_oauth_authorization_code_nonce/migration.sql` as a tracked, idempotent schema-recovery migration. Do not run `prisma migrate deploy` until the previously documented shared Prisma migration-history conflict has been reconciled.
 - Render service was live before the repair; no application code change or manual Render deploy was needed for the database-only correction. Post-repair Render log window contained no new events; a fresh end-to-end user login remains to be confirmed.
 - Pending: review/merge this migration-record PR, then test MAX Auth login and OAuth callback/token exchange from MAX Chat. If authorization succeeds but token exchange fails, inspect the next exact backend error before changing anything else.
+
+
+## Current task: Delegated administrator access and user broadcasts (2026-11-22)
+
+### Implemented on branch `feat/admin-management-broadcast-centre`
+- Added `AdminAccess` records with role presets, explicit permission lists, full-access flag, active/revoked state, and grantor attribution.
+- Added server-side permission middleware for user management, admin management, organisation review, beta management, diagnostics, broadcast management and security management.
+- Restricted existing admin route groups by their corresponding permissions rather than relying on the dashboard's `isAdmin` flag alone.
+- Added administrator list/grant/update/revoke API endpoints. Granting full access is restricted to an existing full-access administrator; delegated admins cannot grant permissions they do not hold.
+- Protected the primary `zionopaaje` owner assignment from delegated changes.
+- Added broadcast records and per-recipient in-app notification records, username targeting, all-active-users targeting, email delivery attempts and delivery error tracking.
+- Added authenticated notification inbox and mark-as-read endpoints.
+- Added additive SQL migration to create the three tables and seed the existing primary owner with full access.
+- Database migration has not yet been applied to production. Do not deploy backend until the migration is applied and verified.
+
+### Verification / remaining
+- TypeScript build, Prisma validation/generation, route integration tests and production migration verification: pending.
+- Confirm all existing administrator accounts are intentionally assigned their permissions before rollout; the migration only seeds the primary owner as full access.
+- Review broadcast email throughput for large audiences; current implementation sends email attempts during the request.
+- End-to-end admin grant, privilege-boundary, broadcast, notification inbox and email tests: pending.
+- No merge or deployment.
