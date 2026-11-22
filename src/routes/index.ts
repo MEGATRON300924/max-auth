@@ -16,6 +16,7 @@ import avatarRoutes from "./avatar.routes";
 import statusRoutes from "./status.routes";
 import adminStatusRoutes from "./adminStatus.routes";
 import betaRoutes from "./beta.routes";
+import notificationRoutes from "./notification.routes";
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use("/internal", internalRoutes);
 router.use("/businesses", businessRoutes);
 router.use("/family", familyRoutes);
 router.use("/beta", betaRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;
