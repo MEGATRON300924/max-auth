@@ -39,10 +39,13 @@ export async function authenticateOAuthAdmin(req: Request, _res: Response, next:
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, username: true, isAdmin: true, status: true },
+      select: { id: true, username: true, isAdmin: true, status: true, adminAccess: { select: { permissions: true, fullAccess: true, isActive: true } } },
     });
     if (!user || user.status !== "ACTIVE") return next(AppError.unauthorized("The MAX Account is not active"));
-    if (!user.isAdmin) return next(AppError.forbidden("Administrator access required"));
+    if (!user.isAdmin || !user.adminAccess?.isActive) return next(AppError.forbidden("Administrator access required"));
+    if (!user.adminAccess.fullAccess && !user.adminAccess.permissions.includes("system_diagnostics")) {
+      return next(AppError.forbidden("System diagnostics permission required", "ADMIN_PERMISSION_REQUIRED"));
+    }
 
     (req as Request & { maxAdmin?: { id: string; username: string } }).maxAdmin = {
       id: user.id,
