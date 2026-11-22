@@ -200,6 +200,10 @@ model User {
   betaRoleAssignments BetaRoleAssignment[]
   betaApplication BetaApplication?
   betaNotifications BetaNotification[]
+  adminAccess AdminAccess?
+  adminAccessGranted AdminAccess[] @relation("AdminAccessGrantor")
+  adminBroadcastsCreated AdminBroadcast[] @relation("AdminBroadcastAuthor")
+  adminBroadcastRecipients AdminBroadcastRecipient[]
   betaAnnouncementsCreated BetaAnnouncement[] @relation("BetaAnnouncementAuthor")
   betaIssueReports BetaIssueReport[] @relation("BetaIssueReportReporter")
   betaIssueReportsReviewed BetaIssueReport[] @relation("BetaIssueReportReviewer")
@@ -771,4 +775,49 @@ model BetaIssueReport {
   @@index([source, createdAt])
   @@index([userId, createdAt])
   @@map("beta_issue_reports")
+}
+
+
+model AdminAccess {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantedById String?  @map("granted_by_id") @db.Uuid
+  grantedBy   User?    @relation("AdminAccessGrantor", fields: [grantedById], references: [id], onDelete: SetNull)
+  role        String   @db.VarChar(40)
+  permissions String[] @default([])
+  fullAccess  Boolean  @default(false) @map("full_access")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  @@index([isActive])
+  @@map("admin_access")
+}
+
+model AdminBroadcast {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String   @db.VarChar(180)
+  body        String   @db.VarChar(12000)
+  audience    String   @db.VarChar(20)
+  authorId    String   @map("author_id") @db.Uuid
+  author      User     @relation("AdminBroadcastAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @map("created_at")
+  recipients  AdminBroadcastRecipient[]
+  @@index([createdAt])
+  @@map("admin_broadcasts")
+}
+
+model AdminBroadcastRecipient {
+  id          String   @id @default(uuid()) @db.Uuid
+  broadcastId String   @map("broadcast_id") @db.Uuid
+  broadcast   AdminBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  userId      String   @map("user_id") @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt      DateTime? @map("read_at")
+  emailSentAt DateTime? @map("email_sent_at")
+  emailError  String?  @map("email_error") @db.VarChar(1000)
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@unique([broadcastId, userId])
+  @@index([userId, createdAt])
+  @@map("admin_broadcast_recipients")
 }
