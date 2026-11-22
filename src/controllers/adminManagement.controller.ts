@@ -25,14 +25,14 @@ async function actorAccess(actorId: string) {
 }
 
 export const adminManagementController = {
-  async listAdministrators(_req: Request, res: Response, next: NextFunction) {
+  async listAdministrators(req: Request, res: Response, next: NextFunction) {
     try {
       const records = await prisma.adminAccess.findMany({
         where: { isActive: true },
         include: { user: { select: { id: true, username: true, fullName: true, displayName: true, email: true } } },
         orderBy: { createdAt: "asc" },
       });
-      return ok(res, { administrators: records.map(safeAdmin), availablePermissions: PERMISSIONS });
+      const currentAccess = await actorAccess(req.user!.sub);\n      return ok(res, { administrators: records.map(safeAdmin), availablePermissions: PERMISSIONS, currentAccess: { fullAccess: currentAccess.fullAccess, permissions: currentAccess.permissions } });
     } catch (error) { next(error); }
   },
 
