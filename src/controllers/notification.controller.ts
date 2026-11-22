@@ -16,7 +16,7 @@ export const notificationController = {
         }),
         prisma.adminBroadcastRecipient.count({ where: { userId: req.user!.sub, readAt: null } }),
       ]);
-      return ok(res, { notifications: items.map(item => ({ id: item.id, readAt: item.readAt, createdAt: item.createdAt, ...item.broadcast, author: item.broadcast.author.username })), unread, page, limit });
+      return ok(res, { notifications: items.map(item => ({ id: item.id, broadcastId: item.broadcast.id, title: item.broadcast.title, body: item.broadcast.body, audience: item.broadcast.audience, readAt: item.readAt, createdAt: item.createdAt, author: item.broadcast.author.username })), unread, page, limit });
     } catch (error) { next(error); }
   },
   async markRead(req: Request, res: Response, next: NextFunction) {
