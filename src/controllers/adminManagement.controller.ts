@@ -43,7 +43,7 @@ export const adminManagementController = {
       const actor = await actorAccess(actorId);
       const username = String(req.body.username || "").trim();
       const role = String(req.body.role || "CUSTOM_ADMIN").trim().slice(0, 40);
-      const permissions = Array.isArray(req.body.permissions) ? [...new Set(req.body.permissions)] : [];
+      const permissions: string[] = Array.isArray(req.body.permissions) ? [...new Set((req.body.permissions as unknown[]).filter((item): item is string => typeof item === "string"))] : [];
       const fullAccess = req.body.fullAccess === true;
       if (fullAccess && !actor.fullAccess) throw AppError.forbidden("Only a full-access administrator can grant full access");
       if (permissions.some((item: string) => !PERMISSIONS.includes(item as AdminPermission))) throw AppError.badRequest("One or more permissions are invalid");
@@ -89,7 +89,7 @@ export const adminManagementController = {
         await auditService.record("ADMIN_ACTION", { userId: targetId, metadata: { actorId, action: "ADMIN_ACCESS_REVOKED" } });
         return ok(res, { revoked: true });
       }
-      const permissions = Array.isArray(req.body.permissions) ? [...new Set(req.body.permissions)] : current.permissions;
+      const permissions: string[] = Array.isArray(req.body.permissions) ? [...new Set((req.body.permissions as unknown[]).filter((item): item is string => typeof item === "string"))] : current.permissions;
       const fullAccess = req.body.fullAccess === true;
       if (fullAccess && !actor.fullAccess) throw AppError.forbidden("Only a full-access administrator can grant full access");
       if (permissions.some((p: string) => !PERMISSIONS.includes(p as AdminPermission))) throw AppError.badRequest("One or more permissions are invalid");
@@ -128,7 +128,7 @@ export const adminManagementController = {
       if (audience === "ALL") {
         users = await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, username: true, email: true, displayName: true } });
       } else {
-        const usernames = Array.isArray(req.body.usernames) ? [...new Set(req.body.usernames.map((u: unknown) => String(u).trim().replace(/^@/, "").toLowerCase()).filter(Boolean))] : [];
+        const usernames: string[] = Array.isArray(req.body.usernames) ? [...new Set((req.body.usernames as unknown[]).filter((u): u is string => typeof u === "string").map(u => u.trim().replace(/^@/, "").toLowerCase()).filter(Boolean))] : [];
         if (!usernames.length || usernames.length > 500) throw AppError.badRequest("Enter between 1 and 500 usernames");
         users = await prisma.user.findMany({ where: { username: { in: usernames }, status: "ACTIVE" }, select: { id: true, username: true, email: true, displayName: true } });
         const found = new Set(users.map(user => user.username.toLowerCase()));
