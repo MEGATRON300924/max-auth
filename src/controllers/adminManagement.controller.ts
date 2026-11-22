@@ -32,7 +32,8 @@ export const adminManagementController = {
         include: { user: { select: { id: true, username: true, fullName: true, displayName: true, email: true } } },
         orderBy: { createdAt: "asc" },
       });
-      const currentAccess = await actorAccess(req.user!.sub);\n      return ok(res, { administrators: records.map(safeAdmin), availablePermissions: PERMISSIONS, currentAccess: { fullAccess: currentAccess.fullAccess, permissions: currentAccess.permissions } });
+      const currentAccess = await actorAccess(req.user!.sub);
+      return ok(res, { administrators: records.map(safeAdmin), availablePermissions: PERMISSIONS, currentAccess: { fullAccess: currentAccess.fullAccess, permissions: currentAccess.permissions } });
     } catch (error) { next(error); }
   },
 
