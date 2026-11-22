@@ -4,7 +4,7 @@ import { AppError } from "../utils/AppError";
 import { ok } from "../utils/response";
 import { mailService } from "../services/mail.service";
 import { auditService } from "../services/audit.service";
-import { AdminPermission } from "../middleware/requireAdminPermission";
+import type { AdminPermission } from "../middleware/requireAdminPermission";
 
 const PERMISSIONS: AdminPermission[] = [
   "user_management", "admin_management", "organisation_review", "beta_management",
