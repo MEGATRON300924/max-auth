@@ -11,7 +11,7 @@ export type AdminPermission =
   | "broadcast_management"
   | "security_management";
 
-export async function requireAdminPermission(permission: AdminPermission) {
+export function requireAdminPermission(permission: AdminPermission) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
       if (!req.user) return next(AppError.unauthorized());
