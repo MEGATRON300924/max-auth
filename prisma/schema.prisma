@@ -444,6 +444,7 @@ model OAuthAuthorizationCode {
   scopes       String[]
   codeChallenge String?
   codeChallengeMethod String?
+  nonce        String?
   expiresAt    DateTime
   usedAt       DateTime?
   createdAt    DateTime @default(now())
