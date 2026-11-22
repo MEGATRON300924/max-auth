@@ -250,3 +250,13 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Added focused unit tests for Google/Spotify invalid_grant, rate limits, provider outages, invalid_client, vague error messages and unrelated errors.
 - No Prisma schema change or database migration is required. No production environment, database or provider credentials were changed.
 - Pending: run Jest, TypeScript build, lint and GitHub Actions CI; inspect the resulting diff and open a PR. Do not merge or deploy until the PR has been reviewed and merged.
+
+
+## OAuth authorization-code schema recovery — 2026-11-22
+- Production MAX Auth login failure traced to `prisma.oAuthAuthorizationCode.create()` failing because `public.oauth_authorization_codes.nonce` was missing, although `OAuthAuthorizationCode.nonce` is present as an optional Prisma `String?` field.
+- Confirmed the production Max Auth Supabase project (`vowxnbhwpevckcwpkdcj`) had no `nonce` column; the table's other authorization-code fields were present.
+- Applied the additive, idempotent DDL `ALTER TABLE public.oauth_authorization_codes ADD COLUMN IF NOT EXISTS "nonce" TEXT` through the Supabase migration mechanism. No rows, tokens, consent records, or Prisma migration-ledger entries were modified.
+- Verified `nonce` now exists as nullable `text`. This aligns the database with the existing Prisma model and addresses the exact production exception.
+- Added `prisma/migrations/20261122120000_add_oauth_authorization_code_nonce/migration.sql` as a tracked, idempotent schema-recovery migration. Do not run `prisma migrate deploy` until the previously documented shared Prisma migration-history conflict has been reconciled.
+- Render service was live before the repair; no application code change or manual Render deploy was needed for the database-only correction. Post-repair Render log window contained no new events; a fresh end-to-end user login remains to be confirmed.
+- Pending: review/merge this migration-record PR, then test MAX Auth login and OAuth callback/token exchange from MAX Chat. If authorization succeeds but token exchange fails, inspect the next exact backend error before changing anything else.
