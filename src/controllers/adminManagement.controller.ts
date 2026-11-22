@@ -54,7 +54,8 @@ export const adminManagementController = {
       if (!target) throw AppError.notFound("No MAX user found with that username");
       if (target.status !== "ACTIVE") throw AppError.badRequest("Suspended or inactive accounts cannot become administrators");
       if (target.id === actorId) throw AppError.badRequest("You cannot change your own administrator assignment here");
-      if (target.username.toLowerCase() === "zionopaaje" && !actor.fullAccess) throw AppError.forbidden("The primary owner assignment is protected");
+      if (target.username.toLowerCase() === "zionopaaje") throw AppError.forbidden("The primary owner assignment is protected");
+      if (role === "SUPER_ADMIN" && !fullAccess) throw AppError.badRequest("The Super Admin role requires full access");
       const record = await prisma.$transaction(async (tx) => {
         await tx.user.update({ where: { id: target.id }, data: { isAdmin: true } });
         return tx.adminAccess.upsert({
@@ -94,9 +95,11 @@ export const adminManagementController = {
       if (fullAccess && !actor.fullAccess) throw AppError.forbidden("Only a full-access administrator can grant full access");
       if (permissions.some((p: string) => !PERMISSIONS.includes(p as AdminPermission))) throw AppError.badRequest("One or more permissions are invalid");
       if (!actor.fullAccess && permissions.some((p: string) => !actor.permissions.includes(p))) throw AppError.forbidden("You cannot grant permissions you do not hold");
+      const nextRole = String(req.body.role || current.role).slice(0, 40);
+      if (nextRole === "SUPER_ADMIN" && !fullAccess) throw AppError.badRequest("The Super Admin role requires full access");
       const updated = await prisma.adminAccess.update({
         where: { userId: targetId },
-        data: { role: String(req.body.role || current.role).slice(0, 40), permissions: fullAccess ? [] : permissions, fullAccess, isActive: true },
+        data: { role: fullAccess ? "SUPER_ADMIN" : nextRole, permissions: fullAccess ? [] : permissions, fullAccess, isActive: true },
         include: { user: { select: { id: true, username: true, fullName: true, displayName: true, email: true } } },
       });
       await auditService.record("ADMIN_ACTION", { userId: targetId, metadata: { actorId, action: "ADMIN_ACCESS_UPDATED", role: updated.role, permissions: updated.permissions, fullAccess } });
