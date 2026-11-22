@@ -281,3 +281,11 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Review broadcast email throughput for large audiences; current implementation sends email attempts during the request.
 - End-to-end admin grant, privilege-boundary, broadcast, notification inbox and email tests: pending.
 - No merge or deployment.
+
+
+### Follow-up hardening and CI (2026-11-22)
+- Extended granular access enforcement to the separate OAuth-authenticated admin system-status endpoint.
+- Protected the primary owner assignment from changes by any delegated administrator.
+- Enforced that the SUPER_ADMIN role and full-access flag must be granted together.
+- Initial backend CI caught strict TypeScript typing issues in request-supplied permissions/recipients and duplicate notification response keys; those were corrected.
+- Backend CI run #629 failed on the initial implementation; a subsequent run passed TypeScript compilation before the latest hardening changes. Latest backend CI run #632 is in progress.
