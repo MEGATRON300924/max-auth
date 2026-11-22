@@ -289,3 +289,15 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Enforced that the SUPER_ADMIN role and full-access flag must be granted together.
 - Initial backend CI caught strict TypeScript typing issues in request-supplied permissions/recipients and duplicate notification response keys; those were corrected.
 - Backend CI run #629 failed on the initial implementation; a subsequent run passed TypeScript compilation before the latest hardening changes. Latest backend CI run #632 is in progress.
+
+
+### Production broadcast failure diagnosis and database repair — 2026-11-22
+- Confirmed backend PR #46 merged to main as commit 822cc7b69dd1706670a291b5516378aa288049d5 and Render deployed it successfully at 14:13 UTC.
+- Investigated live Render logs for service srv-d9pop1ks728c73c08tog. Repeated runtime errors at 14:19 UTC and 17:54–17:55 UTC explicitly reported: `The table public.admin_access does not exist in the current database.` The failure occurred in requireAdminPermission before the broadcast controller could run.
+- Confirmed the production MAX Auth database is Supabase project vowxnbhwpevckcwpkdcj (Max Auth) and that all three new tables were absent before repair.
+- Applied the additive migration `add_admin_management_broadcasts` to the production database, creating admin_access, admin_broadcasts and admin_broadcast_recipients with the exact schema from prisma/migrations/20261122170000_admin_management_broadcasts/migration.sql.
+- The migration seeded zionopaaje as ACTIVE SUPER_ADMIN with full_access=true and preserved all existing user/broadcast data; no existing rows were deleted or modified beyond ensuring the primary owner's isAdmin flag and admin_access grant.
+- Verified all three tables now resolve in public schema and the primary owner record exists with isAdmin=true, role=SUPER_ADMIN, full_access=true and is_active=true.
+- Frontend PR #36 is merged; Render backend service is live on the merged backend commit. Database repair completed without a backend redeploy.
+- Remaining verification: retry a real authenticated broadcast from the admin UI and confirm it appears in notification inboxes; email delivery was not test-sent to avoid sending an unsolicited announcement. Check fresh Render logs after the user's retry.
+- Important: do not run broad `prisma migrate deploy` until the previously documented shared migration-ledger ownership/history issue is reconciled. This repair used the controlled additive migration only.
