@@ -60,8 +60,8 @@ export const adminManagementController = {
         await tx.user.update({ where: { id: target.id }, data: { isAdmin: true } });
         return tx.adminAccess.upsert({
           where: { userId: target.id },
-          create: { userId: target.id, grantedById: actorId, role, permissions: fullAccess ? [] : permissions, fullAccess, isActive: true },
-          update: { grantedById: actorId, role, permissions: fullAccess ? [] : permissions, fullAccess, isActive: true },
+          create: { userId: target.id, grantedById: actorId, role: fullAccess ? "SUPER_ADMIN" : role, permissions: fullAccess ? [] : permissions, fullAccess, isActive: true },
+          update: { grantedById: actorId, role: fullAccess ? "SUPER_ADMIN" : role, permissions: fullAccess ? [] : permissions, fullAccess, isActive: true },
           include: { user: { select: { id: true, username: true, fullName: true, displayName: true, email: true } } },
         });
       });
