@@ -427,6 +427,7 @@ model ReligionPreference {
   notificationPreferences  Json?
   promptDeferredUntil       DateTime?
   promptCompletedAt        DateTime?
+  notificationPromptCompletedAt DateTime?
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
