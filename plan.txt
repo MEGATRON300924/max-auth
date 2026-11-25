@@ -306,6 +306,6 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Added an isolated, optional religion-preference resource; registration, login, OAuth consent, and existing profile routes remain unchanged.
 - Added a dedicated religion_preferences table with a one-to-one user relation. Fields are nullable/defaulted so existing accounts are unaffected; deleting a user cascades only their own preference record.
 - Added authenticated GET/PUT/PATCH endpoints for reading, saving, deferring, and clearing the optional preference. The API treats prefer_not_to_say as neutral mode and disables religion personalisation and notification preferences.
-- Religious data is not written to general AI memory, audit metadata, or account registration payloads. The new endpoints accept first-party MAX Auth session JWTs only; third-party OAuth clients cannot read this sensitive profile.
+- Religious data is not written to general AI memory, audit metadata, or account registration payloads. The new endpoints accept native MAX Auth session JWTs and the specifically allowlisted MAX Webchat OAuth client; other OAuth clients are denied access to this sensitive profile.
 - Migration is additive and contains no changes to existing user/session tables beyond a new foreign-keyed table.
 - Validation pending: Prisma generation, TypeScript build, tests, migration review, and CI. Do not merge/deploy until checks pass and the migration has been applied safely.
