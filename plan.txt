@@ -301,3 +301,11 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Frontend PR #36 is merged; Render backend service is live on the merged backend commit. Database repair completed without a backend redeploy.
 - Remaining verification: retry a real authenticated broadcast from the admin UI and confirm it appears in notification inboxes; email delivery was not test-sent to avoid sending an unsolicited announcement. Check fresh Render logs after the user's retry.
 - Important: do not run broad `prisma migrate deploy` until the previously documented shared migration-ledger ownership/history issue is reconciled. This repair used the controlled additive migration only.
+
+## 2026-11-25 — Religion Awareness foundation (MAX Auth)
+- Added an isolated, optional religion-preference resource; registration, login, OAuth consent, and existing profile routes remain unchanged.
+- Added a dedicated religion_preferences table with a one-to-one user relation. Fields are nullable/defaulted so existing accounts are unaffected; deleting a user cascades only their own preference record.
+- Added authenticated GET/PUT/PATCH endpoints for reading, saving, deferring, and clearing the optional preference. The API treats prefer_not_to_say as neutral mode and disables religion personalisation and notification preferences.
+- Religious data is not written to general AI memory, audit metadata, or account registration payloads. The new endpoints accept native MAX Auth session JWTs and the specifically allowlisted MAX Webchat OAuth client; other OAuth clients are denied access to this sensitive profile.
+- Migration is additive and contains no changes to existing user/session tables beyond a new foreign-keyed table.
+- Validation pending: Prisma generation, TypeScript build, tests, migration review, and CI. Do not merge/deploy until checks pass and the migration has been applied safely.

@@ -17,6 +17,7 @@ import statusRoutes from "./status.routes";
 import adminStatusRoutes from "./adminStatus.routes";
 import betaRoutes from "./beta.routes";
 import notificationRoutes from "./notification.routes";
+import religionPreferenceRoutes from "./religionPreference.routes";
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use("/businesses", businessRoutes);
 router.use("/family", familyRoutes);
 router.use("/beta", betaRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/religion-preferences", religionPreferenceRoutes);
 
 export default router;
