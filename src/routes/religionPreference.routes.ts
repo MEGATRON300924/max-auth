@@ -11,7 +11,7 @@ const notificationPreferencesSchema = z.record(z.string().max(80), z.boolean()).
 );
 const saveReligionPreferenceSchema = z.object({
   body: z.object({
-    religion: z.string().trim().min(1).max(80),
+    religion: z.enum(["christianity", "jehovahs_witness", "islam", "hinduism", "buddhism", "judaism", "traditional_religion", "other", "prefer_not_to_say"]),
     tradition: z.string().trim().max(120).optional(),
     otherReligion: z.string().trim().max(120).optional(),
     notificationPreferences: notificationPreferencesSchema.optional(),
