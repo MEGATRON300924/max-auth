@@ -22,6 +22,8 @@ router.use(authenticate);
 router.get("/", religionPreferenceController.get);
 router.put("/", validate(saveReligionPreferenceSchema), religionPreferenceController.save);
 router.patch("/defer", religionPreferenceController.defer);
+router.patch("/notifications", validate(z.object({ body: z.object({ notificationPreferences: notificationPreferencesSchema }).strict() })), religionPreferenceController.saveNotifications);
+router.patch("/notifications/complete", religionPreferenceController.completeNotifications);
 router.delete("/", religionPreferenceController.clear);
 
 export default router;
