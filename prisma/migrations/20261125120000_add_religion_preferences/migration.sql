@@ -9,6 +9,7 @@ CREATE TABLE "religion_preferences" (
     "notificationPreferences" JSONB,
     "promptDeferredUntil" TIMESTAMP(3),
     "promptCompletedAt" TIMESTAMP(3),
+    "notificationPromptCompletedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "religion_preferences_pkey" PRIMARY KEY ("id")
