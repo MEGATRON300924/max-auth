@@ -309,3 +309,9 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Religious data is not written to general AI memory, audit metadata, or account registration payloads. The new endpoints accept native MAX Auth session JWTs and the specifically allowlisted MAX Webchat OAuth client; other OAuth clients are denied access to this sensitive profile.
 - Migration is additive and contains no changes to existing user/session tables beyond a new foreign-keyed table.
 - Validation pending: Prisma generation, TypeScript build, tests, migration review, and CI. Do not merge/deploy until checks pass and the migration has been applied safely.
+
+## 2026-11-25 — Production migration gate
+- Added an npm prestart hook that runs `prisma migrate deploy` only when NODE_ENV=production.
+- This ensures additive schema migrations are applied before the new MAX Auth process starts. If a migration fails, the new process exits before accepting traffic; Render can retain the previous healthy deployment rather than running new code against a missing table.
+- Local development/test starts do not run production migrations.
+- Validation pending: CI and Render deployment verification. No production deployment triggered by this branch.

@@ -23,6 +23,8 @@ jobs:
         run: npm ci
       - name: Generate Prisma client
         run: npx prisma generate
+      - name: Validate production migration prestart hook
+        run: node --check scripts/prestart.js && NODE_ENV=test node scripts/prestart.js
 
       - name: TypeScript build
         run: npm run build
