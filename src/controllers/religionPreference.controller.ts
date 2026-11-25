@@ -146,7 +146,29 @@ export const religionPreferenceController = {
 
   async clear(req: Request, res: Response, next: NextFunction) {
     try {
-      await prisma.religionPreference.deleteMany({ where: { userId: req.user!.sub } });
+      await prisma.religionPreference.upsert({
+        where: { userId: req.user!.sub },
+        create: {
+          userId: req.user!.sub,
+          religion: null,
+          onboardingStatus: "COMPLETED",
+          personalizationEnabled: false,
+          notificationPreferences: {},
+          promptCompletedAt: new Date(),
+          notificationPromptCompletedAt: new Date(),
+        },
+        update: {
+          religion: null,
+          tradition: null,
+          otherReligion: null,
+          onboardingStatus: "COMPLETED",
+          personalizationEnabled: false,
+          notificationPreferences: {},
+          promptDeferredUntil: null,
+          promptCompletedAt: new Date(),
+          notificationPromptCompletedAt: new Date(),
+        },
+      });
       return ok(res, { cleared: true, neutralMode: true });
     } catch (error) {
       return next(error);
