@@ -322,3 +322,12 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Added a narrowly scoped second recovery check to `scripts/prestart.js`: it resolves this migration as applied only when the exact nullable text column exists. Any incomplete schema still stops startup. No columns, account rows, authorization codes or tokens are deleted.
 - Fix commit: `0cfddac4b8eed5c8eec08b68128442600465dbbb`. Render build succeeded; deployment is in progress.
 - Next: verify the nonce migration resolution and remaining pending migrations, confirm `20261125120000_add_religion_preferences` applies, then verify MAX Auth is live. Only after that, redeploy MAX Backend and run authenticated API/Webchat smoke tests. The shared migration ledger must be checked before each service migration runner is allowed to proceed.
+
+
+## 2026-11-25 — MAX Chat connected-account OAuth authentication repair
+- Root cause confirmed from source: MAX Chat uses opaque OAuth access tokens issued by `oauthService.exchangeCode()`, while `src/routes/connectedAccounts.routes.ts` applied the first-party `authenticate` middleware, which calls `verifyAccessToken()` and expects a JWT. This made OAuth-authenticated requests to GitHub, Google, Spotify, Discord and Microsoft connected-account routes fail with `Invalid or expired access token`, even when the provider account was correctly linked.
+- Added `authenticateConnectedAccounts`: first-party three-segment session JWTs continue through the existing `authenticate` middleware; opaque tokens are validated through OAuth introspection, restricted to the official MAX Chat OAuth client, and checked for `connected-apps:read`. Connection-start and mutating requests additionally require the already-approved `profile:write` permission.
+- Updated only the connected-accounts router to use the new dual-mode middleware. No token formats, secrets, session records, provider credentials, OAuth clients, or religion onboarding routes were changed.
+- Branch: `fix/oauth-connected-accounts-auth`.
+- Commits: middleware `19cc3a099f2956ec5b5ab775ee3836097ed10280`; router `fbc3facd1882b8339fdd4d2d0752c9d74f20d7e3`.
+- Pending: run TypeScript build and Jest tests; inspect the full connector path and create a PR only after validation. Do not deploy until checks pass. Authenticated production verification must confirm that a MAX Chat opaque OAuth token can reach `/connected-accounts/github/connect` and receive an authorization URL, while an unrelated OAuth client is rejected and native session JWTs still work.
