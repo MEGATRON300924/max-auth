@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../database/prisma";
 import { ok } from "../utils/response";
-import { AppError } from "../utils/AppError";
 
 const neutralReligion = "prefer_not_to_say";
 
@@ -84,6 +83,7 @@ export const religionPreferenceController = {
           notificationPreferences: true,
           promptDeferredUntil: true,
           promptCompletedAt: true,
+          notificationPromptCompletedAt: true,
           updatedAt: true,
         },
       });
