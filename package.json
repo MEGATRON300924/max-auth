@@ -14,7 +14,8 @@
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
-    "docs:serve": "echo 'Swagger UI available at /docs when server is running'"
+    "docs:serve": "echo 'Swagger UI available at /docs when server is running'",
+    "prestart": "node scripts/prestart.js"
   },
   "engines": {
     "node": ">=20.0.0"
