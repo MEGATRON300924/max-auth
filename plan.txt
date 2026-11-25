@@ -315,3 +315,10 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - This ensures additive schema migrations are applied before the new MAX Auth process starts. If a migration fails, the new process exits before accepting traffic; Render can retain the previous healthy deployment rather than running new code against a missing table.
 - Local development/test starts do not run production migrations.
 - Validation pending: CI and Render deployment verification. No production deployment triggered by this branch.
+
+## 2026-11-25 — Production migration recovery follow-up
+- Render confirmed the initial production prestart recovered the failed `20261119203000_connected_account_health` migration only after checking that the existing enum values and all three expected connected-account columns were present.
+- The next migration, `20261122143000_add_oauth_authorization_nonce`, then failed because `public.oauth_authorization_codes.nonce` already existed as nullable text. The preceding `20261122120000_add_oauth_authorization_code_nonce` migration completed successfully and uses `ADD COLUMN IF NOT EXISTS`.
+- Added a narrowly scoped second recovery check to `scripts/prestart.js`: it resolves this migration as applied only when the exact nullable text column exists. Any incomplete schema still stops startup. No columns, account rows, authorization codes or tokens are deleted.
+- Fix commit: `0cfddac4b8eed5c8eec08b68128442600465dbbb`. Render build succeeded; deployment is in progress.
+- Next: verify the nonce migration resolution and remaining pending migrations, confirm `20261125120000_add_religion_preferences` applies, then verify MAX Auth is live. Only after that, redeploy MAX Backend and run authenticated API/Webchat smoke tests. The shared migration ledger must be checked before each service migration runner is allowed to proceed.
