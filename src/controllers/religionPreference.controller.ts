@@ -20,6 +20,7 @@ export const religionPreferenceController = {
           notificationPreferences: true,
           promptDeferredUntil: true,
           promptCompletedAt: true,
+          notificationPromptCompletedAt: true,
           updatedAt: true,
         },
       });
@@ -33,6 +34,7 @@ export const religionPreferenceController = {
           notificationPreferences: {},
           promptDeferredUntil: null,
           promptCompletedAt: null,
+          notificationPromptCompletedAt: null,
           updatedAt: null,
         },
       });
@@ -60,6 +62,7 @@ export const religionPreferenceController = {
           notificationPreferences: notificationPreferences as Prisma.InputJsonValue,
           promptDeferredUntil: null,
           promptCompletedAt: new Date(),
+          notificationPromptCompletedAt: null,
         },
         update: {
           religion,
@@ -70,6 +73,7 @@ export const religionPreferenceController = {
           notificationPreferences: notificationPreferences as Prisma.InputJsonValue,
           promptDeferredUntil: null,
           promptCompletedAt: new Date(),
+          notificationPromptCompletedAt: null,
         },
         select: {
           religion: true,
@@ -82,6 +86,35 @@ export const religionPreferenceController = {
           promptCompletedAt: true,
           updatedAt: true,
         },
+      });
+      return ok(res, { preference });
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async saveNotifications(req: Request, res: Response, next: NextFunction) {
+    try {
+      const preference = await prisma.religionPreference.update({
+        where: { userId: req.user!.sub },
+        data: {
+          notificationPreferences: req.body.notificationPreferences as Prisma.InputJsonValue,
+          notificationPromptCompletedAt: new Date(),
+        },
+        select: { notificationPreferences: true, notificationPromptCompletedAt: true },
+      });
+      return ok(res, { preference });
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async completeNotifications(req: Request, res: Response, next: NextFunction) {
+    try {
+      const preference = await prisma.religionPreference.update({
+        where: { userId: req.user!.sub },
+        data: { notificationPromptCompletedAt: new Date() },
+        select: { notificationPromptCompletedAt: true },
       });
       return ok(res, { preference });
     } catch (error) {
