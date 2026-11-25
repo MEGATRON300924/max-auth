@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { authenticate } from "../middleware/authenticate";
+import { authenticateReligionPreference } from "../middleware/authenticateReligionPreference";
 import { validate } from "../middleware/validate";
 import { religionPreferenceController } from "../controllers/religionPreference.controller";
 
@@ -18,7 +18,7 @@ const saveReligionPreferenceSchema = z.object({
   }).strict(),
 });
 
-router.use(authenticate);
+router.use(authenticateReligionPreference);
 router.get("/", religionPreferenceController.get);
 router.put("/", validate(saveReligionPreferenceSchema), religionPreferenceController.save);
 router.patch("/defer", religionPreferenceController.defer);
