@@ -6,7 +6,7 @@ import { githubController } from "../controllers/github.controller";
 import { xController } from "../controllers/x.controller";
 import { instagramController } from "../controllers/instagram.controller";
 import { tiktokController } from "../controllers/tiktok.controller";
-import { authenticate } from "../middleware/authenticate";
+import { authenticateConnectedAccounts } from "../middleware/authenticateConnectedAccounts";
 import { oauthRateLimiter } from "../middleware/rateLimiter";
 
 const router = Router();
@@ -20,7 +20,7 @@ router.get("/x/callback", xController.callback);
 router.get("/instagram/callback", instagramController.callback);
 router.get("/tiktok/callback", tiktokController.callback);
 
-router.use(authenticate);
+router.use(authenticateConnectedAccounts);
 router.get("/identity", connectedAccountsController.identity);
 
 router.get("/google/calendar", connectedAccountsController.googleCalendarList);
