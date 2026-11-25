@@ -184,6 +184,7 @@ model User {
   connectedAccounts   ConnectedAccount[]
   oauthIntegrationStates OAuthIntegrationState[]
   aiProfile           AIProfile?
+  religionPreference  ReligionPreference?
   oauthAuthCodes      OAuthAuthorizationCode[]
   oauthAccessTokens   OAuthAccessToken[]
   oauthRefreshTokens  OAuthRefreshToken[]
@@ -412,6 +413,25 @@ model AIProfile {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   @@map("ai_profiles")
+}
+
+model ReligionPreference {
+  id                       String   @id @default(uuid()) @db.Uuid
+  userId                   String   @unique @db.Uuid
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  religion                 String?  @db.VarChar(80)
+  tradition                String?  @db.VarChar(120)
+  otherReligion            String?  @db.VarChar(120)
+  onboardingStatus         String   @default("PENDING") @db.VarChar(20)
+  personalizationEnabled   Boolean  @default(false)
+  notificationPreferences  Json?
+  promptDeferredUntil       DateTime?
+  promptCompletedAt        DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([onboardingStatus])
+  @@map("religion_preferences")
 }
 
 model OAuthClient {
