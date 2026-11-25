@@ -331,3 +331,6 @@ MAX AUTH INTEGRATION AUDIT — 2026-11-12
 - Branch: `fix/oauth-connected-accounts-auth`.
 - Commits: middleware `19cc3a099f2956ec5b5ab775ee3836097ed10280`; router `fbc3facd1882b8339fdd4d2d0752c9d74f20d7e3`.
 - Pending: run TypeScript build and Jest tests; inspect the full connector path and create a PR only after validation. Do not deploy until checks pass. Authenticated production verification must confirm that a MAX Chat opaque OAuth token can reach `/connected-accounts/github/connect` and receive an authorization URL, while an unrelated OAuth client is rejected and native session JWTs still work.
+
+- Validation: GitHub Actions CI run #648 succeeded on the PR head. Prisma client generation, production prestart validation, TypeScript build, and all Jest tests passed (7 suites / 33 tests), including the new connected-account OAuth middleware tests. Existing moderate dependency audit advisories were reported but did not fail the configured CI gates.
+- Production verification is still pending because this PR has not been merged/deployed and no user OAuth token was used in a live request.
